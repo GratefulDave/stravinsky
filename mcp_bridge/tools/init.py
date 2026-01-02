@@ -19,7 +19,7 @@ def bootstrap_repo(project_path: str | Path | None = None) -> str:
     root = Path(project_path or Path.cwd())
     
     # 1. Setup Slash Commands
-    commands_dir = root / ".claude" / "commands" / "stra"
+    commands_dir = root / ".claude" / "commands"
     commands_dir.mkdir(parents=True, exist_ok=True)
     
     commands_created = 0

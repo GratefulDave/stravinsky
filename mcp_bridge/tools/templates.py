@@ -69,6 +69,13 @@ description: Consult the Delphi Strategic Advisor for architecture and hard debu
 Use the `delphi` prompt to analyze the current problem. This triggers a GPT-based consulting phase focused on strategic reasoning, architectural trade-offs, and root-cause analysis for difficult bugs.
 """
 
+COMMAND_LIST = """---
+description: List all active and recent background agent tasks.
+---
+
+Call the `agent_list` tool to see an overview of all currently running and completed background agents, including their Task IDs and statuses.
+"""
+
 COMMAND_DEWEY = """---
 description: Trigger Dewey for documentation research and implementation examples.
 ---
@@ -79,6 +86,7 @@ Use the `dewey` prompt to find evidence and documentation for the topic at hand.
 SLASH_COMMANDS = {
     "stravinsky.md": COMMAND_STRAVINSKY,
     "parallel.md": COMMAND_PARALLEL,
+    "list.md": COMMAND_LIST,
     "context.md": COMMAND_CONTEXT,
     "health.md": COMMAND_HEALTH,
     "delphi.md": COMMAND_DELPHI,

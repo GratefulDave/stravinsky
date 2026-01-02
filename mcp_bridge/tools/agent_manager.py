@@ -118,6 +118,7 @@ class AgentManager:
     
     def spawn(
         self,
+        token_store: Any,
         prompt: str,
         agent_type: str = "explore",
         description: str = "",
@@ -161,13 +162,14 @@ class AgentManager:
         self._save_tasks(tasks)
         
         # Start background execution
-        self._execute_agent(task_id, prompt, agent_type, system_prompt, model, thinking_budget, timeout)
+        self._execute_agent(task_id, token_store, prompt, agent_type, system_prompt, model, thinking_budget, timeout)
         
         return task_id
     
     def _execute_agent(
         self,
         task_id: str,
+        token_store: Any,
         prompt: str,
         agent_type: str,
         system_prompt: Optional[str] = None,
@@ -209,6 +211,7 @@ class AgentManager:
                         result = loop.run_until_complete(
                             asyncio.wait_for(
                                 invoke_gemini(
+                                    token_store=token_store,
                                     prompt=full_prompt, 
                                     model=model,
                                     thinking_budget=thinking_budget
@@ -374,6 +377,35 @@ class AgentManager:
         )
         
         return True
+    
+    def stop_all(self, clear_history: bool = False) -> int:
+        """
+        Stop all running agents and optionally clear task history.
+        
+        Args:
+            clear_history: If True, also remove completed/failed tasks from history
+            
+        Returns:
+            Number of tasks stopped/cleared
+        """
+        tasks = self._load_tasks()
+        stopped_count = 0
+        
+        # Stop running tasks
+        for task_id, task in list(tasks.items()):
+            if task.get("status") == "running":
+                self.cancel(task_id)
+                stopped_count += 1
+        
+        # Optionally clear history
+        if clear_history:
+            cleared = len(tasks)
+            self._save_tasks({})
+            self._processes.clear()
+            logger.info(f"[AgentManager] Cleared all {cleared} agent tasks")
+            return cleared
+        
+        return stopped_count
     
     def get_output(self, task_id: str, block: bool = False, timeout: float = 30.0) -> str:
         """

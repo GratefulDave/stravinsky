@@ -2,7 +2,7 @@ import os
 import sys
 import json
 
-MAX_CHARS = 10000
+MAX_CHARS = 30000
 
 def main():
     try:

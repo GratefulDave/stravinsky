@@ -9,7 +9,7 @@ async def output_truncator_hook(tool_name: str, arguments: Dict[str, Any], outpu
     """
     Truncates tool output if it exceeds a certain length.
     """
-    MAX_LENGTH = 10000 # 10k characters limit
+    MAX_LENGTH = 30000 # 30k characters limit
     
     if len(output) > MAX_LENGTH:
         truncated = output[:MAX_LENGTH]

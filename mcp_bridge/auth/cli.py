@@ -9,6 +9,7 @@ import sys
 import time
 
 from .token_store import TokenStore
+from ..tools.init import bootstrap_repo
 from .oauth import perform_oauth_flow as gemini_oauth, refresh_access_token as gemini_refresh
 from .openai_oauth import (
     perform_oauth_flow as openai_oauth,
@@ -184,6 +185,9 @@ def main():
         help="Provider to refresh token for",
     )
     
+    # init command
+    subparsers.add_parser("init", help="Bootstrap current repository for Stravinsky")
+    
     args = parser.parse_args()
     
     if not args.command:
@@ -200,6 +204,9 @@ def main():
         return cmd_status(token_store)
     elif args.command == "refresh":
         return cmd_refresh(args.provider, token_store)
+    elif args.command == "init":
+        print(bootstrap_repo())
+        return 0
     
     return 0
 

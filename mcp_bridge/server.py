@@ -31,7 +31,7 @@ from .tools.code_search import lsp_diagnostics, ast_grep_search, ast_grep_replac
 from .tools.session_manager import list_sessions, read_session, search_sessions, get_session_info
 from .tools.skill_loader import list_skills, get_skill, create_skill
 from .tools.background_tasks import task_spawn, task_status, task_list
-from .tools.agent_manager import agent_spawn, agent_output, agent_cancel, agent_list, agent_progress
+from .tools.agent_manager import agent_spawn, agent_output, agent_cancel, agent_list, agent_progress, agent_retry
 from .tools.project_context import get_project_context, get_system_health
 from .tools.lsp import (
     lsp_hover,
@@ -46,6 +46,7 @@ from .tools.lsp import (
 )
 from .prompts import stravinsky, delphi, dewey, explore, frontend, document_writer, multimodal
 from .hooks.manager import get_hook_manager
+from . import hooks  # Triggers hook registration in __init__.py
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

@@ -22,6 +22,7 @@ __all__ = [
     "create_skill",
     "agent_spawn",
     "agent_output",
+    "agent_retry",
     "agent_cancel",
     "agent_list",
     "agent_progress",

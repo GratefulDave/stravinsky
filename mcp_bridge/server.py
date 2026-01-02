@@ -330,8 +330,26 @@ async def list_tools() -> list[Tool]:
                         "description": "Tokens reserved for internal reasoning (if model supports it)",
                         "default": 0,
                     },
+                    "timeout": {
+                        "type": "integer",
+                        "description": "Maximum execution time in seconds",
+                        "default": 300,
+                    },
                 },
                 "required": ["prompt"],
+            },
+        ),
+        Tool(
+            name="agent_retry",
+            description="Retry a failed or timed-out background agent. Can optionally refine the prompt.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "string", "description": "The ID of the task to retry"},
+                    "new_prompt": {"type": "string", "description": "Optional refined prompt for the retry"},
+                    "new_timeout": {"type": "integer", "description": "Optional new timeout in seconds"},
+                },
+                "required": ["task_id"],
             },
         ),
         Tool(
@@ -622,6 +640,14 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         elif name == "task_status":
             result = await task_status(
                 task_id=arguments["task_id"],
+            )
+            return [TextContent(type="text", text=result)]
+
+        elif name == "agent_retry":
+            result = await agent_retry(
+                task_id=arguments["task_id"],
+                new_prompt=arguments.get("new_prompt"),
+                new_timeout=arguments.get("new_timeout"),
             )
             return [TextContent(type="text", text=result)]
 

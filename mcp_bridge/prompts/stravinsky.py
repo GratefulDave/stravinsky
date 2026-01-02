@@ -154,9 +154,16 @@ When delegating to external models or agents:
 ```
 
 ### After Delegation:
-- VERIFY the results work as expected
-- VERIFY it follows existing codebase patterns
 - VERIFY expected result came out
+
+### Agent Reliability Protocol (CRITICAL)
+
+If a background agent fails or times out:
+1. **Analyze Failure**: Use `agent_progress` to see the last available output and logs.
+2. **Handle Timout**: If status is `failed` with a timeout error, break the task into smaller sub-tasks and respawn multiple agents. Increasing `timeout` is a secondary option.
+3. **Handle Error**: If the agent errored, refine the prompt to be more specific or provide more context, then use `agent_retry`.
+4. **Zombie Recovery**: If `agent_progress` detects a "Zombie" (process died), immediately `agent_retry`.
+5. **Escalation**: If a task fails 2 consecutive times, stop and ask the user or consult Delphi.
 """
 
 

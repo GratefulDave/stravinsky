@@ -36,6 +36,7 @@ class AgentTask:
     result: Optional[str] = None
     error: Optional[str] = None
     pid: Optional[int] = None
+    timeout: int = 300  # Default 5 minutes
     progress: Optional[Dict[str, Any]] = None  # tool calls, last update
 
 
@@ -124,6 +125,7 @@ class AgentManager:
         system_prompt: Optional[str] = None,
         model: str = "gemini-3-flash",
         thinking_budget: int = 0,
+        timeout: int = 300,
     ) -> str:
         """
         Spawn a new background agent.
@@ -135,6 +137,7 @@ class AgentManager:
             parent_session_id: Optional parent session for notifications
             system_prompt: Optional custom system prompt
             model: Model to use (gemini-3-flash, claude, etc.)
+            timeout: Maximum execution time in seconds
             
         Returns:
             Task ID for tracking
@@ -149,6 +152,7 @@ class AgentManager:
             status="pending",
             created_at=datetime.now().isoformat(),
             parent_session_id=parent_session_id,
+            timeout=timeout,
         )
         
         # Persist task
@@ -157,7 +161,7 @@ class AgentManager:
         self._save_tasks(tasks)
         
         # Start background execution
-        self._execute_agent(task_id, prompt, agent_type, system_prompt, model, thinking_budget)
+        self._execute_agent(task_id, prompt, agent_type, system_prompt, model, thinking_budget, timeout)
         
         return task_id
     
@@ -169,6 +173,7 @@ class AgentManager:
         system_prompt: Optional[str] = None,
         model: str = "gemini-3-flash",
         thinking_budget: int = 0,
+        timeout: int = 300,
     ):
         """Execute agent in background thread."""
         
@@ -202,12 +207,24 @@ class AgentManager:
                     asyncio.set_event_loop(loop)
                     try:
                         result = loop.run_until_complete(
-                            invoke_gemini(
-                                prompt=full_prompt, 
-                                model=model,
-                                thinking_budget=thinking_budget
+                            asyncio.wait_for(
+                                invoke_gemini(
+                                    prompt=full_prompt, 
+                                    model=model,
+                                    thinking_budget=thinking_budget
+                                ),
+                                timeout=timeout
                             )
                         )
+                    except asyncio.TimeoutError:
+                        self._update_task(
+                            task_id,
+                            status="failed",
+                            error=f"Task timed out after {timeout} seconds",
+                            completed_at=datetime.now().isoformat()
+                        )
+                        logger.error(f"[AgentManager] Gemini agent {task_id} timed out")
+                        return
                     finally:
                         loop.close()
                     
@@ -251,8 +268,23 @@ class AgentManager:
                     self._processes[task_id] = process
                     self._update_task(task_id, pid=process.pid)
                     
-                    # Wait for completion
-                    return_code = process.wait()
+                    # Wait for completion with timeout
+                    try:
+                        return_code = process.wait(timeout=timeout)
+                    except subprocess.TimeoutExpired:
+                        try:
+                            os.killpg(os.getpgid(process.pid), signal.SIGTERM)
+                        except:
+                            process.kill()
+                        
+                        self._update_task(
+                            task_id,
+                            status="failed",
+                            error=f"Task timed out after {timeout} seconds",
+                            completed_at=datetime.now().isoformat()
+                        )
+                        logger.error(f"[AgentManager] Claude agent {task_id} timed out")
+                        return
                     
                     # Read output
                     result = ""
@@ -435,6 +467,23 @@ Use `agent_output` with block=true to wait for completion."""
         status = task["status"]
         description = task.get("description", "")
         agent_type = task.get("agent_type", "unknown")
+        pid = task.get("pid")
+        
+        # Zombie Detection: If running but process is gone
+        if status == "running" and pid:
+            try:
+                import psutil
+                if not psutil.pid_exists(pid):
+                    status = "failed"
+                    self._update_task(
+                        task_id, 
+                        status="failed", 
+                        error="Agent process died unexpectedly (Zombie detected)",
+                        completed_at=datetime.now().isoformat()
+                    )
+                    logger.warning(f"[AgentManager] Zombie agent detected: {task_id}")
+            except ImportError:
+                pass 
         
         # Read recent output
         output_content = ""
@@ -502,11 +551,10 @@ def get_manager() -> AgentManager:
 # Tool interface functions
 
 async def agent_spawn(
-    prompt: str,
-    agent_type: str = "explore",
     description: str = "",
     model: str = "gemini-3-flash",
     thinking_budget: int = 0,
+    timeout: int = 300,
 ) -> str:
     """
     Spawn a background agent.
@@ -592,6 +640,42 @@ async def agent_output(task_id: str, block: bool = False) -> str:
     """
     manager = get_manager()
     return manager.get_output(task_id, block=block)
+
+
+async def agent_retry(
+    task_id: str,
+    new_prompt: Optional[str] = None,
+    new_timeout: Optional[int] = None,
+) -> str:
+    """
+    Retry a failed or timed-out background agent.
+    
+    Args:
+        task_id: The ID of the task to retry
+        new_prompt: Optional refined prompt for the retry
+        new_timeout: Optional new timeout in seconds
+        
+    Returns:
+        New Task ID and status
+    """
+    manager = get_manager()
+    task = manager.get_task(task_id)
+    
+    if not task:
+        return f"❌ Task {task_id} not found."
+    
+    if task["status"] in ["running", "pending"]:
+        return f"⚠️ Task {task_id} is still {task['status']}. Cancel it first if you want to retry."
+    
+    prompt = new_prompt or task["prompt"]
+    timeout = new_timeout or task.get("timeout", 300)
+    
+    return await agent_spawn(
+        prompt=prompt,
+        agent_type=task["agent_type"],
+        description=f"Retry of {task_id}: {task['description']}",
+        timeout=timeout
+    )
 
 
 async def agent_cancel(task_id: str) -> str:

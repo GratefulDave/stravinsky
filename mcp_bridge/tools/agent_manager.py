@@ -551,6 +551,8 @@ def get_manager() -> AgentManager:
 # Tool interface functions
 
 async def agent_spawn(
+    prompt: str,
+    agent_type: str = "explore",
     description: str = "",
     model: str = "gemini-3-flash",
     thinking_budget: int = 0,
@@ -564,6 +566,8 @@ async def agent_spawn(
         agent_type: Type of agent (explore, dewey, frontend, delphi)
         description: Short description shown in status
         model: Model to use (gemini-3-flash, gemini-2.0-flash, claude)
+        thinking_budget: Reserved reasoning tokens
+        timeout: Execution timeout in seconds
         
     Returns:
         Task ID and instructions
@@ -611,6 +615,7 @@ ULTRATHINK MODE (when user says "ULTRATHINK" or "think harder"):
         system_prompt=system_prompt,
         model=model,
         thinking_budget=thinking_budget,
+        timeout=timeout,
     )
     
     return f"""🚀 Background agent spawned successfully.

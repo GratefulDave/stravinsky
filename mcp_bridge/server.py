@@ -26,12 +26,31 @@ from mcp.types import (
 )
 
 from .auth.token_store import TokenStore
-from .tools.model_invoke import invoke_gemini, invoke_openai
-from .tools.code_search import lsp_diagnostics, ast_grep_search, ast_grep_replace, grep_search, glob_files
-from .tools.session_manager import list_sessions, read_session, search_sessions, get_session_info
-from .tools.skill_loader import list_skills, get_skill, create_skill
-from .tools.background_tasks import task_spawn, task_status, task_list
-from .tools.agent_manager import agent_spawn, agent_output, agent_cancel, agent_list, agent_progress, agent_retry
+from .tools import (
+    invoke_gemini, 
+    invoke_openai,
+    lsp_diagnostics, 
+    ast_grep_search, 
+    ast_grep_replace, 
+    grep_search, 
+    glob_files,
+    list_sessions, 
+    read_session, 
+    search_sessions, 
+    get_session_info,
+    list_skills, 
+    get_skill, 
+    create_skill,
+    agent_spawn, 
+    agent_output, 
+    agent_cancel, 
+    agent_list, 
+    agent_progress, 
+    agent_retry,
+    task_spawn,
+    task_status,
+    task_list
+)
 from .tools.project_context import get_project_context, get_system_health
 from .tools.lsp import (
     lsp_hover,
@@ -671,6 +690,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 description=arguments.get("description", ""),
                 model=arguments.get("model", "gemini-3-flash"),
                 thinking_budget=arguments.get("thinking_budget", 0),
+                timeout=arguments.get("timeout", 300),
             )
             result_content = result
 

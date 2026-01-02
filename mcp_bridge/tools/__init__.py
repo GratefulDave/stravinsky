@@ -4,6 +4,7 @@ from .code_search import lsp_diagnostics, ast_grep_search, grep_search, glob_fil
 from .session_manager import list_sessions, read_session, search_sessions, get_session_info
 from .skill_loader import list_skills, get_skill, create_skill
 from .agent_manager import agent_spawn, agent_output, agent_cancel, agent_list, agent_progress, agent_retry
+from .background_tasks import task_spawn, task_status, task_list
 from .continuous_loop import enable_ralph_loop, disable_ralph_loop
 
 __all__ = [
@@ -26,6 +27,9 @@ __all__ = [
     "agent_cancel",
     "agent_list",
     "agent_progress",
+    "task_spawn",
+    "task_status",
+    "task_list",
     "enable_ralph_loop",
     "disable_ralph_loop",
 ]

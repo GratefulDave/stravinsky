@@ -8,6 +8,12 @@ API requests to external model providers.
 import time
 
 import httpx
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_exponential,
+    retry_if_exception,
+)
 
 from ..auth.token_store import TokenStore
 from ..auth.oauth import refresh_access_token as gemini_refresh, ANTIGRAVITY_HEADERS
@@ -71,6 +77,18 @@ async def _ensure_valid_token(token_store: TokenStore, provider: str) -> str:
     return access_token
 
 
+def is_retryable_exception(e: Exception) -> bool:
+    """Check if an exception is retryable (429 or 5xx)."""
+    if isinstance(e, httpx.HTTPStatusError):
+        return e.response.status_code == 429 or 500 <= e.response.status_code < 600
+    return False
+
+@retry(
+    stop=stop_after_attempt(5),
+    wait=wait_exponential(multiplier=1, min=4, max=60),
+    retry=retry_if_exception(is_retryable_exception),
+    before_sleep=lambda retry_state: print(f"Rate limited or server error, retrying in {retry_state.next_action.sleep} seconds...")
+)
 async def invoke_gemini(
     token_store: TokenStore,
     prompt: str,
@@ -156,6 +174,12 @@ async def invoke_gemini(
             return f"Error parsing response: {e}"
 
 
+@retry(
+    stop=stop_after_attempt(5),
+    wait=wait_exponential(multiplier=1, min=4, max=60),
+    retry=retry_if_exception(is_retryable_exception),
+    before_sleep=lambda retry_state: print(f"Rate limited or server error, retrying in {retry_state.next_action.sleep} seconds...")
+)
 async def invoke_openai(
     token_store: TokenStore,
     prompt: str,

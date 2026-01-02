@@ -91,7 +91,7 @@ def is_retryable_exception(e: Exception) -> bool:
     stop=stop_after_attempt(5),
     wait=wait_exponential(multiplier=1, min=4, max=60),
     retry=retry_if_exception(is_retryable_exception),
-    before_sleep=lambda retry_state: print(f"Rate limited or server error, retrying in {retry_state.next_action.sleep} seconds...")
+    before_sleep=lambda retry_state: logger.info(f"Rate limited or server error, retrying in {retry_state.next_action.sleep} seconds...")
 )
 async def invoke_gemini(
     token_store: TokenStore,
@@ -200,7 +200,7 @@ async def invoke_gemini(
     stop=stop_after_attempt(5),
     wait=wait_exponential(multiplier=1, min=4, max=60),
     retry=retry_if_exception(is_retryable_exception),
-    before_sleep=lambda retry_state: print(f"Rate limited or server error, retrying in {retry_state.next_action.sleep} seconds...")
+    before_sleep=lambda retry_state: logger.info(f"Rate limited or server error, retrying in {retry_state.next_action.sleep} seconds...")
 )
 async def invoke_openai(
     token_store: TokenStore,

@@ -1,6 +1,6 @@
 [project]
 name = "stravinsky"
-version = "0.2.4"
+version = "0.2.5"
 description = "MCP Bridge for Claude Code with Multi-Model Support. Install globally: claude mcp add --scope user stravinsky -- uvx stravinsky. Add to CLAUDE.md: See https://pypi.org/project/stravinsky/"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -11,7 +11,7 @@ authors = [
 keywords = ["mcp", "claude", "gemini", "openai", "oauth"]
 
 dependencies = [
-    "mcp>=1.0.0",
+    "mcp>=1.2.1",
     "pydantic>=2.0.0",
     "httpx>=0.24.0",
     "python-dotenv>=1.0.0",

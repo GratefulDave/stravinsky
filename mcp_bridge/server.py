@@ -67,8 +67,13 @@ from .prompts import stravinsky, delphi, dewey, explore, frontend, document_writ
 from .hooks.manager import get_hook_manager
 from . import hooks  # Triggers hook registration in __init__.py
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+# Configure logging to stderr explicitly to avoid protocol corruption
+import sys
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(levelname)s:%(name)s:%(message)s',
+    stream=sys.stderr
+)
 logger = logging.getLogger(__name__)
 
 # Initialize the MCP server
@@ -918,13 +923,16 @@ async def async_main():
     initialize_hooks()
     
     logger.info("Starting Stravinsky MCP Bridge Server...")
-
-    async with stdio_server() as (read_stream, write_stream):
-        await server.run(
-            read_stream,
-            write_stream,
-            server.create_initialization_options(),
-        )
+    try:
+        async with stdio_server() as (read_stream, write_stream):
+            await server.run(
+                read_stream,
+                write_stream,
+                server.create_initialization_options(),
+            )
+    except Exception as e:
+        logger.critical(f"FATAL: Server crashed: {e}", exc_info=True)
+        sys.exit(1)
 
 
 def main():

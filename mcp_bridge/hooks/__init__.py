@@ -25,5 +25,4 @@ def initialize_hooks():
     # Tier 3
     manager.register_pre_model_invoke(budget_optimizer_hook)
 
-# Initialize on import
-initialize_hooks()
+# initialize_hooks()

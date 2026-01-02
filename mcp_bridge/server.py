@@ -728,7 +728,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             result_content = result
 
         elif name == "lsp_goto_definition":
-            result = await lsp_definition(
+            result = await lsp_goto_definition(
                 file_path=arguments["file_path"],
                 line=arguments["line"],
                 character=arguments["character"],
@@ -793,7 +793,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 language=arguments.get("language", ""),
                 dry_run=arguments.get("dry_run", True),
             )
-            return [TextContent(type="text", text=result)]
+            result_content = result
 
         else:
             result_content = f"Unknown tool: {name}"
@@ -913,6 +913,10 @@ async def get_prompt(name: str, arguments: dict[str, str] | None) -> GetPromptRe
 
 async def async_main():
     """Async entry point for the MCP server."""
+    # Move hook initialization to startup instead of import time
+    from .hooks import initialize_hooks
+    initialize_hooks()
+    
     logger.info("Starting Stravinsky MCP Bridge Server...")
 
     async with stdio_server() as (read_stream, write_stream):
@@ -925,6 +929,15 @@ async def async_main():
 
 def main():
     """Synchronous main entry point for uvx/CLI."""
+    import argparse
+    from . import __version__ as pkg_version
+    
+    parser = argparse.ArgumentParser(description="Stravinsky MCP Bridge Server")
+    parser.add_argument("--version", action="version", version=f"stravinsky {pkg_version}")
+    
+    # Check for known arguments, but ignore others to pass through to stdio_server
+    args, unknown = parser.parse_known_args()
+    
     asyncio.run(async_main())
 
 

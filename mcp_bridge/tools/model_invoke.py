@@ -5,7 +5,10 @@ These tools use OAuth tokens from the token store to authenticate
 API requests to external model providers.
 """
 
+import logging
 import time
+
+logger = logging.getLogger(__name__)
 
 import httpx
 from tenacity import (

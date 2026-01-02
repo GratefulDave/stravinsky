@@ -74,10 +74,10 @@ import jedi
 script = jedi.Script(path='{file_path}')
 completions = script.infer({line}, {character})
 for c in completions[:1]:
-    print(f"Type: {{c.type}}")
-    print(f"Name: {{c.full_name}}")
+    logger.info(f"Type: {{c.type}}")
+    logger.info(f"Name: {{c.full_name}}")
     if c.docstring():
-        print(f"\\nDocstring:\\n{{c.docstring()[:500]}}")
+        logger.info(f"\\nDocstring:\\n{{c.docstring()[:500]}}")
 """
                 ],
                 capture_output=True,
@@ -133,7 +133,7 @@ import jedi
 script = jedi.Script(path='{file_path}')
 definitions = script.goto({line}, {character})
 for d in definitions:
-    print(f"{{d.module_path}}:{{d.line}}:{{d.column}} - {{d.full_name}}")
+    logger.info(f"{{d.module_path}}:{{d.line}}:{{d.column}} - {{d.full_name}}")
 """
                 ],
                 capture_output=True,
@@ -193,9 +193,9 @@ import jedi
 script = jedi.Script(path='{file_path}')
 references = script.get_references({line}, {character}, include_builtins=False)
 for r in references[:30]:
-    print(f"{{r.module_path}}:{{r.line}}:{{r.column}}")
+    logger.info(f"{{r.module_path}}:{{r.line}}:{{r.column}}")
 if len(references) > 30:
-    print(f"... and {{len(references) - 30}} more")
+    logger.info(f"... and {{len(references) - 30}} more")
 """
                 ],
                 capture_output=True,
@@ -243,7 +243,7 @@ script = jedi.Script(path='{file_path}')
 names = script.get_names(all_scopes=True, definitions=True)
 for n in names:
     indent = "  " * (n.get_line_code().count("    ") if n.get_line_code() else 0)
-    print(f"{{n.line:4d}} | {{indent}}{{n.type:10}} {{n.name}}")
+    logger.info(f"{{n.line:4d}} | {{indent}}{{n.type:10}} {{n.name}}")
 """
                 ],
                 capture_output=True,
@@ -356,12 +356,12 @@ import jedi
 script = jedi.Script(path='{file_path}')
 refs = script.get_references({line}, {character})
 if refs:
-    print(f"Symbol: {{refs[0].name}}")
-    print(f"Type: {{refs[0].type}}")
-    print(f"References: {{len(refs)}}")
-    print("✅ Rename is valid")
+    logger.info(f"Symbol: {{refs[0].name}}")
+    logger.info(f"Type: {{refs[0].type}}")
+    logger.info(f"References: {{len(refs)}}")
+    logger.info("✅ Rename is valid")
 else:
-    print("❌ No symbol found at position")
+    logger.info("❌ No symbol found at position")
 """
                 ],
                 capture_output=True,
@@ -413,9 +413,9 @@ import jedi
 script = jedi.Script(path='{file_path}')
 refactoring = script.rename({line}, {character}, new_name='{new_name}')
 for path, changed in refactoring.get_changed_files().items():
-    print(f"File: {{path}}")
-    print(changed[:500])
-    print("---")
+    logger.info(f"File: {{path}}")
+    logger.info(changed[:500])
+    logger.info("---")
 """
                 ],
                 capture_output=True,

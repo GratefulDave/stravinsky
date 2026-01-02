@@ -161,7 +161,3 @@ The Codex CLI uses the same port. Stop it with: `killall codex`
 MIT
 
 ---
-
-<div align="center">
-  <small>Built with obsession by the Google Deepmind team.</small>
-</div>

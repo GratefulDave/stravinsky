@@ -45,7 +45,7 @@ claude mcp add stravinsky -- stravinsky
 
 ### Authentication
 
-```bash
+````bash
 # Login to Google (Gemini)
 stravinsky-auth login gemini
 
@@ -57,7 +57,22 @@ stravinsky-auth status
 
 # Logout
 stravinsky-auth logout gemini
-```
+
+### Repo Auto-Initialization
+
+Bootstrap any repository for Stravinsky in one command:
+
+```bash
+# In the root of your project:
+stravinsky-auth init
+````
+
+This will:
+
+1. Create/Update `CLAUDE.md` with Stravinsky parallel execution rules.
+2. Install standard slash commands into `.claude/commands/stra/`.
+
+````
 
 ## Add to Your CLAUDE.md
 
@@ -95,7 +110,7 @@ For ANY task with 2+ independent steps:
 
 - **ULTRATHINK**: Engage exhaustive deep reasoning, multi-dimensional analysis
 - **ULTRAWORK**: Maximum parallel execution - spawn agents aggressively for every subtask
-```
+````
 
 ## Tools (31)
 

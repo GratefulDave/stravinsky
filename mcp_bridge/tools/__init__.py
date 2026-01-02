@@ -1,6 +1,6 @@
 # Tools module
 from .model_invoke import invoke_gemini, invoke_openai
-from .code_search import lsp_diagnostics, ast_grep_search, grep_search, glob_files
+from .code_search import lsp_diagnostics, ast_grep_search, ast_grep_replace, grep_search, glob_files
 from .session_manager import list_sessions, read_session, search_sessions, get_session_info
 from .skill_loader import list_skills, get_skill, create_skill
 from .agent_manager import agent_spawn, agent_output, agent_cancel, agent_list, agent_progress, agent_retry
@@ -12,6 +12,7 @@ __all__ = [
     "invoke_openai",
     "lsp_diagnostics",
     "ast_grep_search",
+    "ast_grep_replace",
     "grep_search",
     "glob_files",
     "list_sessions",

@@ -45,6 +45,7 @@ from .tools.lsp import (
     lsp_servers,
 )
 from .prompts import stravinsky, delphi, dewey, explore, frontend, document_writer, multimodal
+from .hooks.manager import get_hook_manager
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -531,8 +532,14 @@ async def list_tools() -> list[Tool]:
 async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
     """Handle tool invocations."""
     logger.info(f"Tool called: {name} with args: {arguments}")
+    hook_manager = get_hook_manager()
 
     try:
+        # Pre-tool call hooks
+        arguments = await hook_manager.execute_pre_tool_call(name, arguments)
+        
+        result_content = None
+
         if name == "invoke_gemini":
             result = await invoke_gemini(
                 token_store=token_store,
@@ -542,7 +549,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 max_tokens=arguments.get("max_tokens", 4096),
                 thinking_budget=arguments.get("thinking_budget", 0),
             )
-            return [TextContent(type="text", text=result)]
+            result_content = result
 
         elif name == "invoke_openai":
             result = await invoke_openai(
@@ -553,24 +560,24 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 max_tokens=arguments.get("max_tokens", 4096),
                 thinking_budget=arguments.get("thinking_budget", 0),
             )
-            return [TextContent(type="text", text=result)]
+            result_content = result
 
         elif name == "get_project_context":
             result = await get_project_context(
                 project_path=arguments.get("project_path"),
             )
-            return [TextContent(type="text", text=result)]
+            result_content = result
 
         elif name == "get_system_health":
             result = await get_system_health()
-            return [TextContent(type="text", text=result)]
+            result_content = result
 
         elif name == "lsp_diagnostics":
             result = await lsp_diagnostics(
                 file_path=arguments["file_path"],
                 severity=arguments.get("severity", "all"),
             )
-            return [TextContent(type="text", text=result)]
+            result_content = result
 
         elif name == "ast_grep_search":
             result = await ast_grep_search(
@@ -578,7 +585,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 directory=arguments.get("directory", "."),
                 language=arguments.get("language", ""),
             )
-            return [TextContent(type="text", text=result)]
+            result_content = result
 
         elif name == "grep_search":
             result = await grep_search(
@@ -586,28 +593,28 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 directory=arguments.get("directory", "."),
                 file_pattern=arguments.get("file_pattern", ""),
             )
-            return [TextContent(type="text", text=result)]
+            result_content = result
 
         elif name == "glob_files":
             result = await glob_files(
                 pattern=arguments["pattern"],
                 directory=arguments.get("directory", "."),
             )
-            return [TextContent(type="text", text=result)]
+            result_content = result
 
         elif name == "session_list":
             result = list_sessions(
                 project_path=arguments.get("project_path"),
                 limit=arguments.get("limit", 20),
             )
-            return [TextContent(type="text", text=result)]
+            result_content = result
 
         elif name == "session_read":
             result = read_session(
                 session_id=arguments["session_id"],
                 limit=arguments.get("limit"),
             )
-            return [TextContent(type="text", text=result)]
+            result_content = result
 
         elif name == "session_search":
             result = search_sessions(
@@ -615,33 +622,33 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 session_id=arguments.get("session_id"),
                 limit=arguments.get("limit", 20),
             )
-            return [TextContent(type="text", text=result)]
+            result_content = result
 
         elif name == "skill_list":
             result = list_skills(
                 project_path=arguments.get("project_path"),
             )
-            return [TextContent(type="text", text=result)]
+            result_content = result
 
         elif name == "skill_get":
             result = get_skill(
                 name=arguments["name"],
                 project_path=arguments.get("project_path"),
             )
-            return [TextContent(type="text", text=result)]
+            result_content = result
 
         elif name == "task_spawn":
             result = await task_spawn(
                 prompt=arguments["prompt"],
                 model=arguments.get("model", "gemini-3-flash"),
             )
-            return [TextContent(type="text", text=result)]
+            result_content = result
 
         elif name == "task_status":
             result = await task_status(
                 task_id=arguments["task_id"],
             )
-            return [TextContent(type="text", text=result)]
+            result_content = result
 
         elif name == "agent_retry":
             result = await agent_retry(
@@ -649,11 +656,11 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 new_prompt=arguments.get("new_prompt"),
                 new_timeout=arguments.get("new_timeout"),
             )
-            return [TextContent(type="text", text=result)]
+            result_content = result
 
         elif name == "task_list":
             result = await task_list()
-            return [TextContent(type="text", text=result)]
+            result_content = result
 
         # Agent tools with full tool access
         elif name == "agent_spawn":
@@ -664,31 +671,31 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 model=arguments.get("model", "gemini-3-flash"),
                 thinking_budget=arguments.get("thinking_budget", 0),
             )
-            return [TextContent(type="text", text=result)]
+            result_content = result
 
         elif name == "agent_output":
             result = await agent_output(
                 task_id=arguments["task_id"],
                 block=arguments.get("block", False),
             )
-            return [TextContent(type="text", text=result)]
+            result_content = result
 
         elif name == "agent_cancel":
             result = await agent_cancel(
                 task_id=arguments["task_id"],
             )
-            return [TextContent(type="text", text=result)]
+            result_content = result
 
         elif name == "agent_list":
             result = await agent_list()
-            return [TextContent(type="text", text=result)]
+            result_content = result
 
         elif name == "agent_progress":
             result = await agent_progress(
                 task_id=arguments["task_id"],
                 lines=arguments.get("lines", 20),
             )
-            return [TextContent(type="text", text=result)]
+            result_content = result
 
         # LSP Tools
         elif name == "lsp_hover":
@@ -697,15 +704,15 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 line=arguments["line"],
                 character=arguments["character"],
             )
-            return [TextContent(type="text", text=result)]
+            result_content = result
 
         elif name == "lsp_goto_definition":
-            result = await lsp_goto_definition(
+            result = await lsp_definition(
                 file_path=arguments["file_path"],
                 line=arguments["line"],
                 character=arguments["character"],
             )
-            return [TextContent(type="text", text=result)]
+            result_content = result
 
         elif name == "lsp_find_references":
             result = await lsp_find_references(
@@ -714,20 +721,19 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 character=arguments["character"],
                 include_declaration=arguments.get("include_declaration", True),
             )
-            return [TextContent(type="text", text=result)]
+            result_content = result
 
         elif name == "lsp_document_symbols":
             result = await lsp_document_symbols(
                 file_path=arguments["file_path"],
             )
-            return [TextContent(type="text", text=result)]
+            result_content = result
 
         elif name == "lsp_workspace_symbols":
             result = await lsp_workspace_symbols(
                 query=arguments["query"],
-                directory=arguments.get("directory", "."),
             )
-            return [TextContent(type="text", text=result)]
+            result_content = result
 
         elif name == "lsp_prepare_rename":
             result = await lsp_prepare_rename(
@@ -735,7 +741,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 line=arguments["line"],
                 character=arguments["character"],
             )
-            return [TextContent(type="text", text=result)]
+            result_content = result
 
         elif name == "lsp_rename":
             result = await lsp_rename(
@@ -743,9 +749,8 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 line=arguments["line"],
                 character=arguments["character"],
                 new_name=arguments["new_name"],
-                dry_run=arguments.get("dry_run", True),
             )
-            return [TextContent(type="text", text=result)]
+            result_content = result
 
         elif name == "lsp_code_actions":
             result = await lsp_code_actions(
@@ -753,11 +758,11 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 line=arguments["line"],
                 character=arguments["character"],
             )
-            return [TextContent(type="text", text=result)]
+            result_content = result
 
         elif name == "lsp_servers":
             result = await lsp_servers()
-            return [TextContent(type="text", text=result)]
+            result_content = result
 
         elif name == "ast_grep_replace":
             result = await ast_grep_replace(
@@ -770,7 +775,21 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             return [TextContent(type="text", text=result)]
 
         else:
-            return [TextContent(type="text", text=f"Unknown tool: {name}")]
+            result_content = f"Unknown tool: {name}"
+
+        # Post-tool call hooks orchestration
+        if result_content is not None:
+             # Ensure we extract the text for hook processing
+             if isinstance(result_content, list) and len(result_content) > 0 and hasattr(result_content[0], "text"):
+                 processed_text = await hook_manager.execute_post_tool_call(name, arguments, result_content[0].text)
+                 result_content[0].text = processed_text
+             elif isinstance(result_content, str):
+                 result_content = await hook_manager.execute_post_tool_call(name, arguments, result_content)
+        
+        # Format the final return
+        if isinstance(result_content, list):
+            return result_content
+        return [TextContent(type="text", text=str(result_content))]
 
     except Exception as e:
         logger.error(f"Error in tool {name}: {e}")

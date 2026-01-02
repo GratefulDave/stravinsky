@@ -18,6 +18,7 @@ from tenacity import (
 from ..auth.token_store import TokenStore
 from ..auth.oauth import refresh_access_token as gemini_refresh, ANTIGRAVITY_HEADERS
 from ..auth.openai_oauth import refresh_access_token as openai_refresh
+from ..hooks.manager import get_hook_manager
 
 
 async def _ensure_valid_token(token_store: TokenStore, provider: str) -> str:
@@ -116,6 +117,24 @@ async def invoke_gemini(
         ValueError: If not authenticated with Gemini
         httpx.HTTPStatusError: If API request fails
     """
+    # Execute pre-model invoke hooks
+    params = {
+        "prompt": prompt,
+        "model": model,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+        "thinking_budget": thinking_budget,
+    }
+    hook_manager = get_hook_manager()
+    params = await hook_manager.execute_pre_model_invoke(params)
+    
+    # Update local variables from possibly modified params
+    prompt = params["prompt"]
+    model = params["model"]
+    temperature = params["temperature"]
+    max_tokens = params["max_tokens"]
+    thinking_budget = params["thinking_budget"]
+
     access_token = await _ensure_valid_token(token_store, "gemini")
 
     # Gemini API endpoint with OAuth
@@ -205,6 +224,24 @@ async def invoke_openai(
         ValueError: If not authenticated with OpenAI
         httpx.HTTPStatusError: If API request fails
     """
+    # Execute pre-model invoke hooks
+    params = {
+        "prompt": prompt,
+        "model": model,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+        "thinking_budget": thinking_budget,
+    }
+    hook_manager = get_hook_manager()
+    params = await hook_manager.execute_pre_model_invoke(params)
+    
+    # Update local variables from possibly modified params
+    prompt = params["prompt"]
+    model = params["model"]
+    temperature = params["temperature"]
+    max_tokens = params["max_tokens"]
+    thinking_budget = params["thinking_budget"]
+
     access_token = await _ensure_valid_token(token_store, "openai")
 
     # OpenAI Chat Completions API

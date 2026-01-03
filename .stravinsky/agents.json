@@ -30,5 +30,21 @@
     "pid": 23792,
     "timeout": 300,
     "progress": null
+  },
+  "agent_d6dc7912": {
+    "id": "agent_d6dc7912",
+    "prompt": "Test prompt",
+    "agent_type": "explore",
+    "description": "Test agent",
+    "status": "running",
+    "created_at": "2026-01-03T16:20:00.842071",
+    "parent_session_id": null,
+    "started_at": "2026-01-03T16:20:00.843771",
+    "completed_at": null,
+    "result": null,
+    "error": null,
+    "pid": null,
+    "timeout": 5,
+    "progress": null
   }
 }

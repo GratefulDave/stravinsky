@@ -58,19 +58,13 @@ stravinsky-auth status
 # Logout
 stravinsky-auth logout gemini
 
-### Repo Auto-Initialization
+### Slash Commands
 
-Bootstrap any repository for Stravinsky in one command:
+Slash commands are discovered from:
+- Project-local: `.claude/commands/**/*.md` (recursive)
+- User-global: `~/.claude/commands/**/*.md` (recursive)
 
-```bash
-# In the root of your project:
-stravinsky-auth init
-````
-
-This will:
-
-1. Create/Update `CLAUDE.md` with Stravinsky parallel execution rules.
-2. Install standard slash commands into `.claude/commands/stra/`.
+Commands can be organized in subdirectories (e.g., `.claude/commands/strav/stravinsky.md`).
 
 ````
 

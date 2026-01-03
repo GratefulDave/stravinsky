@@ -483,30 +483,73 @@ def main():
     from .tools.agent_manager import get_manager
     from .auth.token_store import TokenStore
 
-    parser = argparse.ArgumentParser(description="Stravinsky MCP Bridge Server")
+    parser = argparse.ArgumentParser(
+        description="Stravinsky MCP Bridge - Multi-model AI orchestration for Claude Code. "
+        "Spawns background agents with full tool access via Claude CLI.",
+        prog="stravinsky",
+        epilog="Examples:\n"
+        "  stravinsky              # Start MCP server (default)\n"
+        "  stravinsky list         # Show all background agents\n"
+        "  stravinsky status       # Check auth status\n"
+        "  stravinsky stop --clear # Stop agents and clear history\n",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument("--version", action="version", version=f"stravinsky {__version__}")
 
-    subparsers = parser.add_subparsers(dest="command", help="Available commands")
+    subparsers = parser.add_subparsers(dest="command", help="Available commands", metavar="COMMAND")
 
     # list command
-    subparsers.add_parser("list", help="List background agent tasks")
+    subparsers.add_parser(
+        "list",
+        help="List all background agent tasks",
+        description="Shows status, ID, type, and description of all spawned agents.",
+    )
 
     # status command
-    subparsers.add_parser("status", help="Show system health and auth status")
+    subparsers.add_parser(
+        "status",
+        help="Show authentication status for all providers",
+        description="Displays OAuth authentication status and token expiration for Gemini and OpenAI.",
+    )
 
     # start command (explicit server start)
-    subparsers.add_parser("start", help="Start the MCP server (STDIO)")
+    subparsers.add_parser(
+        "start",
+        help="Explicitly start the MCP server (STDIO transport)",
+        description="Starts the MCP server for communication with Claude Code. Usually started automatically.",
+    )
 
     # stop command (stop all agents)
-    stop_parser = subparsers.add_parser("stop", help="Stop all running agents")
-    stop_parser.add_argument("--clear", action="store_true", help="Also clear agent history")
+    stop_parser = subparsers.add_parser(
+        "stop",
+        help="Stop all running background agents",
+        description="Terminates all active agent processes. Use --clear to also remove history.",
+    )
+    stop_parser.add_argument(
+        "--clear",
+        action="store_true",
+        help="Also clear agent history from .stravinsky/agents.json",
+    )
 
     # auth command (authentication)
-    auth_parser = subparsers.add_parser("auth", help="Authentication commands")
-    auth_subparsers = auth_parser.add_subparsers(dest="auth_command", help="Auth subcommands")
-    login_parser = auth_subparsers.add_parser("login", help="Login to a provider")
+    auth_parser = subparsers.add_parser(
+        "auth",
+        help="Authentication commands (login/logout)",
+        description="Manage OAuth authentication. Use 'stravinsky-auth' for full auth CLI.",
+    )
+    auth_subparsers = auth_parser.add_subparsers(
+        dest="auth_command", help="Auth subcommands", metavar="SUBCOMMAND"
+    )
+    login_parser = auth_subparsers.add_parser(
+        "login",
+        help="Login to a provider via browser OAuth",
+        description="Opens browser for OAuth authentication with the specified provider.",
+    )
     login_parser.add_argument(
-        "provider", choices=["gemini", "openai"], help="Provider to authenticate with"
+        "provider",
+        choices=["gemini", "openai"],
+        metavar="PROVIDER",
+        help="Provider to authenticate with: gemini (Google) or openai (ChatGPT Plus/Pro)",
     )
 
     # Check for CLI flags

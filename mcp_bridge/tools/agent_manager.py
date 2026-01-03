@@ -24,9 +24,10 @@ logger = logging.getLogger(__name__)
 @dataclass
 class AgentTask:
     """Represents a background agent task with full tool access."""
+
     id: str
     prompt: str
-    agent_type: str  # explore, librarian, frontend, etc.
+    agent_type: str  # explore, dewey, frontend, delphi, etc.
     description: str
     status: str  # pending, running, completed, failed, cancelled
     created_at: str
@@ -43,6 +44,7 @@ class AgentTask:
 @dataclass
 class AgentProgress:
     """Progress tracking for a running agent."""
+
     tool_calls: int = 0
     last_tool: Optional[str] = None
     last_message: Optional[str] = None
@@ -52,36 +54,36 @@ class AgentProgress:
 class AgentManager:
     """
     Manages background agent execution using Claude Code CLI.
-    
+
     Key features:
     - Spawns agents with full tool access via `claude -p`
     - Tracks task status and progress
     - Persists state to .stravinsky/agents.json
     - Provides notification mechanism for task completion
     """
-    
+
     CLAUDE_CLI = "/opt/homebrew/bin/claude"
-    
+
     def __init__(self, base_dir: Optional[str] = None):
         if base_dir:
             self.base_dir = Path(base_dir)
         else:
             self.base_dir = Path.cwd() / ".stravinsky"
-        
+
         self.agents_dir = self.base_dir / "agents"
         self.state_file = self.base_dir / "agents.json"
-        
+
         self.base_dir.mkdir(parents=True, exist_ok=True)
         self.agents_dir.mkdir(parents=True, exist_ok=True)
-        
+
         if not self.state_file.exists():
             self._save_tasks({})
-        
+
         # In-memory tracking for running processes
         self._processes: Dict[str, subprocess.Popen] = {}
         self._notification_queue: Dict[str, List[AgentTask]] = {}
         self._lock = threading.RLock()
-    
+
     def _load_tasks(self) -> Dict[str, Any]:
         """Load tasks from persistent storage."""
         with self._lock:
@@ -92,13 +94,13 @@ class AgentManager:
                     return json.load(f)
             except (json.JSONDecodeError, FileNotFoundError):
                 return {}
-    
+
     def _save_tasks(self, tasks: Dict[str, Any]):
         """Save tasks to persistent storage."""
         with self._lock:
             with open(self.state_file, "w") as f:
                 json.dump(tasks, f, indent=2)
-    
+
     def _update_task(self, task_id: str, **kwargs):
         """Update a task's fields."""
         with self._lock:
@@ -106,22 +108,22 @@ class AgentManager:
             if task_id in tasks:
                 tasks[task_id].update(kwargs)
                 self._save_tasks(tasks)
-    
+
     def get_task(self, task_id: str) -> Optional[Dict[str, Any]]:
         """Get a task by ID."""
         tasks = self._load_tasks()
         return tasks.get(task_id)
-    
+
     def list_tasks(self, parent_session_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """List all tasks, optionally filtered by parent session."""
         tasks = self._load_tasks()
         task_list = list(tasks.values())
-        
+
         if parent_session_id:
             task_list = [t for t in task_list if t.get("parent_session_id") == parent_session_id]
-        
+
         return task_list
-    
+
     def spawn(
         self,
         token_store: Any,
@@ -136,7 +138,7 @@ class AgentManager:
     ) -> str:
         """
         Spawn a new background agent.
-        
+
         Args:
             prompt: The task prompt for the agent
             agent_type: Type of agent (explore, dewey, frontend, delphi)
@@ -145,12 +147,12 @@ class AgentManager:
             system_prompt: Optional custom system prompt
             model: Model to use (gemini-3-flash, claude, etc.)
             timeout: Maximum execution time in seconds
-            
+
         Returns:
             Task ID for tracking
         """
         task_id = f"agent_{uuid.uuid4().hex[:8]}"
-        
+
         task = AgentTask(
             id=task_id,
             prompt=prompt,
@@ -161,18 +163,20 @@ class AgentManager:
             parent_session_id=parent_session_id,
             timeout=timeout,
         )
-        
+
         # Persist task
         with self._lock:
             tasks = self._load_tasks()
             tasks[task_id] = asdict(task)
             self._save_tasks(tasks)
-        
+
         # Start background execution
-        self._execute_agent(task_id, token_store, prompt, agent_type, system_prompt, model, thinking_budget, timeout)
-        
+        self._execute_agent(
+            task_id, token_store, prompt, agent_type, system_prompt, model, thinking_budget, timeout
+        )
+
         return task_id
-    
+
     def _execute_agent(
         self,
         task_id: str,
@@ -184,75 +188,107 @@ class AgentManager:
         thinking_budget: int = 0,
         timeout: int = 300,
     ):
-        """Execute agent in background thread using direct API calls.
-        
-        NOTE: The Claude CLI (`claude -p`) hangs in non-interactive mode in v2.0.76,
-        so we use direct API calls instead. This means agents don't have tool access,
-        but they can still perform research/analysis tasks.
+        """Execute agent using Claude CLI with full tool access.
+
+        Uses `claude -p` to spawn a background agent with complete tool access,
+        just like oh-my-opencode's Sisyphus implementation.
         """
-        
+
         def run_agent():
             log_file = self.agents_dir / f"{task_id}.log"
             output_file = self.agents_dir / f"{task_id}.out"
-            
-            self._update_task(
-                task_id,
-                status="running",
-                started_at=datetime.now().isoformat()
-            )
-            
+
+            self._update_task(task_id, status="running", started_at=datetime.now().isoformat())
+
             try:
-                # Use AGENTIC API calls with function calling for full tool access
-                # Import here to avoid circular imports
-                from .model_invoke import invoke_gemini_agentic, invoke_openai
-                
                 # Prepare full prompt with system prompt if provided
                 full_prompt = prompt
                 if system_prompt:
                     full_prompt = f"{system_prompt}\n\n---\n\n{prompt}"
-                
-                logger.info(f"[AgentManager] Executing AGENTIC agent {task_id} via API ({model})")
-                
-                # Create event loop for this thread
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                
+
+                logger.info(f"[AgentManager] Spawning Claude CLI agent {task_id} ({agent_type})")
+
+                # Build Claude CLI command with full tool access
+                # Using `claude -p` for non-interactive mode with prompt
+                cmd = [
+                    self.CLAUDE_CLI,
+                    "-p",
+                    full_prompt,
+                    "--output-format",
+                    "text",
+                ]
+
+                # Add system prompt file if we have one
+                if system_prompt:
+                    system_file = self.agents_dir / f"{task_id}.system"
+                    system_file.write_text(system_prompt)
+                    cmd.extend(["--system-prompt", str(system_file)])
+
+                # Execute Claude CLI as subprocess with full tool access
+                logger.info(f"[AgentManager] Running: {' '.join(cmd[:3])}...")
+
+                with open(log_file, "w") as log_f:
+                    process = subprocess.Popen(
+                        cmd,
+                        stdout=subprocess.PIPE,
+                        stderr=log_f,
+                        text=True,
+                        cwd=str(Path.cwd()),
+                        env={**os.environ, "CLAUDE_CODE_ENTRYPOINT": "stravinsky-agent"},
+                        start_new_session=True,  # Allow process group management
+                    )
+
+                # Track the process
+                self._processes[task_id] = process
+                self._update_task(task_id, pid=process.pid)
+
+                # Wait for completion with timeout
                 try:
-                    # Route to appropriate model
-                    if model.startswith("gpt") or model.startswith("o1") or model.startswith("o3"):
-                        result = loop.run_until_complete(
-                            invoke_openai(
-                                token_store=token_store,
-                                prompt=full_prompt,
-                                model=model,
-                                thinking_budget=thinking_budget,
-                            )
+                    stdout, _ = process.communicate(timeout=timeout)
+                    result = stdout.strip() if stdout else ""
+
+                    if process.returncode == 0:
+                        output_file.write_text(result)
+                        self._update_task(
+                            task_id,
+                            status="completed",
+                            result=result,
+                            completed_at=datetime.now().isoformat(),
                         )
+                        logger.info(f"[AgentManager] Agent {task_id} completed successfully")
                     else:
-                        # Default to Gemini with FULL AGENTIC TOOL ACCESS
-                        result = loop.run_until_complete(
-                            invoke_gemini_agentic(
-                                token_store=token_store,
-                                prompt=full_prompt,
-                                model=model,
-                                max_turns=10,
-                                timeout=120,
-                            )
+                        error_msg = f"Claude CLI exited with code {process.returncode}"
+                        if log_file.exists():
+                            error_msg += f"\n{log_file.read_text()}"
+                        self._update_task(
+                            task_id,
+                            status="failed",
+                            error=error_msg,
+                            completed_at=datetime.now().isoformat(),
                         )
-                finally:
-                    loop.close()
-                
-                # Write output
-                output_file.write_text(result)
-                
+                        logger.error(f"[AgentManager] Agent {task_id} failed: {error_msg}")
+
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    self._update_task(
+                        task_id,
+                        status="failed",
+                        error=f"Agent timed out after {timeout}s",
+                        completed_at=datetime.now().isoformat(),
+                    )
+                    logger.warning(f"[AgentManager] Agent {task_id} timed out")
+
+            except FileNotFoundError:
+                error_msg = f"Claude CLI not found at {self.CLAUDE_CLI}. Install with: npm install -g @anthropic-ai/claude-code"
+                log_file.write_text(error_msg)
                 self._update_task(
                     task_id,
-                    status="completed",
-                    result=result,
-                    completed_at=datetime.now().isoformat()
+                    status="failed",
+                    error=error_msg,
+                    completed_at=datetime.now().isoformat(),
                 )
-                logger.info(f"[AgentManager] Agent {task_id} completed successfully")
-                    
+                logger.error(f"[AgentManager] {error_msg}")
+
             except Exception as e:
                 error_msg = str(e)
                 log_file.write_text(error_msg)
@@ -260,46 +296,46 @@ class AgentManager:
                     task_id,
                     status="failed",
                     error=error_msg,
-                    completed_at=datetime.now().isoformat()
+                    completed_at=datetime.now().isoformat(),
                 )
                 logger.exception(f"[AgentManager] Agent {task_id} exception")
+
             finally:
                 self._processes.pop(task_id, None)
                 self._notify_completion(task_id)
-        
+
         # Run in background thread
         thread = threading.Thread(target=run_agent, daemon=True)
         thread.start()
-    
 
     def _notify_completion(self, task_id: str):
         """Queue notification for parent session."""
         task = self.get_task(task_id)
         if not task:
             return
-        
+
         parent_id = task.get("parent_session_id")
         if parent_id:
             if parent_id not in self._notification_queue:
                 self._notification_queue[parent_id] = []
-            
+
             self._notification_queue[parent_id].append(task)
             logger.info(f"[AgentManager] Queued notification for {parent_id}: task {task_id}")
-    
+
     def get_pending_notifications(self, session_id: str) -> List[Dict[str, Any]]:
         """Get and clear pending notifications for a session."""
         notifications = self._notification_queue.pop(session_id, [])
         return notifications
-    
+
     def cancel(self, task_id: str) -> bool:
         """Cancel a running agent task."""
         task = self.get_task(task_id)
         if not task:
             return False
-        
+
         if task["status"] != "running":
             return False
-        
+
         process = self._processes.get(task_id)
         if process:
             try:
@@ -311,34 +347,30 @@ class AgentManager:
                     process.kill()
                 except:
                     pass
-        
-        self._update_task(
-            task_id,
-            status="cancelled",
-            completed_at=datetime.now().isoformat()
-        )
-        
+
+        self._update_task(task_id, status="cancelled", completed_at=datetime.now().isoformat())
+
         return True
-    
+
     def stop_all(self, clear_history: bool = False) -> int:
         """
         Stop all running agents and optionally clear task history.
-        
+
         Args:
             clear_history: If True, also remove completed/failed tasks from history
-            
+
         Returns:
             Number of tasks stopped/cleared
         """
         tasks = self._load_tasks()
         stopped_count = 0
-        
+
         # Stop running tasks
         for task_id, task in list(tasks.items()):
             if task.get("status") == "running":
                 self.cancel(task_id)
                 stopped_count += 1
-        
+
         # Optionally clear history
         if clear_history:
             cleared = len(tasks)
@@ -346,25 +378,25 @@ class AgentManager:
             self._processes.clear()
             logger.info(f"[AgentManager] Cleared all {cleared} agent tasks")
             return cleared
-        
+
         return stopped_count
-    
+
     def get_output(self, task_id: str, block: bool = False, timeout: float = 30.0) -> str:
         """
         Get output from an agent task.
-        
+
         Args:
             task_id: The task ID
             block: If True, wait for completion
             timeout: Max seconds to wait if blocking
-            
+
         Returns:
             Formatted task output/status
         """
         task = self.get_task(task_id)
         if not task:
             return f"Task {task_id} not found."
-        
+
         if block and task["status"] == "running":
             # Poll for completion
             start = datetime.now()
@@ -373,11 +405,11 @@ class AgentManager:
                 if task["status"] != "running":
                     break
                 asyncio.sleep(0.5)
-        
+
         status = task["status"]
         description = task.get("description", "")
         agent_type = task.get("agent_type", "unknown")
-        
+
         if status == "completed":
             result = task.get("result", "(no output)")
             return f"""✅ Agent Task Completed
@@ -388,7 +420,7 @@ class AgentManager:
 
 **Result**:
 {result}"""
-        
+
         elif status == "failed":
             error = task.get("error", "(no error details)")
             return f"""❌ Agent Task Failed
@@ -399,14 +431,14 @@ class AgentManager:
 
 **Error**:
 {error}"""
-        
+
         elif status == "cancelled":
             return f"""⚠️ Agent Task Cancelled
 
 **Task ID**: {task_id}
 **Agent**: {agent_type}
 **Description**: {description}"""
-        
+
         else:  # pending or running
             pid = task.get("pid", "N/A")
             started = task.get("started_at", "N/A")
@@ -419,46 +451,47 @@ class AgentManager:
 **Started**: {started}
 
 Use `agent_output` with block=true to wait for completion."""
-    
+
     def get_progress(self, task_id: str, lines: int = 20) -> str:
         """
         Get real-time progress from a running agent's output.
-        
+
         Args:
             task_id: The task ID
             lines: Number of lines to show from the end
-            
+
         Returns:
             Recent output lines and status
         """
         task = self.get_task(task_id)
         if not task:
             return f"Task {task_id} not found."
-        
+
         output_file = self.agents_dir / f"{task_id}.out"
         log_file = self.agents_dir / f"{task_id}.log"
-        
+
         status = task["status"]
         description = task.get("description", "")
         agent_type = task.get("agent_type", "unknown")
         pid = task.get("pid")
-        
+
         # Zombie Detection: If running but process is gone
         if status == "running" and pid:
             try:
                 import psutil
+
                 if not psutil.pid_exists(pid):
                     status = "failed"
                     self._update_task(
-                        task_id, 
-                        status="failed", 
+                        task_id,
+                        status="failed",
                         error="Agent process died unexpectedly (Zombie detected)",
-                        completed_at=datetime.now().isoformat()
+                        completed_at=datetime.now().isoformat(),
                     )
                     logger.warning(f"[AgentManager] Zombie agent detected: {task_id}")
             except ImportError:
-                pass 
-        
+                pass
+
         # Read recent output
         output_content = ""
         if output_file.exists():
@@ -470,7 +503,7 @@ Use `agent_output` with block=true to wait for completion."""
                     output_content = "\n".join(recent)
             except Exception:
                 pass
-        
+
         # Check log for errors
         log_content = ""
         if log_file.exists():
@@ -478,7 +511,7 @@ Use `agent_output` with block=true to wait for completion."""
                 log_content = log_file.read_text().strip()
             except Exception:
                 pass
-        
+
         # Status emoji
         status_emoji = {
             "pending": "⏳",
@@ -487,7 +520,7 @@ Use `agent_output` with block=true to wait for completion."""
             "failed": "❌",
             "cancelled": "⚠️",
         }.get(status, "❓")
-        
+
         result = f"""{status_emoji} **Agent Progress**
 
 **Task ID**: {task_id}
@@ -495,34 +528,39 @@ Use `agent_output` with block=true to wait for completion."""
 **Description**: {description}
 **Status**: {status}
 """
-        
+
         if output_content:
             result += f"\n**Recent Output** (last {lines} lines):\n```\n{output_content}\n```"
         elif status == "running":
             result += "\n*Agent is working... no output yet.*"
-        
+
         if log_content and status == "failed":
             # Truncate log if too long
             if len(log_content) > 500:
                 log_content = log_content[:500] + "..."
             result += f"\n\n**Error Log**:\n```\n{log_content}\n```"
-        
+
         return result
 
 
 # Global manager instance
 _manager: Optional[AgentManager] = None
+_manager_lock = threading.Lock()
 
 
 def get_manager() -> AgentManager:
     """Get or create the global AgentManager instance."""
     global _manager
     if _manager is None:
-        _manager = AgentManager()
+        with _manager_lock:
+            # Double-check pattern to avoid race condition
+            if _manager is None:
+                _manager = AgentManager()
     return _manager
 
 
 # Tool interface functions
+
 
 async def agent_spawn(
     prompt: str,
@@ -534,7 +572,7 @@ async def agent_spawn(
 ) -> str:
     """
     Spawn a background agent.
-    
+
     Args:
         prompt: The task for the agent to perform
         agent_type: Type of agent (explore, dewey, frontend, delphi)
@@ -542,12 +580,12 @@ async def agent_spawn(
         model: Model to use (gemini-3-flash, gemini-2.0-flash, claude)
         thinking_budget: Reserved reasoning tokens
         timeout: Execution timeout in seconds
-        
+
     Returns:
         Task ID and instructions
     """
     manager = get_manager()
-    
+
     # Map agent types to system prompts
     system_prompts = {
         "explore": "You are a codebase exploration specialist. Find files, patterns, and answer 'where is X?' questions efficiently.",
@@ -618,20 +656,21 @@ RESPONSE RULES:
 - If info not found, state clearly what's missing
 - Be thorough on the goal, concise on everything else""",
     }
-    
+
     system_prompt = system_prompts.get(agent_type, None)
-    
+
     # Override model based on agent type for optimal performance
     agent_model_overrides = {
         "frontend": "gemini-3-pro",  # Pro for UI/UX complexity
         "delphi": "gpt-5.2-medium",  # OpenAI for strategic reasoning
     }
     actual_model = agent_model_overrides.get(agent_type, model)
-    
+
     # Get token store for authentication
     from ..auth.token_store import TokenStore
+
     token_store = TokenStore()
-    
+
     task_id = manager.spawn(
         token_store=token_store,
         prompt=prompt,
@@ -642,7 +681,7 @@ RESPONSE RULES:
         thinking_budget=thinking_budget,
         timeout=timeout,
     )
-    
+
     return f"""🚀 Background agent spawned successfully.
 
 **Task ID**: {task_id}
@@ -660,11 +699,11 @@ The agent is now running. Use:
 async def agent_output(task_id: str, block: bool = False) -> str:
     """
     Get output from a background agent task.
-    
+
     Args:
         task_id: The task ID from agent_spawn
         block: If True, wait for the task to complete (up to 30s)
-        
+
     Returns:
         Task status and output
     """
@@ -679,48 +718,48 @@ async def agent_retry(
 ) -> str:
     """
     Retry a failed or timed-out background agent.
-    
+
     Args:
         task_id: The ID of the task to retry
         new_prompt: Optional refined prompt for the retry
         new_timeout: Optional new timeout in seconds
-        
+
     Returns:
         New Task ID and status
     """
     manager = get_manager()
     task = manager.get_task(task_id)
-    
+
     if not task:
         return f"❌ Task {task_id} not found."
-    
+
     if task["status"] in ["running", "pending"]:
         return f"⚠️ Task {task_id} is still {task['status']}. Cancel it first if you want to retry."
-    
+
     prompt = new_prompt or task["prompt"]
     timeout = new_timeout or task.get("timeout", 300)
-    
+
     return await agent_spawn(
         prompt=prompt,
         agent_type=task["agent_type"],
         description=f"Retry of {task_id}: {task['description']}",
-        timeout=timeout
+        timeout=timeout,
     )
 
 
 async def agent_cancel(task_id: str) -> str:
     """
     Cancel a running background agent.
-    
+
     Args:
         task_id: The task ID to cancel
-        
+
     Returns:
         Cancellation result
     """
     manager = get_manager()
     success = manager.cancel(task_id)
-    
+
     if success:
         return f"✅ Agent task {task_id} has been cancelled."
     else:
@@ -734,18 +773,18 @@ async def agent_cancel(task_id: str) -> str:
 async def agent_list() -> str:
     """
     List all background agent tasks.
-    
+
     Returns:
         Formatted list of tasks
     """
     manager = get_manager()
     tasks = manager.list_tasks()
-    
+
     if not tasks:
         return "No background agent tasks found."
-    
+
     lines = ["**Background Agent Tasks**", ""]
-    
+
     for t in sorted(tasks, key=lambda x: x.get("created_at", ""), reverse=True):
         status_emoji = {
             "pending": "⏳",
@@ -754,24 +793,24 @@ async def agent_list() -> str:
             "failed": "❌",
             "cancelled": "⚠️",
         }.get(t["status"], "❓")
-        
+
         desc = t.get("description", t.get("prompt", "")[:40])
         lines.append(f"- {status_emoji} [{t['id']}] {t['agent_type']}: {desc}")
-    
+
     return "\n".join(lines)
 
 
 async def agent_progress(task_id: str, lines: int = 20) -> str:
     """
     Get real-time progress from a running background agent.
-    
+
     Shows the most recent output lines from the agent, useful for
     monitoring what the agent is currently doing.
-    
+
     Args:
         task_id: The task ID from agent_spawn
         lines: Number of recent output lines to show (default 20)
-        
+
     Returns:
         Recent agent output and status
     """

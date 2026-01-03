@@ -36,20 +36,60 @@ COMMAND_STRAVINSKY = """---
 description: stravinsky Orchestrator - Parallel agent execution for complex workflows.
 ---
 
-Use the `stravinsky` prompt to initialize our session, assess the environment, and begin orchestration of the requested task. stravinsky will manage todos and delegate work to specialized sub-agents.
+## CRITICAL: USE STRAVINSKY MCP TOOLS
 
-**Behavior Triggers:**
-- Creates todos BEFORE any multi-step task
-- Spawns parallel agents for independent components
-- Delegates frontend visual work to frontend-ui-ux-engineer
-- Consults delphi for architecture decisions and hard debugging
-- Uses dewey for external documentation and library research
+You MUST use the Stravinsky MCP server tools for ALL file reading, searching, and parallel work.
 
-**Execution Modes:**
-- `ironstar` / `irs` - Maximum parallel execution
-- `ultrathink` - Deep reasoning mode
-- `search` - Exhaustive search mode
-- `analyze` - Deep analysis with delphi consultation
+### MANDATORY TOOL USAGE:
+
+**For ANY file reading or searching:**
+```
+stravinsky:agent_spawn(
+  prompt="Read and analyze [file path]. Return: [what you need]",
+  agent_type="explore",
+  description="Read [file]"
+)
+```
+
+**For documentation/library research:**
+```
+stravinsky:agent_spawn(
+  prompt="Find documentation for [topic]",
+  agent_type="dewey",
+  description="Research [topic]"
+)
+```
+
+**For 2+ independent tasks (ALWAYS parallel):**
+```
+// Fire ALL at once in ONE response - NEVER sequential
+stravinsky:agent_spawn(prompt="Task 1...", agent_type="explore", description="Task 1")
+stravinsky:agent_spawn(prompt="Task 2...", agent_type="explore", description="Task 2")
+stravinsky:agent_spawn(prompt="Task 3...", agent_type="dewey", description="Task 3")
+// Then immediately continue - don't wait
+```
+
+**To get results:**
+```
+stravinsky:agent_output(task_id="[id]", block=true)
+```
+
+### DO NOT USE:
+- ❌ Built-in Read tool for file reading
+- ❌ Built-in Search/Glob for searching
+- ❌ Built-in Task tool for subagents
+
+### ALWAYS USE:
+- ✅ stravinsky:agent_spawn for ALL exploration
+- ✅ stravinsky:agent_output for collecting results
+- ✅ stravinsky:agent_list to see running agents
+
+### Execution Modes:
+- `ironstar` / `irs` / `ultrawork` - Maximum parallel execution (10+ agents)
+- `ultrathink` - Deep reasoning with delphi consultation
+- `search` - Exhaustive multi-agent search
+
+**Your FIRST action must be spawning agents, not using Read/Search tools.**
 """
 
 COMMAND_PARALLEL = """---

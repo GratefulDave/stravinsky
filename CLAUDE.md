@@ -43,6 +43,11 @@ claude mcp add stravinsky -- stravinsky
 
 ### Slash Commands (Skills)
 
+Skills are discovered from:
+- Project-local: `.claude/commands/**/*.md` (recursive)
+- User-global: `~/.claude/commands/**/*.md` (recursive)
+
+Common commands:
 - `/stravinsky`: Task Orchestrator & Planner
 - `/delphi`: Architecture & Debug Advisor
 - `/dewey`: Documentation & Research

@@ -7,8 +7,8 @@ delegation to specialized agents, and workflow management.
 
 Key naming conventions (stravinsky equivalents):
 - stravinsky (not Sisyphus) - main orchestrator
-- dewey (not librarian) - documentation/research agent
-- delphi (not oracle) - strategic advisor
+- dewey - documentation/research agent
+- delphi - strategic advisor
 - ironstar (not ultrawork) - maximum execution mode
 """
 

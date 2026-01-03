@@ -534,12 +534,14 @@ def main():
     # auth command (authentication)
     auth_parser = subparsers.add_parser(
         "auth",
-        help="Authentication commands (login/logout)",
-        description="Manage OAuth authentication. Use 'stravinsky-auth' for full auth CLI.",
+        help="Authentication commands (login/logout/refresh/status)",
+        description="Manage OAuth authentication for Gemini and OpenAI providers.",
     )
     auth_subparsers = auth_parser.add_subparsers(
         dest="auth_command", help="Auth subcommands", metavar="SUBCOMMAND"
     )
+
+    # auth login
     login_parser = auth_subparsers.add_parser(
         "login",
         help="Login to a provider via browser OAuth",
@@ -550,6 +552,46 @@ def main():
         choices=["gemini", "openai"],
         metavar="PROVIDER",
         help="Provider to authenticate with: gemini (Google) or openai (ChatGPT Plus/Pro)",
+    )
+
+    # auth logout
+    logout_parser = auth_subparsers.add_parser(
+        "logout",
+        help="Remove stored OAuth credentials",
+        description="Deletes stored access and refresh tokens for the specified provider.",
+    )
+    logout_parser.add_argument(
+        "provider",
+        choices=["gemini", "openai"],
+        metavar="PROVIDER",
+        help="Provider to logout from: gemini or openai",
+    )
+
+    # auth status
+    auth_subparsers.add_parser(
+        "status",
+        help="Show authentication status for all providers",
+        description="Displays authentication status and token expiration for Gemini and OpenAI.",
+    )
+
+    # auth refresh
+    refresh_parser = auth_subparsers.add_parser(
+        "refresh",
+        help="Manually refresh access token",
+        description="Force-refresh the access token using the stored refresh token.",
+    )
+    refresh_parser.add_argument(
+        "provider",
+        choices=["gemini", "openai"],
+        metavar="PROVIDER",
+        help="Provider to refresh token for: gemini or openai",
+    )
+
+    # auth init
+    auth_subparsers.add_parser(
+        "init",
+        help="Bootstrap current repository for Stravinsky",
+        description="Creates .stravinsky/ directory structure and copies default configuration files.",
     )
 
     # Check for CLI flags
@@ -601,11 +643,35 @@ def main():
         return 0
 
     elif args.command == "auth":
-        if getattr(args, "auth_command", None) == "login":
+        auth_cmd = getattr(args, "auth_command", None)
+        token_store = get_token_store()
+
+        if auth_cmd == "login":
             from .auth.cli import cmd_login
 
-            token_store = get_token_store()
             return cmd_login(args.provider, token_store)
+
+        elif auth_cmd == "logout":
+            from .auth.cli import cmd_logout
+
+            return cmd_logout(args.provider, token_store)
+
+        elif auth_cmd == "status":
+            from .auth.cli import cmd_status
+
+            return cmd_status(token_store)
+
+        elif auth_cmd == "refresh":
+            from .auth.cli import cmd_refresh
+
+            return cmd_refresh(args.provider, token_store)
+
+        elif auth_cmd == "init":
+            from .tools.init import bootstrap_repo
+
+            print(bootstrap_repo())
+            return 0
+
         else:
             auth_parser.print_help()
             return 0

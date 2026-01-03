@@ -218,6 +218,10 @@ class AgentManager:
                     "text",
                 ]
 
+                # Add model selection if specified
+                if model:
+                    cmd.extend(["--model", model])
+
                 # Add system prompt file if we have one
                 if system_prompt:
                     system_file = self.agents_dir / f"{task_id}.system"

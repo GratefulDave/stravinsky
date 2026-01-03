@@ -12,21 +12,25 @@ logger = logging.getLogger(__name__)
 
 # Model name mapping: user-friendly names -> Antigravity API model IDs
 # Per API spec: https://github.com/NoeFabris/opencode-antigravity-auth/blob/main/docs/ANTIGRAVITY_API_SPEC.md
-# Antigravity uses its own model naming: gemini-3-flash, gemini-3-pro-low, gemini-3-pro-high
+# VERIFIED GEMINI MODELS (as of 2025-12):
+#   - gemini-3-pro-high, gemini-3-pro-low
+# NOTE: There is NO gemini-3-flash in the API - all flash aliases map to gemini-3-pro-low
+# NOTE: Claude models should use Anthropic API directly, NOT Antigravity
 GEMINI_MODEL_MAP = {
-    # Antigravity native models (pass-through)
-    "gemini-3-flash": "gemini-3-flash",
+    # Antigravity verified Gemini models (pass-through)
     "gemini-3-pro-low": "gemini-3-pro-low",
     "gemini-3-pro-high": "gemini-3-pro-high",
-    # Aliases for convenience
-    "gemini-flash": "gemini-3-flash",
+    # Aliases for convenience (map to closest verified model)
+    "gemini-flash": "gemini-3-pro-low",
+    "gemini-3-flash": "gemini-3-pro-low",  # NOT a real model - redirect to pro-low
     "gemini-pro": "gemini-3-pro-low",
     "gemini-3-pro": "gemini-3-pro-low",
+    "gemini": "gemini-3-pro-low",  # Default gemini alias
     # Legacy mappings (redirect to Antigravity models)
-    "gemini-2.0-flash": "gemini-3-flash",
-    "gemini-2.0-flash-001": "gemini-3-flash",
+    "gemini-2.0-flash": "gemini-3-pro-low",
+    "gemini-2.0-flash-001": "gemini-3-pro-low",
     "gemini-2.0-pro": "gemini-3-pro-low",
-    "gemini-2.0-pro-exp": "gemini-3-pro-low",
+    "gemini-2.0-pro-exp": "gemini-3-pro-high",
 }
 
 
@@ -189,8 +193,9 @@ async def invoke_gemini(
     }
 
     # Build inner request payload
+    # Per API spec: contents must include role ("user" or "model")
     inner_payload = {
-        "contents": [{"parts": [{"text": prompt}]}],
+        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
         "generationConfig": {
             "temperature": temperature,
             "maxOutputTokens": max_tokens,

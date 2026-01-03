@@ -249,8 +249,10 @@ def get_tool_definitions() -> List[Tool]:
         Tool(
             name="agent_spawn",
             description=(
-                "Spawn a background agent. Uses Gemini by default for fast execution. "
-                "Set model='claude' to use Claude Code CLI with full tool access."
+                "PREFERRED TOOL for parallel work. Spawn multiple agents simultaneously for independent tasks. "
+                "ALWAYS use this when you have 2+ independent research, implementation, or verification tasks. "
+                "Call agent_spawn multiple times in ONE response to run tasks concurrently. "
+                "Each agent runs independently with full Gemini capabilities."
             ),
             inputSchema={
                 "type": "object",
@@ -258,7 +260,7 @@ def get_tool_definitions() -> List[Tool]:
                     "prompt": {"type": "string", "description": "The task for the agent to perform"},
                     "agent_type": {
                         "type": "string",
-                        "description": "Agent type: explore, dewey, frontend, delphi",
+                        "description": "Agent type: explore (codebase search), dewey (docs research), frontend (UI), delphi (architecture)",
                         "default": "explore",
                     },
                     "description": {"type": "string", "description": "Short description for status display"},

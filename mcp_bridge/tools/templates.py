@@ -1,10 +1,10 @@
 """
-Templates for Stravinsky repository initialization.
+Templates for stravinsky repository initialization.
 """
 
-CLAUDE_MD_TEMPLATE = """## Stravinsky MCP (Parallel Agents)
+CLAUDE_MD_TEMPLATE = """## stravinsky MCP (Parallel Agents)
 
-Use Stravinsky MCP tools. **DEFAULT: spawn parallel agents for multi-step tasks.**
+Use stravinsky MCP tools. **DEFAULT: spawn parallel agents for multi-step tasks.**
 
 ### Agent Tools
 - `agent_spawn(prompt, agent_type, description)` - Spawn background agent with full tool access
@@ -13,30 +13,50 @@ Use Stravinsky MCP tools. **DEFAULT: spawn parallel agents for multi-step tasks.
 - `agent_list()` - Overview of all running agents
 - `agent_cancel(task_id)` - Stop a running agent
 
-### Parallel Execution (ULTRAWORK)
+### Agent Types
+- `explore` - Codebase search, "where is X?" questions
+- `dewey` - Documentation research, implementation examples
+- `frontend` - UI/UX work, component design
+- `delphi` - Strategic advice, architecture review
+
+### Parallel Execution (IRONSTAR)
 For ANY task with 2+ independent steps:
 1. **Immediately use agent_spawn** for each independent component
 2. Fire all agents simultaneously, don't wait
 3. Monitor with agent_progress, collect with agent_output
 
 ### Trigger Commands
-- **ULTRAWORK**: Maximum parallel execution - spawn agents aggressively for every subtask
+- **IRONSTAR** / **IRS**: Maximum parallel execution - spawn agents aggressively for every subtask
 - **ULTRATHINK**: Engage exhaustive deep reasoning, multi-dimensional analysis
+- **SEARCH**: Maximize search effort across codebase and external resources
+- **ANALYZE**: Deep analysis mode with delphi consultation for complex issues
 """
 
-# Slash Commands
 COMMAND_STRAVINSKY = """---
-description: Trigger the Stravinsky Orchestrator for complex workflows.
+description: stravinsky Orchestrator - Parallel agent execution for complex workflows.
 ---
 
-Use the `stravinsky` prompt to initialize our session, assess the environment, and begin orchestration of the requested task. Stravinsky will manage todos and delegate work to specialized sub-agents.
+Use the `stravinsky` prompt to initialize our session, assess the environment, and begin orchestration of the requested task. stravinsky will manage todos and delegate work to specialized sub-agents.
+
+**Behavior Triggers:**
+- Creates todos BEFORE any multi-step task
+- Spawns parallel agents for independent components
+- Delegates frontend visual work to frontend-ui-ux-engineer
+- Consults delphi for architecture decisions and hard debugging
+- Uses dewey for external documentation and library research
+
+**Execution Modes:**
+- `ironstar` / `irs` - Maximum parallel execution
+- `ultrathink` - Deep reasoning mode
+- `search` - Exhaustive search mode
+- `analyze` - Deep analysis with delphi consultation
 """
 
 COMMAND_PARALLEL = """---
 description: Execute a task with multiple parallel agents for speed.
 ---
 
-Use the Stravinsky MCP tools to execute this task with PARALLEL AGENTS.
+Use the stravinsky MCP tools to execute this task with PARALLEL AGENTS.
 
 **MANDATORY:** For the following task items, spawn a SEPARATE `agent_spawn` call for EACH independent item. Do not work on them sequentially - fire all agents simultaneously:
 
@@ -63,10 +83,17 @@ Call the `get_system_health` tool to verify that all CLI dependencies (rg, fd, s
 """
 
 COMMAND_DELPHI = """---
-description: Consult the Delphi Strategic Advisor for architecture and hard debugging.
+description: Consult the delphi Strategic Advisor for architecture and hard debugging.
 ---
 
 Use the `delphi` prompt to analyze the current problem. This triggers a GPT-based consulting phase focused on strategic reasoning, architectural trade-offs, and root-cause analysis for difficult bugs.
+
+**When to use delphi:**
+- Complex architecture design decisions
+- After 2+ failed fix attempts
+- Multi-system tradeoffs
+- Security/performance concerns
+- Unfamiliar code patterns
 """
 
 COMMAND_LIST = """---
@@ -77,10 +104,23 @@ Call the `agent_list` tool to see an overview of all currently running and compl
 """
 
 COMMAND_DEWEY = """---
-description: Trigger Dewey for documentation research and implementation examples.
+description: Trigger dewey for documentation research and implementation examples.
 ---
 
-Use the `dewey` prompt to find evidence and documentation for the topic at hand. Dewey specializes in multi-repository search and official documentation retrieval.
+Use the `dewey` prompt to find evidence and documentation for the topic at hand. dewey specializes in multi-repository search and official documentation retrieval.
+
+**When to use dewey:**
+- Unfamiliar npm/pip/cargo packages
+- "How do I use [library]?"
+- "What's the best practice for [framework feature]?"
+- Finding OSS implementation examples
+"""
+
+COMMAND_VERSION = """---
+description: Returns the current version and diagnostic info for stravinsky.
+---
+
+Display the stravinsky MCP version, registered hooks, available agents, and system health status.
 """
 
 SLASH_COMMANDS = {
@@ -91,4 +131,5 @@ SLASH_COMMANDS = {
     "health.md": COMMAND_HEALTH,
     "delphi.md": COMMAND_DELPHI,
     "dewey.md": COMMAND_DEWEY,
+    "version.md": COMMAND_VERSION,
 }

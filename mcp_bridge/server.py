@@ -202,20 +202,8 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
 
         # --- AGENT DISPATCH ---
         elif name == "agent_spawn":
-            from .tools.agent_manager import get_agent_manager
-            manager = get_agent_manager()
-            task_id = manager.spawn(
-                token_store=token_store,
-                prompt=arguments["prompt"],
-                agent_type=arguments.get("agent_type", "explore"),
-                description=arguments.get("description", ""),
-                parent_session_id=arguments.get("parent_session_id"),
-                system_prompt=arguments.get("system_prompt"),
-                model=arguments.get("model", "gemini-3-flash"),
-                thinking_budget=arguments.get("thinking_budget", 0),
-                timeout=arguments.get("timeout", 300),
-            )
-            result_content = f"Agent spawned with task_id: {task_id}"
+            from .tools.agent_manager import agent_spawn
+            result_content = await agent_spawn(**arguments)
 
         elif name == "agent_output":
             from .tools.agent_manager import agent_output

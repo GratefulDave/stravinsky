@@ -80,26 +80,32 @@ class AgentManager:
         # In-memory tracking for running processes
         self._processes: Dict[str, subprocess.Popen] = {}
         self._notification_queue: Dict[str, List[AgentTask]] = {}
+        self._lock = threading.RLock()
     
     def _load_tasks(self) -> Dict[str, Any]:
         """Load tasks from persistent storage."""
-        try:
-            with open(self.state_file, "r") as f:
-                return json.load(f)
-        except (json.JSONDecodeError, FileNotFoundError):
-            return {}
+        with self._lock:
+            try:
+                if not self.state_file.exists():
+                    return {}
+                with open(self.state_file, "r") as f:
+                    return json.load(f)
+            except (json.JSONDecodeError, FileNotFoundError):
+                return {}
     
     def _save_tasks(self, tasks: Dict[str, Any]):
         """Save tasks to persistent storage."""
-        with open(self.state_file, "w") as f:
-            json.dump(tasks, f, indent=2)
+        with self._lock:
+            with open(self.state_file, "w") as f:
+                json.dump(tasks, f, indent=2)
     
     def _update_task(self, task_id: str, **kwargs):
         """Update a task's fields."""
-        tasks = self._load_tasks()
-        if task_id in tasks:
-            tasks[task_id].update(kwargs)
-            self._save_tasks(tasks)
+        with self._lock:
+            tasks = self._load_tasks()
+            if task_id in tasks:
+                tasks[task_id].update(kwargs)
+                self._save_tasks(tasks)
     
     def get_task(self, task_id: str) -> Optional[Dict[str, Any]]:
         """Get a task by ID."""
@@ -157,9 +163,10 @@ class AgentManager:
         )
         
         # Persist task
-        tasks = self._load_tasks()
-        tasks[task_id] = asdict(task)
-        self._save_tasks(tasks)
+        with self._lock:
+            tasks = self._load_tasks()
+            tasks[task_id] = asdict(task)
+            self._save_tasks(tasks)
         
         # Start background execution
         self._execute_agent(task_id, token_store, prompt, agent_type, system_prompt, model, thinking_budget, timeout)

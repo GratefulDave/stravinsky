@@ -243,6 +243,58 @@ class AgentManager:
                     )
                     logger.info(f"[AgentManager] Gemini agent {task_id} completed successfully")
                     
+                elif model.startswith("gpt"):
+                    # Use OpenAI via invoke_openai
+                    logger.info(f"[AgentManager] Spawning OpenAI agent {task_id} with model {model}")
+                    
+                    # Build full prompt with system context
+                    full_prompt = prompt
+                    if system_prompt:
+                        full_prompt = f"{system_prompt}\n\n---\n\n{full_prompt}"
+                    
+                    # Import and call invoke_openai
+                    import asyncio
+                    from .model_invoke import invoke_openai
+                    
+                    # Run async in thread
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    try:
+                        result = loop.run_until_complete(
+                            asyncio.wait_for(
+                                invoke_openai(
+                                    token_store=token_store,
+                                    prompt=full_prompt, 
+                                    model=model,
+                                    thinking_budget=thinking_budget
+                                ),
+                                timeout=timeout
+                            )
+                        )
+                    except asyncio.TimeoutError:
+                        self._update_task(
+                            task_id,
+                            status="failed",
+                            error=f"Task timed out after {timeout} seconds",
+                            completed_at=datetime.now().isoformat()
+                        )
+                        logger.error(f"[AgentManager] OpenAI agent {task_id} timed out")
+                        return
+                    finally:
+                        loop.close()
+                    
+                    # Write output
+                    with open(output_file, "w") as f:
+                        f.write(result)
+                    
+                    self._update_task(
+                        task_id,
+                        status="completed",
+                        result=result,
+                        completed_at=datetime.now().isoformat()
+                    )
+                    logger.info(f"[AgentManager] OpenAI agent {task_id} completed successfully")
+                    
                 else:
                     # Use Claude CLI for Claude models
                     cmd = [
@@ -679,6 +731,13 @@ RESPONSE RULES:
     
     system_prompt = system_prompts.get(agent_type, None)
     
+    # Override model based on agent type for optimal performance
+    agent_model_overrides = {
+        "frontend": "gemini-3-pro",  # Pro for UI/UX complexity
+        "delphi": "gpt-5.2-medium",  # OpenAI for strategic reasoning
+    }
+    actual_model = agent_model_overrides.get(agent_type, model)
+    
     # Get token store for authentication
     from ..auth.token_store import TokenStore
     token_store = TokenStore()
@@ -689,7 +748,7 @@ RESPONSE RULES:
         agent_type=agent_type,
         description=description or prompt[:50],
         system_prompt=system_prompt,
-        model=model,
+        model=actual_model,
         thinking_budget=thinking_budget,
         timeout=timeout,
     )

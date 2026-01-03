@@ -260,7 +260,7 @@ def get_tool_definitions() -> List[Tool]:
                     "prompt": {"type": "string", "description": "The task for the agent to perform"},
                     "agent_type": {
                         "type": "string",
-                        "description": "Agent type: explore (codebase search), dewey (docs research), frontend (UI), delphi (architecture), document_writer (documentation), multimodal (images/PDFs)",
+                        "description": "Agent type: explore, dewey, frontend (gemini-3-pro), delphi (gpt-5.2-medium), document_writer, multimodal",
                         "default": "explore",
                     },
                     "description": {"type": "string", "description": "Short description for status display"},

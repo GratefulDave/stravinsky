@@ -1,5 +1,5 @@
 # Tools module
-from .model_invoke import invoke_gemini, invoke_openai
+from .model_invoke import invoke_gemini, invoke_openai, invoke_gemini_agentic
 from .code_search import lsp_diagnostics, ast_grep_search, ast_grep_replace, grep_search, glob_files
 from .session_manager import list_sessions, read_session, search_sessions, get_session_info
 from .skill_loader import list_skills, get_skill, create_skill
@@ -9,6 +9,7 @@ from .continuous_loop import enable_ralph_loop, disable_ralph_loop
 
 __all__ = [
     "invoke_gemini",
+    "invoke_gemini_agentic",
     "invoke_openai",
     "lsp_diagnostics",
     "ast_grep_search",

@@ -220,6 +220,246 @@ async def invoke_gemini(
             return f"Error parsing response: {e}"
 
 
+# ========================
+# AGENTIC FUNCTION CALLING
+# ========================
+
+# Tool definitions for background agents
+AGENT_TOOLS = [
+    {
+        "functionDeclarations": [
+            {
+                "name": "read_file",
+                "description": "Read the contents of a file. Returns the file contents as text.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {
+                            "type": "string",
+                            "description": "Absolute or relative path to the file"
+                        }
+                    },
+                    "required": ["path"]
+                }
+            },
+            {
+                "name": "list_directory",
+                "description": "List files and directories in a path",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {
+                            "type": "string",
+                            "description": "Directory path to list"
+                        }
+                    },
+                    "required": ["path"]
+                }
+            },
+            {
+                "name": "grep_search",
+                "description": "Search for a pattern in files using ripgrep. Returns matching lines with file paths and line numbers.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "pattern": {
+                            "type": "string",
+                            "description": "The search pattern (regex)"
+                        },
+                        "path": {
+                            "type": "string",
+                            "description": "Directory or file to search in"
+                        }
+                    },
+                    "required": ["pattern", "path"]
+                }
+            },
+            {
+                "name": "write_file",
+                "description": "Write content to a file",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {
+                            "type": "string",
+                            "description": "Path to the file to write"
+                        },
+                        "content": {
+                            "type": "string",
+                            "description": "Content to write to the file"
+                        }
+                    },
+                    "required": ["path", "content"]
+                }
+            }
+        ]
+    }
+]
+
+
+def _execute_tool(name: str, args: dict) -> str:
+    """Execute a tool and return the result."""
+    import os
+    import subprocess
+    from pathlib import Path
+    
+    try:
+        if name == "read_file":
+            path = Path(args["path"])
+            if not path.exists():
+                return f"Error: File not found: {path}"
+            return path.read_text()
+        
+        elif name == "list_directory":
+            path = Path(args["path"])
+            if not path.exists():
+                return f"Error: Directory not found: {path}"
+            entries = []
+            for entry in path.iterdir():
+                entry_type = "DIR" if entry.is_dir() else "FILE"
+                entries.append(f"[{entry_type}] {entry.name}")
+            return "\n".join(entries) if entries else "(empty directory)"
+        
+        elif name == "grep_search":
+            pattern = args["pattern"]
+            search_path = args["path"]
+            result = subprocess.run(
+                ["rg", "--json", "-m", "50", pattern, search_path],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            if result.returncode == 0:
+                return result.stdout[:10000]  # Limit output size
+            elif result.returncode == 1:
+                return "No matches found"
+            else:
+                return f"Search error: {result.stderr}"
+        
+        elif name == "write_file":
+            path = Path(args["path"])
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(args["content"])
+            return f"Successfully wrote {len(args['content'])} bytes to {path}"
+        
+        else:
+            return f"Unknown tool: {name}"
+    
+    except Exception as e:
+        return f"Tool error: {str(e)}"
+
+
+async def invoke_gemini_agentic(
+    token_store: TokenStore,
+    prompt: str,
+    model: str = "gemini-3-flash",
+    max_turns: int = 10,
+    timeout: int = 120,
+) -> str:
+    """
+    Invoke Gemini with function calling for agentic tasks.
+    
+    This function implements a multi-turn agentic loop:
+    1. Send prompt with tool definitions
+    2. If model returns FunctionCall, execute the tool
+    3. Send FunctionResponse back to model
+    4. Repeat until model returns text or max_turns reached
+    
+    Args:
+        token_store: Token store for OAuth credentials
+        prompt: The task prompt
+        model: Gemini model to use
+        max_turns: Maximum number of tool-use turns
+        timeout: Request timeout in seconds
+        
+    Returns:
+        Final text response from the model
+    """
+    access_token = await _ensure_valid_token(token_store, "gemini")
+    api_model = resolve_gemini_model(model)
+    api_url = f"https://generativelanguage.googleapis.com/v1beta/models/{api_model}:generateContent"
+    
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json",
+        **ANTIGRAVITY_HEADERS,
+    }
+    
+    # Initialize conversation
+    contents = [{"role": "user", "parts": [{"text": prompt}]}]
+    
+    for turn in range(max_turns):
+        payload = {
+            "contents": contents,
+            "tools": AGENT_TOOLS,
+            "generationConfig": {
+                "temperature": 0.7,
+                "maxOutputTokens": 8192,
+            },
+        }
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                api_url,
+                headers=headers,
+                json=payload,
+                timeout=float(timeout),
+            )
+            
+            if response.status_code == 401:
+                raise ValueError("Gemini authentication expired")
+            
+            response.raise_for_status()
+            data = response.json()
+        
+        # Extract response
+        candidates = data.get("candidates", [])
+        if not candidates:
+            return "No response generated"
+        
+        content = candidates[0].get("content", {})
+        parts = content.get("parts", [])
+        
+        if not parts:
+            return "No response parts"
+        
+        # Check for function call
+        function_call = None
+        text_response = None
+        
+        for part in parts:
+            if "functionCall" in part:
+                function_call = part["functionCall"]
+                break
+            elif "text" in part:
+                text_response = part["text"]
+        
+        if function_call:
+            # Execute the function
+            func_name = function_call.get("name")
+            func_args = function_call.get("args", {})
+            
+            logger.info(f"[AgenticGemini] Turn {turn+1}: Executing {func_name}")
+            result = _execute_tool(func_name, func_args)
+            
+            # Add model's response and function result to conversation
+            contents.append({"role": "model", "parts": [{"functionCall": function_call}]})
+            contents.append({
+                "role": "user",
+                "parts": [{
+                    "functionResponse": {
+                        "name": func_name,
+                        "response": {"result": result}
+                    }
+                }]
+            })
+        else:
+            # No function call, return text response
+            return text_response or "Task completed"
+    
+    return "Max turns reached without final response"
+
+
 @retry(
     stop=stop_after_attempt(5),
     wait=wait_exponential(multiplier=1, min=4, max=60),

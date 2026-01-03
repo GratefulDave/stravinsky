@@ -202,16 +202,16 @@ class AgentManager:
             )
             
             try:
-                # Use direct API calls instead of hanging CLI
+                # Use AGENTIC API calls with function calling for full tool access
                 # Import here to avoid circular imports
-                from .model_invoke import invoke_gemini, invoke_openai
+                from .model_invoke import invoke_gemini_agentic, invoke_openai
                 
                 # Prepare full prompt with system prompt if provided
                 full_prompt = prompt
                 if system_prompt:
                     full_prompt = f"{system_prompt}\n\n---\n\n{prompt}"
                 
-                logger.info(f"[AgentManager] Executing agent {task_id} via API ({model})")
+                logger.info(f"[AgentManager] Executing AGENTIC agent {task_id} via API ({model})")
                 
                 # Create event loop for this thread
                 loop = asyncio.new_event_loop()
@@ -229,13 +229,14 @@ class AgentManager:
                             )
                         )
                     else:
-                        # Default to Gemini
+                        # Default to Gemini with FULL AGENTIC TOOL ACCESS
                         result = loop.run_until_complete(
-                            invoke_gemini(
+                            invoke_gemini_agentic(
                                 token_store=token_store,
                                 prompt=full_prompt,
                                 model=model,
-                                thinking_budget=thinking_budget,
+                                max_turns=10,
+                                timeout=120,
                             )
                         )
                 finally:

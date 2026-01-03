@@ -184,7 +184,12 @@ class AgentManager:
         thinking_budget: int = 0,
         timeout: int = 300,
     ):
-        """Execute agent in background thread."""
+        """Execute agent in background thread using direct API calls.
+        
+        NOTE: The Claude CLI (`claude -p`) hangs in non-interactive mode in v2.0.76,
+        so we use direct API calls instead. This means agents don't have tool access,
+        but they can still perform research/analysis tasks.
+        """
         
         def run_agent():
             log_file = self.agents_dir / f"{task_id}.log"
@@ -197,86 +202,63 @@ class AgentManager:
             )
             
             try:
-                # DEFAULT: Use Claude CLI for background agents to ensure full tool access
-                # This ensures research agents can use search, read_file, etc.
-                cmd = [
-                    self.CLAUDE_CLI,
-                    "-p",  # Non-interactive print mode
-                ]
+                # Use direct API calls instead of hanging CLI
+                # Import here to avoid circular imports
+                from .model_invoke import invoke_gemini, invoke_openai
                 
-                # Pass specified model if not default
-                if model:
-                    cmd.extend(["--model", model])
-                
-                # Add system prompt if provided
+                # Prepare full prompt with system prompt if provided
+                full_prompt = prompt
                 if system_prompt:
-                    cmd.extend(["--system-prompt", system_prompt])
+                    full_prompt = f"{system_prompt}\n\n---\n\n{prompt}"
                 
-                # Add the prompt
-                cmd.append(prompt)
+                logger.info(f"[AgentManager] Executing agent {task_id} via API ({model})")
                 
-                logger.info(f"[AgentManager] Spawning agent {task_id} via CLI ({model}): {' '.join(cmd[:5])}...")
+                # Create event loop for this thread
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
                 
-                # Run Claude CLI
-                process = subprocess.Popen(
-                    cmd,
-                    stdout=open(output_file, "w"),
-                    stderr=open(log_file, "w"),
-                    cwd=str(Path.cwd()),
-                    start_new_session=True,
-                )
-                
-                self._processes[task_id] = process
-                self._update_task(task_id, pid=process.pid)
-                
-                # Wait for completion with timeout
                 try:
-                    return_code = process.wait(timeout=timeout)
-                except subprocess.TimeoutExpired:
-                    try:
-                        os.killpg(os.getpgid(process.pid), signal.SIGTERM)
-                    except:
-                        process.kill()
-                    
-                    self._update_task(
-                        task_id,
-                        status="failed",
-                        error=f"Task timed out after {timeout} seconds",
-                        completed_at=datetime.now().isoformat()
-                    )
-                    logger.error(f"[AgentManager] Agent {task_id} timed out")
-                    return
+                    # Route to appropriate model
+                    if model.startswith("gpt") or model.startswith("o1") or model.startswith("o3"):
+                        result = loop.run_until_complete(
+                            invoke_openai(
+                                token_store=token_store,
+                                prompt=full_prompt,
+                                model=model,
+                                thinking_budget=thinking_budget,
+                            )
+                        )
+                    else:
+                        # Default to Gemini
+                        result = loop.run_until_complete(
+                            invoke_gemini(
+                                token_store=token_store,
+                                prompt=full_prompt,
+                                model=model,
+                                thinking_budget=thinking_budget,
+                            )
+                        )
+                finally:
+                    loop.close()
                 
-                # Read output
-                result = ""
-                if output_file.exists():
-                    result = output_file.read_text()
+                # Write output
+                output_file.write_text(result)
                 
-                if return_code == 0:
-                    self._update_task(
-                        task_id,
-                        status="completed",
-                        result=result,
-                        completed_at=datetime.now().isoformat()
-                    )
-                    logger.info(f"[AgentManager] Agent {task_id} completed successfully")
-                else:
-                    error_log = ""
-                    if log_file.exists():
-                        error_log = log_file.read_text()
-                    self._update_task(
-                        task_id,
-                        status="failed",
-                        error=f"Exit code {return_code}: {error_log}",
-                        completed_at=datetime.now().isoformat()
-                    )
-                    logger.error(f"[AgentManager] Agent {task_id} failed: {error_log[:200]}")
+                self._update_task(
+                    task_id,
+                    status="completed",
+                    result=result,
+                    completed_at=datetime.now().isoformat()
+                )
+                logger.info(f"[AgentManager] Agent {task_id} completed successfully")
                     
             except Exception as e:
+                error_msg = str(e)
+                log_file.write_text(error_msg)
                 self._update_task(
                     task_id,
                     status="failed",
-                    error=str(e),
+                    error=error_msg,
                     completed_at=datetime.now().isoformat()
                 )
                 logger.exception(f"[AgentManager] Agent {task_id} exception")
@@ -288,6 +270,7 @@ class AgentManager:
         thread = threading.Thread(target=run_agent, daemon=True)
         thread.start()
     
+
     def _notify_completion(self, task_id: str):
         """Queue notification for parent session."""
         task = self.get_task(task_id)

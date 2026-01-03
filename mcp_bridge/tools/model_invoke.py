@@ -10,6 +10,27 @@ import time
 
 logger = logging.getLogger(__name__)
 
+# Model name mapping: user-friendly names -> actual API model IDs
+# Claude Code uses internal names like 'gemini-3-flash' but the API requires 'gemini-2.0-flash-001'
+GEMINI_MODEL_MAP = {
+    # Flash models
+    "gemini-3-flash": "gemini-2.0-flash-001",
+    "gemini-2.0-flash": "gemini-2.0-flash-001",
+    "gemini-2.0-flash-exp": "gemini-2.0-flash-exp",
+    "gemini-flash": "gemini-2.0-flash-001",
+    # Pro models
+    "gemini-3-pro": "gemini-2.0-pro-exp",
+    "gemini-2.0-pro": "gemini-2.0-pro-exp",
+    "gemini-pro": "gemini-2.0-pro-exp",
+    # Thinking models
+    "gemini-2.0-flash-thinking": "gemini-2.0-flash-thinking-exp-01-21",
+    "gemini-thinking": "gemini-2.0-flash-thinking-exp-01-21",
+}
+
+def resolve_gemini_model(model: str) -> str:
+    """Resolve a user-friendly model name to the actual API model ID."""
+    return GEMINI_MODEL_MAP.get(model, model)  # Pass through if not in map
+
 import httpx
 from tenacity import (
     retry,
@@ -140,8 +161,11 @@ async def invoke_gemini(
 
     access_token = await _ensure_valid_token(token_store, "gemini")
 
+    # Resolve user-friendly model name to actual API model ID
+    api_model = resolve_gemini_model(model)
+
     # Gemini API endpoint with OAuth
-    api_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+    api_url = f"https://generativelanguage.googleapis.com/v1beta/models/{api_model}:generateContent"
 
     headers = {
         "Authorization": f"Bearer {access_token}",

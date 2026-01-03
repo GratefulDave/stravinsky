@@ -128,7 +128,7 @@ class BackgroundManager:
 
 # Tool interface functions
 
-async def task_spawn(prompt: str, model: str = "gemini-3-flash") -> str:
+async def task_spawn(prompt: str, model: str = "gemini-2.0-flash") -> str:
     """Spawns a new background task."""
     manager = BackgroundManager()
     task_id = manager.create_task(prompt, model)

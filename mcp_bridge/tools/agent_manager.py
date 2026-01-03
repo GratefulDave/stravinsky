@@ -180,7 +180,7 @@ class AgentManager:
         prompt: str,
         agent_type: str,
         system_prompt: Optional[str] = None,
-        model: str = "gemini-3-flash",
+        model: str = "gemini-2.0-flash",
         thinking_budget: int = 0,
         timeout: int = 300,
     ):

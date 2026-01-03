@@ -640,7 +640,12 @@ ULTRATHINK MODE (when user says "ULTRATHINK" or "think harder"):
     
     system_prompt = system_prompts.get(agent_type, None)
     
+    # Get token store for authentication
+    from ..auth.token_store import TokenStore
+    token_store = TokenStore()
+    
     task_id = manager.spawn(
+        token_store=token_store,
         prompt=prompt,
         agent_type=agent_type,
         description=description or prompt[:50],

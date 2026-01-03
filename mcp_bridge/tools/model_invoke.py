@@ -164,8 +164,10 @@ async def invoke_gemini(
     # Resolve user-friendly model name to actual API model ID
     api_model = resolve_gemini_model(model)
 
-    # Gemini API endpoint with OAuth
-    api_url = f"https://generativelanguage.googleapis.com/v1beta/models/{api_model}:generateContent"
+    # Use Antigravity internal endpoint (NOT public generativelanguage.googleapis.com)
+    # The OAuth token is only authorized for cloudcode-pa.googleapis.com
+    ANTIGRAVITY_API_BASE = "https://cloudcode-pa.googleapis.com/v1internal"
+    api_url = f"{ANTIGRAVITY_API_BASE}/models/{api_model}:generateContent"
 
     headers = {
         "Authorization": f"Bearer {access_token}",
@@ -377,7 +379,11 @@ async def invoke_gemini_agentic(
     """
     access_token = await _ensure_valid_token(token_store, "gemini")
     api_model = resolve_gemini_model(model)
-    api_url = f"https://generativelanguage.googleapis.com/v1beta/models/{api_model}:generateContent"
+    
+    # Use Antigravity internal endpoint (NOT public generativelanguage.googleapis.com)
+    # The OAuth token is only authorized for cloudcode-pa.googleapis.com
+    ANTIGRAVITY_API_BASE = "https://cloudcode-pa.googleapis.com/v1internal"
+    api_url = f"{ANTIGRAVITY_API_BASE}/models/{api_model}:generateContent"
     
     headers = {
         "Authorization": f"Bearer {access_token}",

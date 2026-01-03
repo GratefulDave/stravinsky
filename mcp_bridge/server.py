@@ -204,7 +204,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         elif name == "agent_spawn":
             from .tools.agent_manager import get_agent_manager
             manager = get_agent_manager()
-            result_content = await manager.spawn(
+            task_id = manager.spawn(
                 token_store=token_store,
                 prompt=arguments["prompt"],
                 agent_type=arguments.get("agent_type", "explore"),
@@ -215,6 +215,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 thinking_budget=arguments.get("thinking_budget", 0),
                 timeout=arguments.get("timeout", 300),
             )
+            result_content = f"Agent spawned with task_id: {task_id}"
 
         elif name == "agent_output":
             from .tools.agent_manager import agent_output
@@ -439,14 +440,22 @@ def main():
             return 0
         
         print("\nStravinsky Background Agents:")
-        print("-" * 60)
+        print("-" * 100)
+        print(f"{'STATUS':10} | {'ID':15} | {'TYPE':10} | {'STARTED':20} | DESCRIPTION")
+        print("-" * 100)
         for t in sorted(tasks, key=lambda x: x.get("created_at", ""), reverse=True):
             status = t["status"]
             task_id = t["id"]
             agent = t["agent_type"]
-            desc = t.get("description", t.get("prompt", "")[:30])
-            print(f"[{status.upper():9}] {task_id:15} | {agent:10} | {desc}")
-        print("-" * 60)
+            created = t.get("created_at", "")[:19].replace("T", " ")  # Format datetime
+            desc = t.get("description", t.get("prompt", "")[:40])[:40]
+            print(f"{status.upper():10} | {task_id:15} | {agent:10} | {created:20} | {desc}")
+            
+            # Show error for failed agents
+            if status == "failed" and t.get("error"):
+                error_msg = t["error"][:100].replace("\n", " ")
+                print(f"           └─ ERROR: {error_msg}")
+        print("-" * 100)
         return 0
         
     elif args.command == "status":

@@ -101,29 +101,60 @@ Before following existing patterns, assess whether they're worth following.
 
 STRAVINSKY_DELEGATION = """## Phase 2 - Parallel Agents & Delegation (DEFAULT BEHAVIOR)
 
-### DEFAULT: Spawn Parallel Agents (ULTRAWORK)
+### MANDATORY: Spawn Parallel Agents for Multi-Task Work
 
-For ANY task with 2+ independent components:
-1. **Immediately spawn parallel agents** using `agent_spawn`.
-2. **LSP ALWAYS**: For code tasks, ensure at least one agent is dedicated to LSP-based symbol resolution.
-3. Continue working on the main task while agents execute.
-4. Use `agent_progress` to monitor running agents.
-5. Collect results with `agent_output` when ready.
+**CRITICAL RULE**: When you have 2+ independent research tasks, implementation components, or verification steps:
+1. **DO NOT** execute them sequentially
+2. **DO** call `agent_spawn` MULTIPLE TIMES IN THE SAME RESPONSE
+3. Each `agent_spawn` runs independently and concurrently
 
-**Examples of ULTRAWORK parallel spawning:**
-- "Add feature X" → Spawn: 1) `explore` agent for LSP/Symbol research, 2) `librarian` for external docs, 3) `delphi` for architecture plan.
-- "Fix bug in Y" → Spawn: 1) `debug` agent for log analysis, 2) `explore` agent with LSP to trace call stack.
-- "Build component Z" → Spawn: 1) `frontend` agent for UI, 2) `explore` for backend integration patterns.
+### Parallel Spawning Syntax (MANDATORY FORMAT)
+
+When you have multiple tasks, call agent_spawn multiple times in ONE response:
+
+```
+# Task 1: Research existing patterns
+agent_spawn(prompt="Search for existing auth patterns in src/", agent_type="explore", description="Auth patterns research")
+
+# Task 2: Find API documentation  
+agent_spawn(prompt="Find API documentation for OAuth2 flow", agent_type="explore", description="OAuth docs research")
+
+# Task 3: Design review
+agent_spawn(prompt="Review the current auth architecture", agent_type="delphi", description="Architecture review")
+```
+
+**ALL THREE execute simultaneously.** Do not wait for one to complete before spawning the next.
 
 ### Agent Types:
 | Type | Purpose |
 |------|---------|  
-| `explore` | Codebase search, "where is X?" questions |
+| `explore` | Codebase search, "where is X?" questions, LSP-based research |
 | `librarian` | Documentation research, implementation examples |
 | `frontend` | UI/UX work, component design |
 | `delphi` | Strategic advice, architecture review |
 
-### When to Use External Models:
+### Examples of ULTRAWORK Parallel Spawning:
+
+**"Add feature X"** → In ONE response, spawn:
+```
+agent_spawn(prompt="Find existing implementations of similar features using LSP", agent_type="explore", description="Feature research")
+agent_spawn(prompt="Research best practices for X in the codebase context", agent_type="librarian", description="Best practices")
+agent_spawn(prompt="Design architecture for feature X integration", agent_type="delphi", description="Architecture design")
+```
+
+**"Fix bug in Y"** → In ONE response, spawn:
+```
+agent_spawn(prompt="Trace the call stack for Y using LSP goto_definition", agent_type="explore", description="Call stack trace")
+agent_spawn(prompt="Search for error logs and patterns related to Y", agent_type="explore", description="Error analysis")
+```
+
+### After Spawning Agents:
+1. Continue with any work you can do in parallel
+2. Use `agent_list()` to see all running agents
+3. Use `agent_progress(task_id)` to check real-time progress
+4. Use `agent_output(task_id, block=True)` to collect results when ready
+
+### When to Use External Models Directly:
 
 | Task Type | Tool | Rationale |
 |-----------|------|-----------|
@@ -134,34 +165,12 @@ For ANY task with 2+ independent components:
 | **Multimodal Analysis** | `invoke_gemini` | Gemini for image/PDF analysis |
 | **Full Tool Access Tasks** | `agent_spawn` | Background agent with ALL tools available |
 
-### Agent Tools (PREFERRED for complex work):
-1. `agent_spawn(prompt, agent_type, description)` - Launch background agent with full tool access
-2. `agent_output(task_id, block)` - Get results (block=True to wait)
-3. `agent_progress(task_id)` - Check real-time progress
-4. `agent_list()` - Overview of all running agents
-5. `agent_cancel(task_id)` - Stop a running agent
-
-### Delegation Prompt Structure (MANDATORY):
-
-When delegating to external models or agents:
-
-```
-1. TASK: Atomic, specific goal (one action per delegation)
-2. EXPECTED OUTCOME: Concrete deliverables with success criteria
-3. CONTEXT: File paths, existing patterns, constraints
-4. MUST DO: Exhaustive requirements
-5. MUST NOT DO: Forbidden actions
-```
-
-### After Delegation:
-- VERIFY expected result came out
-
 ### Agent Reliability Protocol (CRITICAL)
 
 If a background agent fails or times out:
 1. **Analyze Failure**: Use `agent_progress` to see the last available output and logs.
-2. **Handle Timout**: If status is `failed` with a timeout error, break the task into smaller sub-tasks and respawn multiple agents. Increasing `timeout` is a secondary option.
-3. **Handle Error**: If the agent errored, refine the prompt to be more specific or provide more context, then use `agent_retry`.
+2. **Handle Timeout**: If status is `failed` with a timeout error, break the task into smaller sub-tasks and respawn multiple agents.
+3. **Handle Error**: If the agent errored, refine the prompt to be more specific, then use `agent_retry`.
 4. **Zombie Recovery**: If `agent_progress` detects a "Zombie" (process died), immediately `agent_retry`.
 5. **Escalation**: If a task fails 2 consecutive times, stop and ask the user or consult Delphi.
 """

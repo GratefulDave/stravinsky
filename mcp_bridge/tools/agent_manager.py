@@ -197,181 +197,80 @@ class AgentManager:
             )
             
             try:
-                # Route based on model type
-                if model.startswith("gemini"):
-                    # Use Gemini via invoke_gemini
-                    logger.info(f"[AgentManager] Spawning Gemini agent {task_id} with model {model}")
-                    
-                    # Build full prompt with system context
-                    full_prompt = prompt
-                    if system_prompt:
-                        full_prompt = f"{system_prompt}\n\n---\n\n{full_prompt}"
-                    
-                    # Import and call invoke_gemini
-                    import asyncio
-                    from .model_invoke import invoke_gemini
-                    
-                    # Run async in thread
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
+                # DEFAULT: Use Claude CLI for background agents to ensure full tool access
+                # This ensures research agents can use search, read_file, etc.
+                cmd = [
+                    self.CLAUDE_CLI,
+                    "-p",  # Non-interactive print mode
+                ]
+                
+                # Pass specified model if not default
+                if model:
+                    cmd.extend(["--model", model])
+                
+                # Add system prompt if provided
+                if system_prompt:
+                    cmd.extend(["--system-prompt", system_prompt])
+                
+                # Add the prompt
+                cmd.append(prompt)
+                
+                logger.info(f"[AgentManager] Spawning agent {task_id} via CLI ({model}): {' '.join(cmd[:5])}...")
+                
+                # Run Claude CLI
+                process = subprocess.Popen(
+                    cmd,
+                    stdout=open(output_file, "w"),
+                    stderr=open(log_file, "w"),
+                    cwd=str(Path.cwd()),
+                    start_new_session=True,
+                )
+                
+                self._processes[task_id] = process
+                self._update_task(task_id, pid=process.pid)
+                
+                # Wait for completion with timeout
+                try:
+                    return_code = process.wait(timeout=timeout)
+                except subprocess.TimeoutExpired:
                     try:
-                        result = loop.run_until_complete(
-                            asyncio.wait_for(
-                                invoke_gemini(
-                                    token_store=token_store,
-                                    prompt=full_prompt, 
-                                    model=model,
-                                    thinking_budget=thinking_budget
-                                ),
-                                timeout=timeout
-                            )
-                        )
-                    except asyncio.TimeoutError:
-                        self._update_task(
-                            task_id,
-                            status="failed",
-                            error=f"Task timed out after {timeout} seconds",
-                            completed_at=datetime.now().isoformat()
-                        )
-                        logger.error(f"[AgentManager] Gemini agent {task_id} timed out")
-                        return
-                    finally:
-                        loop.close()
+                        os.killpg(os.getpgid(process.pid), signal.SIGTERM)
+                    except:
+                        process.kill()
                     
-                    # Write output
-                    with open(output_file, "w") as f:
-                        f.write(result)
-                    
+                    self._update_task(
+                        task_id,
+                        status="failed",
+                        error=f"Task timed out after {timeout} seconds",
+                        completed_at=datetime.now().isoformat()
+                    )
+                    logger.error(f"[AgentManager] Agent {task_id} timed out")
+                    return
+                
+                # Read output
+                result = ""
+                if output_file.exists():
+                    result = output_file.read_text()
+                
+                if return_code == 0:
                     self._update_task(
                         task_id,
                         status="completed",
                         result=result,
                         completed_at=datetime.now().isoformat()
                     )
-                    logger.info(f"[AgentManager] Gemini agent {task_id} completed successfully")
-                    
-                elif model.startswith("gpt"):
-                    # Use OpenAI via invoke_openai
-                    logger.info(f"[AgentManager] Spawning OpenAI agent {task_id} with model {model}")
-                    
-                    # Build full prompt with system context
-                    full_prompt = prompt
-                    if system_prompt:
-                        full_prompt = f"{system_prompt}\n\n---\n\n{full_prompt}"
-                    
-                    # Import and call invoke_openai
-                    import asyncio
-                    from .model_invoke import invoke_openai
-                    
-                    # Run async in thread
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-                    try:
-                        result = loop.run_until_complete(
-                            asyncio.wait_for(
-                                invoke_openai(
-                                    token_store=token_store,
-                                    prompt=full_prompt, 
-                                    model=model,
-                                    thinking_budget=thinking_budget
-                                ),
-                                timeout=timeout
-                            )
-                        )
-                    except asyncio.TimeoutError:
-                        self._update_task(
-                            task_id,
-                            status="failed",
-                            error=f"Task timed out after {timeout} seconds",
-                            completed_at=datetime.now().isoformat()
-                        )
-                        logger.error(f"[AgentManager] OpenAI agent {task_id} timed out")
-                        return
-                    finally:
-                        loop.close()
-                    
-                    # Write output
-                    with open(output_file, "w") as f:
-                        f.write(result)
-                    
-                    self._update_task(
-                        task_id,
-                        status="completed",
-                        result=result,
-                        completed_at=datetime.now().isoformat()
-                    )
-                    logger.info(f"[AgentManager] OpenAI agent {task_id} completed successfully")
-                    
+                    logger.info(f"[AgentManager] Agent {task_id} completed successfully")
                 else:
-                    # Use Claude CLI for Claude models
-                    cmd = [
-                        self.CLAUDE_CLI,
-                        "-p",  # Non-interactive print mode
-                    ]
-                    
-                    # Add system prompt if provided
-                    if system_prompt:
-                        cmd.extend(["--system-prompt", system_prompt])
-                    
-                    # Add the prompt
-                    cmd.append(prompt)
-                    
-                    logger.info(f"[AgentManager] Spawning Claude agent {task_id}: {' '.join(cmd[:5])}...")
-                    
-                    # Run Claude CLI
-                    process = subprocess.Popen(
-                        cmd,
-                        stdout=open(output_file, "w"),
-                        stderr=open(log_file, "w"),
-                        cwd=str(Path.cwd()),
-                        start_new_session=True,
+                    error_log = ""
+                    if log_file.exists():
+                        error_log = log_file.read_text()
+                    self._update_task(
+                        task_id,
+                        status="failed",
+                        error=f"Exit code {return_code}: {error_log}",
+                        completed_at=datetime.now().isoformat()
                     )
-                    
-                    self._processes[task_id] = process
-                    self._update_task(task_id, pid=process.pid)
-                    
-                    # Wait for completion with timeout
-                    try:
-                        return_code = process.wait(timeout=timeout)
-                    except subprocess.TimeoutExpired:
-                        try:
-                            os.killpg(os.getpgid(process.pid), signal.SIGTERM)
-                        except:
-                            process.kill()
-                        
-                        self._update_task(
-                            task_id,
-                            status="failed",
-                            error=f"Task timed out after {timeout} seconds",
-                            completed_at=datetime.now().isoformat()
-                        )
-                        logger.error(f"[AgentManager] Claude agent {task_id} timed out")
-                        return
-                    
-                    # Read output
-                    result = ""
-                    if output_file.exists():
-                        result = output_file.read_text()
-                    
-                    if return_code == 0:
-                        self._update_task(
-                            task_id,
-                            status="completed",
-                            result=result,
-                            completed_at=datetime.now().isoformat()
-                        )
-                        logger.info(f"[AgentManager] Agent {task_id} completed successfully")
-                    else:
-                        error_log = ""
-                        if log_file.exists():
-                            error_log = log_file.read_text()
-                        self._update_task(
-                            task_id,
-                            status="failed",
-                            error=f"Exit code {return_code}: {error_log}",
-                            completed_at=datetime.now().isoformat()
-                        )
-                        logger.error(f"[AgentManager] Agent {task_id} failed: {error_log[:200]}")
+                    logger.error(f"[AgentManager] Agent {task_id} failed: {error_log[:200]}")
                     
             except Exception as e:
                 self._update_task(

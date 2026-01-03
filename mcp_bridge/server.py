@@ -199,6 +199,36 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 name=arguments["name"],
                 project_path=arguments.get("project_path"),
             )
+        
+        elif name == "stravinsky_version":
+            from . import __version__
+            import sys
+            import os
+            result_content = [
+                TextContent(
+                    type="text",
+                    text=f"Stravinsky Bridge v{__version__}\n"
+                         f"Python: {sys.version.split()[0]}\n"
+                         f"Platform: {sys.platform}\n"
+                         f"CWD: {os.getcwd()}\n"
+                         f"CLI: {os.environ.get('CLAUDE_CLI', '/opt/homebrew/bin/claude')}"
+                )
+            ]
+
+        elif name == "system_restart":
+            # Schedule a restart. We can't exit immediately or MCP will error on the reply.
+            # We'll use a small delay.
+            async def restart_soon():
+                await asyncio.sleep(1)
+                os._exit(0) # Immediate exit
+            
+            asyncio.create_task(restart_soon())
+            result_content = [
+                TextContent(
+                    type="text",
+                    text="🚀 Restarting Stravinsky Bridge... This process will exit and Claude Code will automatically respawn it. Please wait a few seconds before calling tools again."
+                )
+            ]
 
         # --- AGENT DISPATCH ---
         elif name == "agent_spawn":

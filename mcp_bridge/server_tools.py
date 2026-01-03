@@ -5,6 +5,22 @@ def get_tool_definitions() -> List[Tool]:
     """Return all Tool definitions for the Stravinsky MCP server."""
     return [
         Tool(
+            name="stravinsky_version",
+            description="Returns the current version of the Stravinsky MCP bridge and diagnostic info.",
+            inputSchema={
+                "type": "object",
+                "properties": {},
+            },
+        ),
+        Tool(
+            name="system_restart",
+            description="Force-restarts the Stravinsky MCP server by exiting the process. The host (Claude Code) will automatically respawn it, picking up any updated code/packages.",
+            inputSchema={
+                "type": "object",
+                "properties": {},
+            },
+        ),
+        Tool(
             name="invoke_gemini",
             description=(
                 "Invoke a Gemini model with the given prompt. "

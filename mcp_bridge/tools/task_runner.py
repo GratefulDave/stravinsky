@@ -11,6 +11,7 @@ import logging
 import os
 import sys
 import asyncio
+import subprocess
 from datetime import datetime
 from pathlib import Path
 
@@ -43,13 +44,38 @@ async def run_task(task_id: str, base_dir: str):
     agents_dir.mkdir(parents=True, exist_ok=True)
 
     try:
-        # Import model invocation
-        from mcp_bridge.tools.model_invoke import invoke_gemini
+        # Use Claude CLI for background tasks to ensure tool access
+        # Discover CLI path
+        claude_cli = os.environ.get("CLAUDE_CLI", "/opt/homebrew/bin/claude")
         
-        logger.info(f"Executing task {task_id} with model {model}...")
+        cmd = [
+            claude_cli,
+            "-p",
+        ]
         
-        # Execute the model call
-        result = await invoke_gemini(prompt=prompt, model=model)
+        if model:
+            cmd.extend(["--model", model])
+        
+        cmd.append(prompt)
+        
+        logger.info(f"Executing task {task_id} via CLI ({model})...")
+        
+        # Open output and log files
+        with open(output_file, "w") as out_f, open(base_path / "tasks" / f"{task_id}.log", "a") as log_f:
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=out_f,
+                stderr=log_f,
+                cwd=os.getcwd()
+            )
+            
+            await process.wait()
+            
+        # Read result
+        if output_file.exists():
+            result = output_file.read_text()
+        else:
+            result = ""
         
         # Save result
         with open(output_file, "w") as f:

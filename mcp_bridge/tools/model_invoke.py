@@ -164,10 +164,17 @@ async def invoke_gemini(
     # Resolve user-friendly model name to actual API model ID
     api_model = resolve_gemini_model(model)
 
-    # Use Antigravity internal endpoint (NOT public generativelanguage.googleapis.com)
-    # The OAuth token is only authorized for cloudcode-pa.googleapis.com
-    ANTIGRAVITY_API_BASE = "https://cloudcode-pa.googleapis.com/v1internal"
-    api_url = f"{ANTIGRAVITY_API_BASE}/models/{api_model}:generateContent"
+    # Reference implementation uses endpoint fallback order
+    ANTIGRAVITY_ENDPOINTS = [
+        "https://daily-cloudcode-pa.sandbox.googleapis.com",   # dev
+        "https://autopush-cloudcode-pa.sandbox.googleapis.com", # staging
+        "https://cloudcode-pa.googleapis.com",                  # prod
+    ]
+    
+    # Generate session ID and project ID per reference
+    import uuid
+    session_id = str(uuid.uuid4())
+    project_id = "rising-fact-p41fc"
 
     headers = {
         "Authorization": f"Bearer {access_token}",
@@ -175,51 +182,84 @@ async def invoke_gemini(
         **ANTIGRAVITY_HEADERS,  # Include Antigravity headers
     }
 
-    payload = {
+    # Build inner request payload
+    inner_payload = {
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {
             "temperature": temperature,
             "maxOutputTokens": max_tokens,
         },
+        "sessionId": session_id,
     }
     
     # Add thinking budget if supported by model/API
     if thinking_budget > 0:
         # For Gemini 2.0+ Thinking models
-        payload["generationConfig"]["thinkingConfig"] = {
+        inner_payload["generationConfig"]["thinkingConfig"] = {
             "includeThoughts": True,
             "tokenLimit": thinking_budget
         }
+    
+    # Wrap request body per reference implementation
+    wrapped_payload = {
+        "project": project_id,
+        "model": api_model,
+        "userAgent": "antigravity",
+        "requestId": f"invoke-{uuid.uuid4()}",
+        "request": inner_payload,
+    }
 
-    async with httpx.AsyncClient() as client:
-        response = await client.post(
-            api_url,
-            headers=headers,
-            json=payload,
-            timeout=120.0,
-        )
+    # Try endpoints in fallback order
+    response = None
+    last_error = None
+    
+    for endpoint in ANTIGRAVITY_ENDPOINTS:
+        # Reference uses: {endpoint}/v1internal:generateContent (NOT /models/{model})
+        api_url = f"{endpoint}/v1internal:generateContent"
         
-        if response.status_code == 401:
-            raise ValueError(
-                "Gemini authentication expired. "
-                "Run: python -m mcp_bridge.auth.cli login gemini"
-            )
-        
-        response.raise_for_status()
-
-        data = response.json()
-
-        # Extract text from response
         try:
-            candidates = data.get("candidates", [])
-            if candidates:
-                content = candidates[0].get("content", {})
-                parts = content.get("parts", [])
-                if parts:
-                    return parts[0].get("text", "")
-            return "No response generated"
-        except (KeyError, IndexError) as e:
-            return f"Error parsing response: {e}"
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    api_url,
+                    headers=headers,
+                    json=wrapped_payload,
+                    timeout=120.0,
+                )
+                
+                if response.status_code == 401:
+                    raise ValueError(
+                        "Gemini authentication expired. "
+                        "Run: python -m mcp_bridge.auth.cli login gemini"
+                    )
+                
+                # If we got a non-retryable response, use it
+                if response.status_code < 500 and response.status_code != 429:
+                    break
+                    
+        except httpx.TimeoutException as e:
+            last_error = e
+            continue
+        except Exception as e:
+            last_error = e
+            continue
+    
+    if response is None:
+        raise ValueError(f"All Antigravity endpoints failed: {last_error}")
+    
+    response.raise_for_status()
+    data = response.json()
+
+    # Extract text from response
+    try:
+        candidates = data.get("candidates", [])
+        if candidates:
+            content = candidates[0].get("content", {})
+            parts = content.get("parts", [])
+            if parts:
+                return parts[0].get("text", "")
+        return "No response generated"
+    except (KeyError, IndexError) as e:
+        return f"Error parsing response: {e}"
 
 
 # ========================
@@ -377,13 +417,23 @@ async def invoke_gemini_agentic(
     Returns:
         Final text response from the model
     """
+    import uuid
+    
     access_token = await _ensure_valid_token(token_store, "gemini")
     api_model = resolve_gemini_model(model)
     
-    # Use Antigravity internal endpoint (NOT public generativelanguage.googleapis.com)
-    # The OAuth token is only authorized for cloudcode-pa.googleapis.com
-    ANTIGRAVITY_API_BASE = "https://cloudcode-pa.googleapis.com/v1internal"
-    api_url = f"{ANTIGRAVITY_API_BASE}/models/{api_model}:generateContent"
+    # Reference implementation uses endpoint fallback order
+    ANTIGRAVITY_ENDPOINTS = [
+        "https://daily-cloudcode-pa.sandbox.googleapis.com",   # dev
+        "https://autopush-cloudcode-pa.sandbox.googleapis.com", # staging
+        "https://cloudcode-pa.googleapis.com",                  # prod
+    ]
+    
+    # Generate session ID for this conversation (per reference)
+    session_id = str(uuid.uuid4())
+    
+    # Default project ID from reference
+    project_id = "rising-fact-p41fc"
     
     headers = {
         "Authorization": f"Bearer {access_token}",
@@ -395,28 +445,68 @@ async def invoke_gemini_agentic(
     contents = [{"role": "user", "parts": [{"text": prompt}]}]
     
     for turn in range(max_turns):
-        payload = {
+        # Build inner request payload (what goes inside "request" wrapper)
+        inner_payload = {
             "contents": contents,
             "tools": AGENT_TOOLS,
             "generationConfig": {
                 "temperature": 0.7,
                 "maxOutputTokens": 8192,
             },
+            "sessionId": session_id,
         }
         
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                api_url,
-                headers=headers,
-                json=payload,
-                timeout=float(timeout),
-            )
+        # Wrap request body per reference implementation
+        # From request.ts wrapRequestBody()
+        wrapped_payload = {
+            "project": project_id,
+            "model": api_model,
+            "userAgent": "antigravity",
+            "requestId": f"agent-{uuid.uuid4()}",
+            "request": inner_payload,
+        }
+        
+        # Try endpoints in fallback order
+        response = None
+        last_error = None
+        
+        for endpoint in ANTIGRAVITY_ENDPOINTS:
+            # Reference uses: {endpoint}/v1internal:generateContent (NOT /models/{model})
+            api_url = f"{endpoint}/v1internal:generateContent"
             
-            if response.status_code == 401:
-                raise ValueError("Gemini authentication expired")
-            
-            response.raise_for_status()
-            data = response.json()
+            try:
+                async with httpx.AsyncClient() as client:
+                    response = await client.post(
+                        api_url,
+                        headers=headers,
+                        json=wrapped_payload,
+                        timeout=float(timeout),
+                    )
+                    
+                    if response.status_code == 401:
+                        raise ValueError("Gemini authentication expired")
+                    
+                    # If we got a response (even an error), don't try next endpoint
+                    # unless it's a retryable error
+                    if response.status_code < 500 and response.status_code != 429:
+                        break
+                    
+                    logger.warning(f"[AgenticGemini] Endpoint {endpoint} returned {response.status_code}, trying next")
+                    
+            except httpx.TimeoutException as e:
+                last_error = e
+                logger.warning(f"[AgenticGemini] Endpoint {endpoint} timed out, trying next")
+                continue
+            except Exception as e:
+                last_error = e
+                logger.warning(f"[AgenticGemini] Endpoint {endpoint} failed: {e}, trying next")
+                continue
+        
+        if response is None:
+            raise ValueError(f"All Antigravity endpoints failed: {last_error}")
+        
+        response.raise_for_status()
+        data = response.json()
         
         # Extract response
         candidates = data.get("candidates", [])

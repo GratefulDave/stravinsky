@@ -428,6 +428,12 @@ def main():
     stop_parser = subparsers.add_parser("stop", help="Stop all running agents")
     stop_parser.add_argument("--clear", action="store_true", help="Also clear agent history")
     
+    # auth command (authentication)
+    auth_parser = subparsers.add_parser("auth", help="Authentication commands")
+    auth_subparsers = auth_parser.add_subparsers(dest="auth_command", help="Auth subcommands")
+    login_parser = auth_subparsers.add_parser("login", help="Login to a provider")
+    login_parser.add_argument("provider", choices=["gemini", "openai"], help="Provider to authenticate with")
+    
     # Check for CLI flags
     args, unknown = parser.parse_known_args()
     
@@ -474,6 +480,14 @@ def main():
         else:
             print(f"Stopped {count} running agent(s).")
         return 0
+        
+    elif args.command == "auth":
+        if getattr(args, 'auth_command', None) == "login":
+            from .auth.cli import cmd_login
+            return cmd_login(args.provider)
+        else:
+            auth_parser.print_help()
+            return 0
         
     else:
         # Default behavior: start server (fallback for MCP runners and unknown args)

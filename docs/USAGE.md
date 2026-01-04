@@ -14,39 +14,96 @@ Invoke Google's Gemini models with OAuth authentication.
 invoke_gemini(prompt, model, temperature, max_tokens, thinking_budget)
 ```
 
+**Authentication:**
+- Uses Google OAuth 2.0 with PKCE (Proof Key for Code Exchange)
+- Connects to Google Antigravity API
+- Requires Google account with Gemini access
+- Setup: `stravinsky-auth login gemini`
+- Tokens stored securely in system keyring (auto-refresh enabled)
+
 **Parameters:**
 - `prompt` (required): The prompt to send
-- `model`: Model to use (default: `gemini-3-pro-low`)
-  - `gemini-3-pro-low` - Fast, efficient
-  - `gemini-3-pro-high` - More capable
+- `model`: Model to use (default: `gemini-3-flash`)
+  - `gemini-3-flash` - Fast, efficient (maps to Antigravity's flash model)
+  - `gemini-3-pro` - More capable (maps to Antigravity's pro model)
+  - Custom model IDs supported
 - `temperature`: 0.0-2.0 (default: 0.7)
-- `max_tokens`: Max response tokens (default: 4096)
-- `thinking_budget`: Tokens for thinking (0 = disabled)
+- `max_tokens`: Max response tokens (default: 8192)
+- `thinking_budget`: Tokens reserved for internal reasoning (default: 0)
+
+**Model Routing:**
+Stravinsky automatically maps friendly model names to Antigravity API model IDs:
+- `gemini-3-flash` → Uses Antigravity's flash model
+- `gemini-3-pro` → Uses Antigravity's pro model
+- Direct model IDs are passed through unchanged
 
 **Example:**
 ```
 Use invoke_gemini with prompt "Explain quantum computing" and thinking_budget 1000
 ```
 
+**Use Cases:**
+- UI/UX generation and component design
+- Creative content and documentation writing
+- Multimodal analysis (images, diagrams)
+- Fast prototyping and code generation
+
 ### invoke_openai
 
-Invoke OpenAI GPT models with OAuth authentication.
+Invoke OpenAI GPT models via ChatGPT backend with OAuth authentication.
 
 ```
 invoke_openai(prompt, model, temperature, max_tokens, thinking_budget)
 ```
 
+**Authentication:**
+- Uses ChatGPT OAuth 2.0 with PKCE (identical to Codex CLI flow)
+- **Requires ChatGPT Plus or Pro subscription**
+- Connects to `https://chatgpt.com/backend-api/codex/responses`
+- Setup: `stravinsky-auth login openai`
+- Browser authentication on port 1455 (same as Codex CLI)
+- Tokens stored securely in system keyring (auto-refresh enabled)
+
+**OAuth Implementation:**
+Replicates the `opencode-openai-codex-auth` plugin:
+- Client ID: `app_EMoamEEZ73f0CkXaXp7hrann`
+- PKCE with S256 (SHA-256) code challenge
+- Fetches official Codex instructions from GitHub (`openai/codex` repository)
+- SSE (Server-Sent Events) streaming for real-time responses
+- Extracts account ID from JWT token for proper attribution
+
 **Parameters:**
 - `prompt` (required): The prompt to send
-- `model`: Model to use (default: `gpt-5.2`)
+- `model`: Model to use (default: `gpt-5.2-codex`)
+  - `gpt-5.2-codex` - Latest Codex model (recommended)
+  - `gpt-5.1-codex` - Previous generation
+  - `gpt-5.1-codex-max` - Extended context variant
 - `temperature`: 0.0-2.0 (default: 0.7)
 - `max_tokens`: Max response tokens (default: 4096)
-- `thinking_budget`: Tokens for extended thinking (0 = disabled)
+- `thinking_budget`: Tokens reserved for reasoning (default: 0)
+  - When > 0, sets reasoning effort to "high"
+  - Enables extended thinking capabilities
+
+**Port 1455 Requirement:**
+OpenAI OAuth requires port 1455 for the callback handler. If you get a port conflict:
+```bash
+# Stop Codex CLI if running
+killall codex
+
+# Or use Codex CLI directly
+codex login
+```
 
 **Example:**
 ```
-Use invoke_openai with prompt "Design a REST API" and model "gpt-5.2"
+Use invoke_openai with prompt "Design a REST API with authentication" and model "gpt-5.2-codex"
 ```
+
+**Use Cases:**
+- Complex reasoning and strategic advice
+- Architecture reviews and design decisions
+- Code review and security analysis
+- Advanced debugging and problem-solving
 
 ---
 

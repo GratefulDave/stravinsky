@@ -79,7 +79,7 @@ claude mcp add stravinsky -- stravinsky
 
 ## Authentication Setup
 
-Stravinsky uses OAuth to authenticate with external AI providers.
+Stravinsky uses OAuth 2.0 with PKCE (Proof Key for Code Exchange) to authenticate with external AI providers. All tokens are stored securely in your system keyring and automatically refresh when needed.
 
 ### Gemini (Google AI)
 
@@ -87,9 +87,27 @@ Stravinsky uses OAuth to authenticate with external AI providers.
 stravinsky-auth login gemini
 ```
 
-This opens a browser for Google OAuth. You need:
+**OAuth Flow:**
+1. Opens browser to Google OAuth consent screen
+2. Uses PKCE (S256) for secure public client authentication
+3. Redirects to local callback handler after approval
+4. Exchanges authorization code for access/refresh tokens
+5. Stores tokens in system keyring (`stravinsky-gemini`)
+
+**Requirements:**
 - A Google account
-- Access to Gemini API (via Google AI Studio or Cloud)
+- Access to Google Antigravity API (Gemini backend)
+- Browser access for OAuth consent
+
+**Token Management:**
+- Access tokens auto-refresh 5 minutes before expiry
+- Refresh tokens stored persistently in system keyring
+- No manual token management required
+
+**Storage Location:**
+- macOS: Keychain
+- Linux: Secret Service API
+- Windows: Credential Locker
 
 ### OpenAI (ChatGPT)
 
@@ -97,9 +115,44 @@ This opens a browser for Google OAuth. You need:
 stravinsky-auth login openai
 ```
 
-This opens a browser for OpenAI OAuth. You need:
-- A ChatGPT Plus or Pro subscription
-- Port 1455 available (stop Codex CLI if running: `killall codex`)
+**OAuth Flow:**
+1. Opens browser to ChatGPT OAuth consent screen
+2. Uses PKCE (S256) with identical flow to Codex CLI
+3. **Requires port 1455 for callback** (same as Codex CLI)
+4. Exchanges authorization code for access/refresh tokens
+5. Stores tokens in system keyring (`stravinsky-openai`)
+
+**Requirements:**
+- **ChatGPT Plus or Pro subscription** (required)
+- Port 1455 available for OAuth callback
+- Browser access for OAuth consent
+- No Codex CLI running on same port
+
+**OAuth Implementation:**
+Stravinsky replicates the `opencode-openai-codex-auth` plugin:
+- Client ID: `app_EMoamEEZ73f0CkXaXp7hrann` (official Codex OAuth client)
+- Endpoint: `https://auth.openai.com/oauth/authorize`
+- Callback: `http://localhost:1455/auth/callback`
+- Scope: `openid profile email offline_access`
+
+**Token Management:**
+- Access tokens auto-refresh 5 minutes before expiry
+- JWT tokens contain account ID for backend attribution
+- Refresh tokens stored persistently in system keyring
+- Compatible with Codex CLI tokens (can share authentication)
+
+**Port 1455 Requirement:**
+OpenAI's OAuth requires this specific port for the callback. If the port is in use:
+```bash
+# Check what's using port 1455
+lsof -i :1455
+
+# Stop Codex CLI if running
+killall codex
+
+# Then retry login
+stravinsky-auth login openai
+```
 
 ### Check Status
 
@@ -107,12 +160,19 @@ This opens a browser for OpenAI OAuth. You need:
 stravinsky-auth status
 ```
 
+Shows:
+- Authentication status for each provider (✓ Authenticated / ✗ Not authenticated)
+- Token expiry information
+- Account details (email for Gemini, account ID for OpenAI)
+
 ### Logout
 
 ```bash
 stravinsky-auth logout gemini
 stravinsky-auth logout openai
 ```
+
+Removes tokens from system keyring. You'll need to re-authenticate to use the respective provider.
 
 ---
 

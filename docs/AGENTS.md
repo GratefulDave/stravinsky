@@ -6,23 +6,19 @@ Detailed guide to specialized agent configurations.
 
 ## Overview
 
-Stravinsky provides 7 specialized agent types, each optimized for specific tasks:
+Stravinsky provides 7 specialized agent types, each with a unique system prompt optimized for specific tasks.
 
-| Agent | Model | Thinking Budget | Purpose |
-|-------|-------|-----------------|---------|
-| `stravinsky` | Claude Opus 4.5 | N/A | Task orchestration, planning |
-| `delphi` | GPT-5.2 | N/A | Strategic advice, hard debugging |
-| `dewey` | Gemini Pro | 0 (flash) | Documentation research |
-| `explore` | Gemini Pro | 0 (flash) | Codebase search, analysis |
-| `frontend` | Gemini Pro | 32k (high) | UI/UX work, components |
-| `document_writer` | Gemini Pro | 0 (flash) | Technical documentation |
-| `multimodal` | Gemini Pro | 0 (flash) | Visual analysis |
+**All agents run via Claude CLI** using Claude's default model. Agents have full tool access and can invoke Stravinsky MCP tools (`invoke_gemini`, `invoke_openai`) if they need to use other models.
 
-**Note:** Gemini tiers are controlled by `thinking_budget`:
-- **High (32k)**: Extended reasoning for complex UI/UX work
-- **Medium (16k)**: Balanced reasoning
-- **Low (8k)**: Basic reasoning
-- **0 (flash)**: Fast responses, no extended thinking
+| Agent | Specialty | Purpose |
+|-------|-----------|---------|
+| `stravinsky` | Orchestration | Task orchestration, planning |
+| `delphi` | Strategy | Strategic advice, hard debugging |
+| `dewey` | Research | Documentation research |
+| `explore` | Search | Codebase search, analysis |
+| `frontend` | UI/UX | UI/UX work, components |
+| `document_writer` | Writing | Technical documentation |
+| `multimodal` | Vision | Visual analysis |
 
 ---
 
@@ -49,8 +45,6 @@ agent_spawn(
 ### delphi (Strategic Advisor)
 
 **Purpose:** Strategic technical advice, architecture review, hard debugging
-
-**Model:** GPT-5.2 (via OpenAI OAuth)
 
 **Best for:**
 - Architecture decisions
@@ -109,8 +103,6 @@ agent_spawn(
 
 **Purpose:** UI/UX work, component design, prototyping
 
-**Model:** Gemini (via Google OAuth)
-
 **Best for:**
 - Component design
 - UI implementation
@@ -148,8 +140,6 @@ agent_spawn(
 ### multimodal (Visual Analyst)
 
 **Purpose:** Visual analysis of UI screenshots, diagrams, and images
-
-**Model:** Gemini (via Google OAuth)
 
 **Best for:**
 - Screenshot analysis
@@ -252,7 +242,6 @@ review = agent_spawn(
 ## Performance Tips
 
 1. **Use `explore` for quick searches** - it's optimized for speed
-2. **Use `delphi` sparingly** - GPT calls have higher latency
-3. **Batch related tasks** - spawn multiple explore agents together
-4. **Use `agent_progress`** - monitor long-running agents
-5. **Cancel stuck agents** - don't wait indefinitely
+2. **Batch related tasks** - spawn multiple explore agents together
+3. **Use `agent_progress`** - monitor long-running agents
+4. **Cancel stuck agents** - don't wait indefinitely

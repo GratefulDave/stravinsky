@@ -8,6 +8,7 @@ This replaces the simple model-only invocation with true agentic execution.
 import asyncio
 import json
 import os
+import shutil
 import subprocess
 import signal
 import uuid
@@ -62,7 +63,8 @@ class AgentManager:
     - Provides notification mechanism for task completion
     """
 
-    CLAUDE_CLI = "/opt/homebrew/bin/claude"
+    # Dynamic CLI path - find claude in PATH, fallback to common locations
+    CLAUDE_CLI = shutil.which("claude") or "/opt/homebrew/bin/claude"
 
     def __init__(self, base_dir: Optional[str] = None):
         # Initialize lock FIRST - used by _save_tasks and _load_tasks
@@ -220,9 +222,10 @@ class AgentManager:
                     "text",
                 ]
 
-                # Add model selection if specified
-                if model:
-                    cmd.extend(["--model", model])
+                # NOTE: We intentionally do NOT pass --model to Claude CLI
+                # The agent_configs have Stravinsky MCP model names (gemini-3-pro-low, gpt-5.2)
+                # which Claude CLI doesn't recognize. Agents use Claude's default model
+                # and can invoke Stravinsky MCP tools (invoke_gemini, invoke_openai) if needed.
 
                 # Add system prompt file if we have one
                 if system_prompt:
@@ -233,16 +236,17 @@ class AgentManager:
                 # Execute Claude CLI as subprocess with full tool access
                 logger.info(f"[AgentManager] Running: {' '.join(cmd[:3])}...")
 
-                with open(log_file, "w") as log_f:
-                    process = subprocess.Popen(
-                        cmd,
-                        stdout=subprocess.PIPE,
-                        stderr=log_f,
-                        text=True,
-                        cwd=str(Path.cwd()),
-                        env={**os.environ, "CLAUDE_CODE_ENTRYPOINT": "stravinsky-agent"},
-                        start_new_session=True,  # Allow process group management
-                    )
+                # Use PIPE for stderr to capture it properly
+                # (Previously used file handle which was closed before process finished)
+                process = subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    cwd=str(Path.cwd()),
+                    env={**os.environ, "CLAUDE_CODE_ENTRYPOINT": "stravinsky-agent"},
+                    start_new_session=True,  # Allow process group management
+                )
 
                 # Track the process
                 self._processes[task_id] = process
@@ -250,8 +254,12 @@ class AgentManager:
 
                 # Wait for completion with timeout
                 try:
-                    stdout, _ = process.communicate(timeout=timeout)
+                    stdout, stderr = process.communicate(timeout=timeout)
                     result = stdout.strip() if stdout else ""
+
+                    # Write stderr to log file
+                    if stderr:
+                        log_file.write_text(stderr)
 
                     if process.returncode == 0:
                         output_file.write_text(result)
@@ -264,8 +272,8 @@ class AgentManager:
                         logger.info(f"[AgentManager] Agent {task_id} completed successfully")
                     else:
                         error_msg = f"Claude CLI exited with code {process.returncode}"
-                        if log_file.exists():
-                            error_msg += f"\n{log_file.read_text()}"
+                        if stderr:
+                            error_msg += f"\n{stderr}"
                         self._update_task(
                             task_id,
                             status="failed",
@@ -665,24 +673,16 @@ RESPONSE RULES:
 
     system_prompt = system_prompts.get(agent_type, None)
 
-    # Override model and thinking_budget based on agent type for optimal performance
-    # Per project requirements:
-    # - Gemini tiers are controlled by thinking_budget, NOT model name
-    # - high: 32000, medium: 16000, low: 8000 thinking tokens
-    # - "gemini-3-pro-high" = gemini-3-pro-low + thinking_budget=32000
-    # - "gemini-3-flash" equivalent = gemini-3-pro-low + thinking_budget=0
-    agent_configs = {
-        "stravinsky": {"model": "claude-opus-4-5", "thinking_budget": 0},
-        "frontend": {"model": "gemini-3-pro-low", "thinking_budget": 32000},  # HIGH tier
-        "document_writer": {"model": "gemini-3-pro-low", "thinking_budget": 0},  # Flash equiv
-        "multimodal": {"model": "gemini-3-pro-low", "thinking_budget": 0},  # Flash equiv
-        "explore": {"model": "gemini-3-pro-low", "thinking_budget": 0},  # Flash equiv
-        "delphi": {"model": "gpt-5.2", "thinking_budget": 0},  # GPT-5.2 strategic
-        "dewey": {"model": "gemini-3-pro-low", "thinking_budget": 0},  # Flash equiv
-    }
-    config = agent_configs.get(agent_type, {"model": model, "thinking_budget": thinking_budget})
-    actual_model = config["model"]
-    actual_thinking_budget = config["thinking_budget"]
+    # NOTE: All agents run via Claude CLI using Claude's default model.
+    # The agent_configs below are kept for documentation purposes only.
+    # Agents can invoke Stravinsky MCP tools (invoke_gemini, invoke_openai)
+    # within their prompts if they need to use other models.
+    #
+    # Agent model preferences (for reference - NOT passed to Claude CLI):
+    # - stravinsky: Claude Opus 4.5 (orchestration)
+    # - delphi: GPT-5.2 (strategic advice) - use invoke_openai
+    # - frontend: Gemini Pro High (UI/UX) - use invoke_gemini with thinking_budget
+    # - explore, dewey, document_writer, multimodal: Gemini Flash (fast) - use invoke_gemini
 
     # Get token store for authentication
     from ..auth.token_store import TokenStore
@@ -695,8 +695,8 @@ RESPONSE RULES:
         agent_type=agent_type,
         description=description or prompt[:50],
         system_prompt=system_prompt,
-        model=actual_model,
-        thinking_budget=actual_thinking_budget,
+        model=model,  # Not used for Claude CLI, kept for API compatibility
+        thinking_budget=thinking_budget,  # Not used for Claude CLI, kept for API compatibility
         timeout=timeout,
     )
 
@@ -704,8 +704,6 @@ RESPONSE RULES:
 
 **Task ID**: {task_id}
 **Agent Type**: {agent_type}
-**Model**: {actual_model}
-**Thinking Budget**: {actual_thinking_budget if actual_thinking_budget > 0 else "N/A"}
 **Description**: {description or prompt[:50]}
 
 The agent is now running. Use:

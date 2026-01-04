@@ -1,0 +1,3 @@
+{"error":{"code":"EPIPE","errno":-32,"syscall":"write"},"level":"error","message":"Uncaught exception","service":"grep-app-server","timestamp":"2026-01-03 22:11:59"}
+{"error":{"code":"EPIPE","errno":-32,"syscall":"write"},"level":"error","message":"Uncaught exception","service":"grep-app-server","timestamp":"2026-01-03 22:12:44"}
+{"error":{"code":"EPIPE","errno":-32,"syscall":"write"},"level":"error","message":"Uncaught exception","service":"grep-app-server","timestamp":"2026-01-03 22:28:32"}

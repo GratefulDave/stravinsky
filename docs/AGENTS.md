@@ -13,6 +13,7 @@ Stravinsky provides 7 specialized agent types, each with a unique system prompt 
 | Agent | Specialty | Purpose |
 |-------|-----------|---------|
 | `stravinsky` | Orchestration | Task orchestration, planning |
+| `planner` | Planning | Pre-implementation planning (Opus) |
 | `delphi` | Strategy | Strategic advice, hard debugging |
 | `dewey` | Research | Documentation research |
 | `explore` | Search | Codebase search, analysis |
@@ -41,6 +42,27 @@ agent_spawn(
   "Auth implementation"
 )
 ```
+
+### planner (Pre-Implementation Planner)
+
+**Purpose:** Create structured implementation plans before coding begins
+
+**Best for:**
+- Planning complex implementations before writing code
+- Breaking down requirements into parallel and sequential tasks
+- Identifying dependencies and potential blockers
+- Creating agent delegation roadmaps
+
+**Example:**
+```
+agent_spawn(
+  "Create a detailed implementation plan for adding OAuth2 authentication with Google and GitHub providers",
+  "planner",
+  "Plan OAuth implementation"
+)
+```
+
+**Note:** Uses Claude Opus for superior reasoning about dependencies and parallelization.
 
 ### delphi (Strategic Advisor)
 
@@ -183,6 +205,9 @@ Is it about analyzing images/screenshots?
 
 Is it a complex multi-step task?
   → stravinsky
+
+Need a plan before implementing?
+  → planner
 ```
 
 ### Parallel Agent Strategies

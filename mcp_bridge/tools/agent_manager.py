@@ -36,6 +36,8 @@ AGENT_MODEL_ROUTING = {
     "multimodal": None,
     "frontend": None,
     "delphi": None,
+    # Planner uses Opus for superior reasoning about dependencies and parallelization
+    "planner": "opus",
     # Default for unknown agent types (coding tasks) - use Sonnet 4.5
     "_default": "sonnet",
 }
@@ -48,6 +50,7 @@ AGENT_COST_TIERS = {
     "multimodal": "CHEAP",  # Uses gemini-3-flash
     "frontend": "MEDIUM",  # Uses gemini-3-pro-high
     "delphi": "EXPENSIVE",  # Uses gpt-5.2 (OpenAI GPT)
+    "planner": "EXPENSIVE",  # Uses Claude Opus 4.5
     "_default": "EXPENSIVE",  # Claude Sonnet 4.5 via CLI
 }
 
@@ -185,7 +188,8 @@ class AgentManager:
         Returns:
             Task ID for tracking
         """
-        task_id = f"agent_{uuid.uuid4().hex[:8]}"
+        import uuid as uuid_module  # Local import for MCP context
+        task_id = f"agent_{uuid_module.uuid4().hex[:8]}"
 
         task = AgentTask(
             id=task_id,
@@ -711,6 +715,54 @@ WORKFLOW:
 1. Receive file path and extraction goal
 2. Call invoke_gemini(prompt="Analyze this file: <path>. Extract: <goal>", model="gemini-3-flash")
 3. Return extracted information only""",
+
+        "planner": """You are a pre-implementation planning specialist. You analyze requests and produce structured implementation plans BEFORE any code changes begin.
+
+PURPOSE:
+- Analyze requests and produce actionable implementation plans
+- Identify dependencies and parallelization opportunities
+- Enable efficient parallel execution by the orchestrator
+- Prevent wasted effort through upfront planning
+
+METHODOLOGY:
+1. EXPLORE FIRST: Spawn explore agents IN PARALLEL to understand the codebase
+2. DECOMPOSE: Break request into atomic, single-purpose tasks
+3. ANALYZE DEPENDENCIES: What blocks what? What can run in parallel?
+4. ASSIGN AGENTS: Map each task to the right specialist (explore/dewey/frontend/delphi)
+5. OUTPUT STRUCTURED PLAN: Use the required format below
+
+REQUIRED OUTPUT FORMAT:
+```
+## PLAN: [Brief title]
+
+### ANALYSIS
+- **Request**: [One sentence summary]
+- **Scope**: [What's in/out of scope]
+- **Risk Level**: [Low/Medium/High]
+
+### EXECUTION PHASES
+
+#### Phase 1: [Name] (PARALLEL)
+| Task | Agent | Files | Est |
+|------|-------|-------|-----|
+| [description] | explore | file.py | S/M/L |
+
+#### Phase 2: [Name] (SEQUENTIAL after Phase 1)
+| Task | Agent | Files | Est |
+|------|-------|-------|-----|
+
+### AGENT SPAWN COMMANDS
+```python
+# Phase 1 - Fire all in parallel
+agent_spawn(prompt="...", agent_type="explore", description="...")
+```
+```
+
+CONSTRAINTS:
+- You ONLY plan. You NEVER execute code changes.
+- Every task must have a clear agent assignment
+- Parallel phases must be truly independent
+- Include ready-to-use agent_spawn commands""",
     }
 
     system_prompt = system_prompts.get(agent_type, None)

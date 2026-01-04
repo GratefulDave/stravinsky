@@ -12,6 +12,13 @@ logger = logging.getLogger(__name__)
 class HookManager:
     """
     Manages the registration and execution of hooks.
+
+    Hook Types:
+    - pre_tool_call: Before tool execution (can modify args or block)
+    - post_tool_call: After tool execution (can modify output)
+    - pre_model_invoke: Before model invocation (can modify prompt/params)
+    - session_idle: When session becomes idle (can inject continuation)
+    - pre_compact: Before context compaction (can preserve critical context)
     """
 
     _instance = None
@@ -24,6 +31,13 @@ class HookManager:
             Callable[[str, Dict[str, Any], str], Awaitable[Optional[str]]]
         ] = []
         self.pre_model_invoke_hooks: List[
+            Callable[[Dict[str, Any]], Awaitable[Optional[Dict[str, Any]]]]
+        ] = []
+        # New hook types based on oh-my-opencode patterns
+        self.session_idle_hooks: List[
+            Callable[[Dict[str, Any]], Awaitable[Optional[Dict[str, Any]]]]
+        ] = []
+        self.pre_compact_hooks: List[
             Callable[[Dict[str, Any]], Awaitable[Optional[Dict[str, Any]]]]
         ] = []
 
@@ -50,6 +64,18 @@ class HookManager:
     ):
         """Run before model invocation. Can modify prompt or parameters."""
         self.pre_model_invoke_hooks.append(hook)
+
+    def register_session_idle(
+        self, hook: Callable[[Dict[str, Any]], Awaitable[Optional[Dict[str, Any]]]]
+    ):
+        """Run when session becomes idle. Can inject continuation prompts."""
+        self.session_idle_hooks.append(hook)
+
+    def register_pre_compact(
+        self, hook: Callable[[Dict[str, Any]], Awaitable[Optional[Dict[str, Any]]]]
+    ):
+        """Run before context compaction. Can preserve critical context."""
+        self.pre_compact_hooks.append(hook)
 
     async def execute_pre_tool_call(
         self, tool_name: str, arguments: Dict[str, Any]
@@ -89,6 +115,30 @@ class HookManager:
                     current_params = modified_params
             except Exception as e:
                 logger.error(f"[HookManager] Error in pre_model_invoke hook {hook.__name__}: {e}")
+        return current_params
+
+    async def execute_session_idle(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Executes all session idle hooks (Stop hook pattern)."""
+        current_params = params
+        for hook in self.session_idle_hooks:
+            try:
+                modified_params = await hook(current_params)
+                if modified_params is not None:
+                    current_params = modified_params
+            except Exception as e:
+                logger.error(f"[HookManager] Error in session_idle hook {hook.__name__}: {e}")
+        return current_params
+
+    async def execute_pre_compact(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Executes all pre-compact hooks (context preservation)."""
+        current_params = params
+        for hook in self.pre_compact_hooks:
+            try:
+                modified_params = await hook(current_params)
+                if modified_params is not None:
+                    current_params = modified_params
+            except Exception as e:
+                logger.error(f"[HookManager] Error in pre_compact hook {hook.__name__}: {e}")
         return current_params
 
 

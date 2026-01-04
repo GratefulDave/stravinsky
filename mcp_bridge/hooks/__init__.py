@@ -1,6 +1,13 @@
 """
 Hooks initialization.
-Registers all Tier 1-4 hooks into the HookManager.
+Registers all Tier 1-5 hooks into the HookManager.
+
+Hook Tiers:
+- Tier 1: Post-tool-call (immediate response modification)
+- Tier 2: Pre-model-invoke (context management)
+- Tier 3: Pre-model-invoke (performance optimization)
+- Tier 4: Pre-model-invoke (behavior enforcement)
+- Tier 5: Session lifecycle (idle detection, compaction)
 """
 
 from .manager import get_hook_manager
@@ -19,6 +26,11 @@ from .auto_slash_command import auto_slash_command_hook
 from .session_recovery import session_recovery_hook
 from .empty_message_sanitizer import empty_message_sanitizer_hook
 
+# New hooks based on oh-my-opencode patterns
+from .session_idle import session_idle_hook
+from .pre_compact import pre_compact_hook
+from .parallel_enforcer import parallel_enforcer_post_tool_hook
+
 
 def initialize_hooks():
     """Register all available hooks."""
@@ -30,6 +42,7 @@ def initialize_hooks():
     manager.register_post_tool_call(comment_checker_hook)
     manager.register_post_tool_call(agent_reminder_hook)
     manager.register_post_tool_call(session_recovery_hook)
+    manager.register_post_tool_call(parallel_enforcer_post_tool_hook)  # NEW: Enforce parallel spawning
 
     # Tier 2: Pre-model-invoke (context management)
     manager.register_pre_model_invoke(directory_context_hook)
@@ -45,5 +58,9 @@ def initialize_hooks():
     manager.register_pre_model_invoke(keyword_detector_hook)
     manager.register_pre_model_invoke(todo_continuation_hook)
     manager.register_pre_model_invoke(auto_slash_command_hook)
+
+    # Tier 5: Session lifecycle hooks (NEW)
+    manager.register_session_idle(session_idle_hook)  # Stop hook - idle detection
+    manager.register_pre_compact(pre_compact_hook)    # PreCompact - context preservation
 
     return manager

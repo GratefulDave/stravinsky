@@ -130,6 +130,7 @@ agent_spawn(prompt, agent_type, description)
 | `frontend` | UI/UX work, component design |
 | `delphi` | Strategic advice, architecture review |
 | `stravinsky` | Task orchestration, planning |
+| `planner` | Pre-implementation planning (Opus) |
 | `document_writer` | Technical documentation |
 | `multimodal` | Visual analysis, screenshots |
 
@@ -327,6 +328,29 @@ Get content of a specific skill.
 
 ```
 skill_get(skill_name)
+```
+
+### Built-in Skills (Slash Commands)
+
+Stravinsky provides several pre-defined skills accessible via slash commands:
+
+| Skill | Purpose |
+|-------|---------|
+| `/stravinsky` | Orchestrate complex tasks with parallel agent delegation |
+| `/plan` | Create implementation plans before coding (uses Opus) |
+| `/delphi` | Consult strategic advisor for architecture/debugging |
+| `/dewey` | Research documentation and implementation examples |
+| `/verify` | Post-implementation verification checklist |
+| `/review` | Structured code review workflow |
+| `/debug` | Systematic debugging with root cause analysis |
+| `/get-context` | Refresh Git status, rules, and todos |
+| `/health` | Comprehensive system health check |
+
+**Example Usage:**
+```
+/plan Add OAuth2 authentication with Google and GitHub providers
+/review changes to src/auth/
+/debug Error: Connection refused on port 5432
 ```
 
 ---

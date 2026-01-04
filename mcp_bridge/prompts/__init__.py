@@ -6,13 +6,15 @@ from . import explore
 from . import frontend
 from . import document_writer
 from . import multimodal
+from . import planner
 
 __all__ = [
     "stravinsky",
-    "delphi", 
+    "delphi",
     "dewey",
     "explore",
     "frontend",
     "document_writer",
     "multimodal",
+    "planner",
 ]

@@ -51,7 +51,7 @@ Common commands:
 - `/stravinsky`: Task Orchestrator & Planner
 - `/delphi`: Architecture & Debug Advisor
 - `/dewey`: Documentation & Research
-- `/context`: Refresh Git/Rules/Todo context
+- `/get-context`: Refresh Git/Rules/Todo context (renamed from /context to avoid Claude conflict)
 - `/health`: Comprehensive system check
 
 ## OAuth Flows

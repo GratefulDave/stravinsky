@@ -464,6 +464,15 @@ async def async_main():
     except Exception as e:
         logger.error(f"Failed to initialize hooks: {e}")
 
+    # Start background token refresh scheduler
+    try:
+        from .auth.token_refresh import background_token_refresh
+
+        asyncio.create_task(background_token_refresh(get_token_store()))
+        logger.info("Background token refresh scheduler started")
+    except Exception as e:
+        logger.warning(f"Failed to start token refresh scheduler: {e}")
+
     try:
         async with stdio_server() as (read_stream, write_stream):
             await server.run(

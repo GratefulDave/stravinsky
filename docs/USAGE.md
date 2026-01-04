@@ -1,0 +1,318 @@
+# Stravinsky Usage Guide
+
+Complete reference for all Stravinsky MCP tools and features.
+
+---
+
+## Model Invocation
+
+### invoke_gemini
+
+Invoke Google's Gemini models with OAuth authentication.
+
+```
+invoke_gemini(prompt, model, temperature, max_tokens, thinking_budget)
+```
+
+**Parameters:**
+- `prompt` (required): The prompt to send
+- `model`: Model to use (default: `gemini-3-pro-low`)
+  - `gemini-3-pro-low` - Fast, efficient
+  - `gemini-3-pro-high` - More capable
+- `temperature`: 0.0-2.0 (default: 0.7)
+- `max_tokens`: Max response tokens (default: 4096)
+- `thinking_budget`: Tokens for thinking (0 = disabled)
+
+**Example:**
+```
+Use invoke_gemini with prompt "Explain quantum computing" and thinking_budget 1000
+```
+
+### invoke_openai
+
+Invoke OpenAI GPT models with OAuth authentication.
+
+```
+invoke_openai(prompt, model, temperature, max_tokens, thinking_budget)
+```
+
+**Parameters:**
+- `prompt` (required): The prompt to send
+- `model`: Model to use (default: `gpt-5.2`)
+- `temperature`: 0.0-2.0 (default: 0.7)
+- `max_tokens`: Max response tokens (default: 4096)
+- `thinking_budget`: Tokens for extended thinking (0 = disabled)
+
+**Example:**
+```
+Use invoke_openai with prompt "Design a REST API" and model "gpt-5.2"
+```
+
+---
+
+## Agent System
+
+### agent_spawn
+
+Spawn a background agent with full Claude Code tool access.
+
+```
+agent_spawn(prompt, agent_type, description)
+```
+
+**Parameters:**
+- `prompt` (required): Task for the agent
+- `agent_type`: Type of agent (see below)
+- `description`: Short description for tracking
+
+**Agent Types:**
+| Type | Purpose |
+|------|---------|
+| `explore` | Codebase search, structural analysis |
+| `dewey` | Documentation research, examples |
+| `frontend` | UI/UX work, component design |
+| `delphi` | Strategic advice, architecture review |
+| `stravinsky` | Task orchestration, planning |
+| `document_writer` | Technical documentation |
+| `multimodal` | Visual analysis, screenshots |
+
+**Example:**
+```
+Use agent_spawn with prompt "Find all API endpoints" and agent_type "explore"
+```
+
+### agent_output
+
+Get output from a spawned agent.
+
+```
+agent_output(task_id, block)
+```
+
+**Parameters:**
+- `task_id` (required): ID from agent_spawn
+- `block`: Wait for completion (default: true)
+
+### agent_progress
+
+Check real-time progress of an agent.
+
+```
+agent_progress(task_id, lines)
+```
+
+**Parameters:**
+- `task_id` (required): ID from agent_spawn
+- `lines`: Number of recent lines to show
+
+### agent_list
+
+List all running and completed agents.
+
+```
+agent_list()
+```
+
+### agent_cancel
+
+Cancel a running agent.
+
+```
+agent_cancel(task_id)
+```
+
+---
+
+## Code Search
+
+### ast_grep_search
+
+AST-aware code pattern search using ast-grep.
+
+```
+ast_grep_search(pattern, path, language)
+```
+
+**Example:**
+```
+Use ast_grep_search with pattern "async function $NAME($_)" and language "typescript"
+```
+
+### ast_grep_replace
+
+AST-aware code replacement.
+
+```
+ast_grep_replace(pattern, replacement, path, language)
+```
+
+### grep_search
+
+Traditional regex-based search.
+
+```
+grep_search(pattern, path, file_pattern)
+```
+
+### glob_files
+
+Find files by pattern.
+
+```
+glob_files(pattern, path)
+```
+
+---
+
+## LSP Tools
+
+Full Language Server Protocol support for Python.
+
+### lsp_diagnostics
+
+Get errors and warnings for a file.
+
+```
+lsp_diagnostics(file_path)
+```
+
+### lsp_hover
+
+Get type information at a position.
+
+```
+lsp_hover(file_path, line, character)
+```
+
+### lsp_goto_definition
+
+Jump to symbol definition.
+
+```
+lsp_goto_definition(file_path, line, character)
+```
+
+### lsp_find_references
+
+Find all usages of a symbol.
+
+```
+lsp_find_references(file_path, line, character)
+```
+
+### lsp_document_symbols
+
+Get file outline/structure.
+
+```
+lsp_document_symbols(file_path)
+```
+
+### lsp_workspace_symbols
+
+Search symbols across workspace.
+
+```
+lsp_workspace_symbols(query)
+```
+
+### lsp_rename
+
+Rename a symbol across the workspace.
+
+```
+lsp_rename(file_path, line, character, new_name)
+```
+
+---
+
+## Session Management
+
+### session_list
+
+List available Claude Code sessions.
+
+```
+session_list()
+```
+
+### session_read
+
+Read content from a session.
+
+```
+session_read(session_id)
+```
+
+### session_search
+
+Search across sessions.
+
+```
+session_search(query)
+```
+
+---
+
+## Skills
+
+### skill_list
+
+List available slash commands/skills.
+
+```
+skill_list()
+```
+
+### skill_get
+
+Get content of a specific skill.
+
+```
+skill_get(skill_name)
+```
+
+---
+
+## Parallel Execution Patterns
+
+### Pattern 1: Parallel Exploration
+
+```
+1. agent_spawn("Find all database models", "explore", "DB models")
+2. agent_spawn("Find all API routes", "explore", "API routes")
+3. agent_spawn("Find all test files", "explore", "Tests")
+4. Wait for all with agent_output
+```
+
+### Pattern 2: Research + Implementation
+
+```
+1. agent_spawn("Research best practices for X", "dewey", "Research")
+2. Wait for research with agent_output
+3. agent_spawn("Implement based on research", "frontend", "Implement")
+```
+
+### Pattern 3: ULTRAWORK Mode
+
+For maximum parallelism, spawn 5+ agents simultaneously:
+
+```
+1. agent_spawn("Task 1", "explore", "T1")
+2. agent_spawn("Task 2", "explore", "T2")
+3. agent_spawn("Task 3", "dewey", "T3")
+4. agent_spawn("Task 4", "frontend", "T4")
+5. agent_spawn("Task 5", "delphi", "T5")
+6. Monitor all with agent_list
+7. Collect with agent_output for each
+```
+
+---
+
+## Best Practices
+
+1. **Always use parallel agents** for multi-step tasks
+2. **Match agent type to task** - explore for search, dewey for docs
+3. **Use thinking_budget** for complex reasoning tasks
+4. **Monitor with agent_progress** for long-running tasks
+5. **Cancel stuck agents** with agent_cancel

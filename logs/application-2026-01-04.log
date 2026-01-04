@@ -2,3 +2,63 @@
 {"level":"info","message":"Starting FastMCP server in stdio mode","service":"grep-app-server","timestamp":"2026-01-04 00:40:57"}
 {"level":"info","message":"Client connected via stdio","service":"grep-app-server","sessionIdentifier":"2a1sy5f7","timestamp":"2026-01-04 00:40:57"}
 {"level":"info","message":"FastMCP server started successfully in stdio mode","service":"grep-app-server","timestamp":"2026-01-04 00:40:57"}
+{"level":"info","message":"Executing searchCode tool","options":{"jsonOutput":false},"query":"repo:code-yeongyu/oh-my-opencode AGENTS.md","service":"grep-app-server","timestamp":"2026-01-04 01:51:22"}
+{"level":"info","message":"Starting code search for query: \"repo:code-yeongyu/oh-my-opencode AGENTS.md\"","query":"repo:code-yeongyu/oh-my-opencode AGENTS.md","service":"grep-app-server","timestamp":"2026-01-04 01:51:22"}
+{"level":"info","message":"Executing searchCode tool","options":{"jsonOutput":false},"query":"repo:code-yeongyu/oh-my-opencode delegation subagents","service":"grep-app-server","timestamp":"2026-01-04 01:51:22"}
+{"level":"info","message":"Starting code search for query: \"repo:code-yeongyu/oh-my-opencode delegation subagents\"","query":"repo:code-yeongyu/oh-my-opencode delegation subagents","service":"grep-app-server","timestamp":"2026-01-04 01:51:22"}
+{"level":"info","message":"Executing searchCode tool","options":{"jsonOutput":false},"query":"repo:code-yeongyu/oh-my-opencode CLAUDE.md","service":"grep-app-server","timestamp":"2026-01-04 01:51:22"}
+{"level":"info","message":"Starting code search for query: \"repo:code-yeongyu/oh-my-opencode CLAUDE.md\"","query":"repo:code-yeongyu/oh-my-opencode CLAUDE.md","service":"grep-app-server","timestamp":"2026-01-04 01:51:22"}
+{"error":"Request failed with status code 429","level":"error","message":"Search execution failed","service":"grep-app-server","stack":"AxiosError: Request failed with status code 429\n    at settle (file:///Users/davidandrews/grep_app_mcp/node_modules/axios/lib/core/settle.js:19:12)\n    at IncomingMessage.handleStreamEnd (file:///Users/davidandrews/grep_app_mcp/node_modules/axios/lib/adapters/http.js:599:11)\n    at IncomingMessage.emit (node:events:519:35)\n    at endReadableNT (node:internal/streams/readable:1696:12)\n    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)\n    at Axios.request (file:///Users/davidandrews/grep_app_mcp/node_modules/axios/lib/core/Axios.js:45:41)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async fetchGrepApp (file:///Users/davidandrews/grep_app_mcp/dist/core/grep-app-client.js:20:22)\n    at async Object.execute (file:///Users/davidandrews/grep_app_mcp/dist/core/grep-app-client.js:70:29)\n    at async Object.execute (file:///Users/davidandrews/grep_app_mcp/dist/tools/search-code.js:50:28)\n    at async file:///Users/davidandrews/grep_app_mcp/node_modules/fastmcp/dist/FastMCP.js:879:35","timestamp":"2026-01-04 01:51:22"}
+{"error":"Request failed with status code 429","level":"error","message":"Search execution failed","service":"grep-app-server","stack":"AxiosError: Request failed with status code 429\n    at settle (file:///Users/davidandrews/grep_app_mcp/node_modules/axios/lib/core/settle.js:19:12)\n    at IncomingMessage.handleStreamEnd (file:///Users/davidandrews/grep_app_mcp/node_modules/axios/lib/adapters/http.js:599:11)\n    at IncomingMessage.emit (node:events:519:35)\n    at endReadableNT (node:internal/streams/readable:1696:12)\n    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)\n    at Axios.request (file:///Users/davidandrews/grep_app_mcp/node_modules/axios/lib/core/Axios.js:45:41)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async fetchGrepApp (file:///Users/davidandrews/grep_app_mcp/dist/core/grep-app-client.js:20:22)\n    at async Object.execute (file:///Users/davidandrews/grep_app_mcp/dist/core/grep-app-client.js:70:29)\n    at async Object.execute (file:///Users/davidandrews/grep_app_mcp/dist/tools/search-code.js:50:28)\n    at async file:///Users/davidandrews/grep_app_mcp/node_modules/fastmcp/dist/FastMCP.js:879:35","timestamp":"2026-01-04 01:51:22"}
+{"error":"Request failed with status code 429","level":"error","message":"Search execution failed","service":"grep-app-server","stack":"AxiosError: Request failed with status code 429\n    at settle (file:///Users/davidandrews/grep_app_mcp/node_modules/axios/lib/core/settle.js:19:12)\n    at IncomingMessage.handleStreamEnd (file:///Users/davidandrews/grep_app_mcp/node_modules/axios/lib/adapters/http.js:599:11)\n    at IncomingMessage.emit (node:events:519:35)\n    at endReadableNT (node:internal/streams/readable:1696:12)\n    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)\n    at Axios.request (file:///Users/davidandrews/grep_app_mcp/node_modules/axios/lib/core/Axios.js:45:41)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async fetchGrepApp (file:///Users/davidandrews/grep_app_mcp/dist/core/grep-app-client.js:20:22)\n    at async Object.execute (file:///Users/davidandrews/grep_app_mcp/dist/core/grep-app-client.js:70:29)\n    at async Object.execute (file:///Users/davidandrews/grep_app_mcp/dist/tools/search-code.js:50:28)\n    at async file:///Users/davidandrews/grep_app_mcp/node_modules/fastmcp/dist/FastMCP.js:879:35","timestamp":"2026-01-04 01:51:22"}
+{"level":"info","message":"Logger initialized","service":"grep-app-server","timestamp":"2026-01-04 03:16:18"}
+{"level":"info","message":"Starting FastMCP server in stdio mode","service":"grep-app-server","timestamp":"2026-01-04 03:16:18"}
+{"level":"info","message":"Client connected via stdio","service":"grep-app-server","sessionIdentifier":"65j2m6w1","timestamp":"2026-01-04 03:16:18"}
+{"level":"info","message":"FastMCP server started successfully in stdio mode","service":"grep-app-server","timestamp":"2026-01-04 03:16:18"}
+{"level":"info","message":"Logger initialized","service":"grep-app-server","timestamp":"2026-01-04 03:22:59"}
+{"level":"info","message":"Starting FastMCP server in stdio mode","service":"grep-app-server","timestamp":"2026-01-04 03:22:59"}
+{"level":"info","message":"Client connected via stdio","service":"grep-app-server","sessionIdentifier":"g6irxinq","timestamp":"2026-01-04 03:22:59"}
+{"level":"info","message":"FastMCP server started successfully in stdio mode","service":"grep-app-server","timestamp":"2026-01-04 03:22:59"}
+{"level":"info","message":"Logger initialized","service":"grep-app-server","timestamp":"2026-01-04 03:24:07"}
+{"level":"info","message":"Starting FastMCP server in stdio mode","service":"grep-app-server","timestamp":"2026-01-04 03:24:07"}
+{"level":"info","message":"Client connected via stdio","service":"grep-app-server","sessionIdentifier":"tfh7qxj8","timestamp":"2026-01-04 03:24:07"}
+{"level":"info","message":"FastMCP server started successfully in stdio mode","service":"grep-app-server","timestamp":"2026-01-04 03:24:07"}
+{"level":"info","message":"Logger initialized","service":"grep-app-server","timestamp":"2026-01-04 03:30:13"}
+{"level":"info","message":"Starting FastMCP server in stdio mode","service":"grep-app-server","timestamp":"2026-01-04 03:30:13"}
+{"level":"info","message":"Client connected via stdio","service":"grep-app-server","sessionIdentifier":"xf8kxn5l","timestamp":"2026-01-04 03:30:13"}
+{"level":"info","message":"FastMCP server started successfully in stdio mode","service":"grep-app-server","timestamp":"2026-01-04 03:30:13"}
+{"level":"info","message":"Logger initialized","service":"grep-app-server","timestamp":"2026-01-04 03:32:35"}
+{"level":"info","message":"Starting FastMCP server in stdio mode","service":"grep-app-server","timestamp":"2026-01-04 03:32:35"}
+{"level":"info","message":"Client connected via stdio","service":"grep-app-server","sessionIdentifier":"gktgcqd7","timestamp":"2026-01-04 03:32:35"}
+{"level":"info","message":"FastMCP server started successfully in stdio mode","service":"grep-app-server","timestamp":"2026-01-04 03:32:35"}
+{"level":"info","message":"Logger initialized","service":"grep-app-server","timestamp":"2026-01-04 03:36:48"}
+{"level":"info","message":"Starting FastMCP server in stdio mode","service":"grep-app-server","timestamp":"2026-01-04 03:36:48"}
+{"level":"info","message":"Client connected via stdio","service":"grep-app-server","sessionIdentifier":"qy8h43iu","timestamp":"2026-01-04 03:36:48"}
+{"level":"info","message":"FastMCP server started successfully in stdio mode","service":"grep-app-server","timestamp":"2026-01-04 03:36:48"}
+{"level":"info","message":"Logger initialized","service":"grep-app-server","timestamp":"2026-01-04 03:37:48"}
+{"level":"info","message":"Starting FastMCP server in stdio mode","service":"grep-app-server","timestamp":"2026-01-04 03:37:49"}
+{"level":"info","message":"Client connected via stdio","service":"grep-app-server","sessionIdentifier":"mkfe5gi5","timestamp":"2026-01-04 03:37:49"}
+{"level":"info","message":"FastMCP server started successfully in stdio mode","service":"grep-app-server","timestamp":"2026-01-04 03:37:49"}
+{"level":"info","message":"Logger initialized","service":"grep-app-server","timestamp":"2026-01-04 03:43:54"}
+{"level":"info","message":"Starting FastMCP server in stdio mode","service":"grep-app-server","timestamp":"2026-01-04 03:43:54"}
+{"level":"info","message":"Client connected via stdio","service":"grep-app-server","sessionIdentifier":"2ivursc9","timestamp":"2026-01-04 03:43:54"}
+{"level":"info","message":"FastMCP server started successfully in stdio mode","service":"grep-app-server","timestamp":"2026-01-04 03:43:54"}
+{"level":"info","message":"Logger initialized","service":"grep-app-server","timestamp":"2026-01-04 03:46:40"}
+{"level":"info","message":"Starting FastMCP server in stdio mode","service":"grep-app-server","timestamp":"2026-01-04 03:46:41"}
+{"level":"info","message":"Client connected via stdio","service":"grep-app-server","sessionIdentifier":"y0udrmje","timestamp":"2026-01-04 03:46:41"}
+{"level":"info","message":"FastMCP server started successfully in stdio mode","service":"grep-app-server","timestamp":"2026-01-04 03:46:41"}
+{"level":"info","message":"Logger initialized","service":"grep-app-server","timestamp":"2026-01-04 03:55:55"}
+{"level":"info","message":"Starting FastMCP server in stdio mode","service":"grep-app-server","timestamp":"2026-01-04 03:55:55"}
+{"level":"info","message":"Client connected via stdio","service":"grep-app-server","sessionIdentifier":"yynln2em","timestamp":"2026-01-04 03:55:55"}
+{"level":"info","message":"FastMCP server started successfully in stdio mode","service":"grep-app-server","timestamp":"2026-01-04 03:55:55"}
+{"level":"info","message":"Logger initialized","service":"grep-app-server","timestamp":"2026-01-04 03:56:54"}
+{"level":"info","message":"Starting FastMCP server in stdio mode","service":"grep-app-server","timestamp":"2026-01-04 03:56:54"}
+{"level":"info","message":"Client connected via stdio","service":"grep-app-server","sessionIdentifier":"r1dyghrj","timestamp":"2026-01-04 03:56:54"}
+{"level":"info","message":"Logger initialized","service":"grep-app-server","timestamp":"2026-01-04 03:58:33"}
+{"level":"info","message":"Starting FastMCP server in stdio mode","service":"grep-app-server","timestamp":"2026-01-04 03:58:33"}
+{"level":"info","message":"Client connected via stdio","service":"grep-app-server","sessionIdentifier":"ru4zxcol","timestamp":"2026-01-04 03:58:33"}
+{"level":"info","message":"FastMCP server started successfully in stdio mode","service":"grep-app-server","timestamp":"2026-01-04 03:58:33"}
+{"level":"info","message":"Logger initialized","service":"grep-app-server","timestamp":"2026-01-04 04:18:52"}
+{"level":"info","message":"Starting FastMCP server in stdio mode","service":"grep-app-server","timestamp":"2026-01-04 04:18:52"}
+{"level":"info","message":"Client connected via stdio","service":"grep-app-server","sessionIdentifier":"ob59ij2n","timestamp":"2026-01-04 04:18:52"}
+{"level":"info","message":"FastMCP server started successfully in stdio mode","service":"grep-app-server","timestamp":"2026-01-04 04:18:52"}

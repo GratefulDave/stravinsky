@@ -268,6 +268,8 @@ async def invoke_gemini(
         "temperature": temperature,
         "max_tokens": max_tokens,
         "thinking_budget": thinking_budget,
+        "token_store": token_store,  # Pass for hooks that need model access
+        "provider": "gemini",  # Identify which provider is being called
     }
     hook_manager = get_hook_manager()
     params = await hook_manager.execute_pre_model_invoke(params)
@@ -717,6 +719,8 @@ async def invoke_openai(
         "temperature": temperature,
         "max_tokens": max_tokens,
         "thinking_budget": thinking_budget,
+        "token_store": token_store,  # Pass for hooks that need model access
+        "provider": "openai",  # Identify which provider is being called
     }
     hook_manager = get_hook_manager()
     params = await hook_manager.execute_pre_model_invoke(params)

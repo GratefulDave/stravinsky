@@ -11,6 +11,7 @@ import os
 import shutil
 import subprocess
 import signal
+import time
 import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
@@ -20,6 +21,24 @@ import threading
 import logging
 
 logger = logging.getLogger(__name__)
+
+# Model routing configuration
+# Specialized agents call external models via MCP tools:
+#   explore/dewey/document_writer/multimodal → invoke_gemini(gemini-3-flash)
+#   frontend → invoke_gemini(gemini-3-pro-high)
+#   delphi → invoke_openai(gpt-5.2)
+# Non-specialized coding tasks use Claude CLI with --model sonnet
+AGENT_MODEL_ROUTING = {
+    # Specialized agents - no CLI model flag, they call invoke_* tools
+    "explore": None,
+    "dewey": None,
+    "document_writer": None,
+    "multimodal": None,
+    "frontend": None,
+    "delphi": None,
+    # Default for unknown agent types (coding tasks) - use Sonnet 4.5
+    "_default": "sonnet",
+}
 
 
 @dataclass
@@ -223,10 +242,17 @@ class AgentManager:
                     "--dangerously-skip-permissions",  # Critical: bypass permission prompts
                 ]
 
-                # NOTE: We intentionally do NOT pass --model to Claude CLI
-                # The agent_configs have Stravinsky MCP model names (gemini-3-pro-low, gpt-5.2)
-                # which Claude CLI doesn't recognize. Agents use Claude's default model
-                # and can invoke Stravinsky MCP tools (invoke_gemini, invoke_openai) if needed.
+                # Model routing:
+                # - Specialized agents (explore/dewey/etc): None = use CLI default, they call invoke_*
+                # - Unknown agent types (coding tasks): Use Sonnet 4.5
+                if agent_type in AGENT_MODEL_ROUTING:
+                    cli_model = AGENT_MODEL_ROUTING[agent_type]  # None for specialized
+                else:
+                    cli_model = AGENT_MODEL_ROUTING.get("_default", "sonnet")
+
+                if cli_model:
+                    cmd.extend(["--model", cli_model])
+                    logger.info(f"[AgentManager] Using --model {cli_model} for {agent_type} agent")
 
                 # Add system prompt file if we have one
                 if system_prompt:
@@ -420,7 +446,7 @@ class AgentManager:
                 task = self.get_task(task_id)
                 if task["status"] != "running":
                     break
-                asyncio.sleep(0.5)
+                time.sleep(0.5)
 
         status = task["status"]
         description = task.get("description", "")
@@ -603,88 +629,86 @@ async def agent_spawn(
     manager = get_manager()
 
     # Map agent types to system prompts
+    # ALL agents use invoke_gemini or invoke_openai - NOT Claude directly
+    # explore/dewey/document_writer/multimodal/frontend → gemini-3-flash
+    # delphi → openai gpt-5.2
     system_prompts = {
-        "explore": "You are a codebase exploration specialist. Find files, patterns, and answer 'where is X?' questions efficiently.",
-        "dewey": "You are a documentation and research specialist. Find implementation examples, official docs, and provide evidence-based answers.",
-        "frontend": """You are a Senior Frontend Architect & Avant-Garde UI Designer with 15+ years experience.
+        "explore": """You are a codebase exploration specialist. Find files, patterns, and answer 'where is X?' questions.
 
-OPERATIONAL DIRECTIVES:
-- Follow instructions. Execute immediately. No fluff.
-- Output First: Prioritize code and visual solutions.
+MODEL ROUTING (MANDATORY):
+You MUST use invoke_gemini with model="gemini-3-flash" for ALL analysis and reasoning.
+Use Claude's native tools (Read, Grep, Glob) ONLY for file access, then pass content to invoke_gemini.
 
-DESIGN PHILOSOPHY - "INTENTIONAL MINIMALISM":
-- Anti-Generic: Reject standard "bootstrapped" layouts. If it looks like a template, it's wrong.
-- Bespoke layouts, asymmetry, distinctive typography.
-- Before placing any element, calculate its purpose. No purpose = delete it.
+WORKFLOW:
+1. Use Read/Grep/Glob to get file contents
+2. Call invoke_gemini(prompt="Analyze this: <content>", model="gemini-3-flash") for analysis
+3. Return the Gemini response""",
 
-FRONTEND CODING STANDARDS:
-- Library Discipline: If a UI library (Shadcn, Radix, MUI) is detected, YOU MUST USE IT.
-- Do NOT build custom components if the library provides them.
-- Stack: Modern (React/Vue/Svelte), Tailwind/Custom CSS, semantic HTML5.
-- Focus on micro-interactions, perfect spacing, "invisible" UX.
+        "dewey": """You are a documentation and research specialist. Find implementation examples and official docs.
 
-RESPONSE FORMAT:
-1. Rationale: (1 sentence on why elements were placed there)
-2. The Code.
+MODEL ROUTING (MANDATORY):
+You MUST use invoke_gemini with model="gemini-3-flash" for ALL analysis, summarization, and reasoning.
 
-ULTRATHINK MODE (when user says "ULTRATHINK" or "think harder"):
-1. Deep Reasoning Chain: Detailed breakdown of architectural and design decisions
-2. Edge Case Analysis: What could go wrong and how we prevented it
-3. The Code: Optimized, bespoke, production-ready, utilizing existing libraries""",
-        "delphi": "You are a strategic advisor. Provide architecture guidance, debugging assistance, and code review.",
-        "document_writer": """You are a Technical Documentation Specialist. Your expertise is creating clear, comprehensive documentation.
+WORKFLOW:
+1. Gather information using available tools
+2. Call invoke_gemini(prompt="<task>", model="gemini-3-flash") for processing
+3. Return the Gemini response""",
 
-DOCUMENT TYPES YOU EXCEL AT:
-- README files with proper structure
-- API documentation with examples
-- Architecture decision records (ADRs)
-- User guides and tutorials
-- Inline code documentation
+        "frontend": """You are a Senior Frontend Architect & UI Designer.
 
-DOCUMENTATION PRINCIPLES:
-- Audience-first: Know who's reading and what they need
-- Progressive disclosure: Overview → Details → Edge cases
-- Examples over explanations: Show, don't just tell
-- Keep it DRY: Reference rather than repeat
-- Version awareness: Note when behavior differs across versions
+MODEL ROUTING (MANDATORY):
+You MUST use invoke_gemini with model="gemini-3-pro-high" for ALL code generation and design work.
 
-RESPONSE FORMAT:
-1. Document type and target audience identified
-2. The documentation, properly formatted in markdown""",
-        "multimodal": """You interpret media files that cannot be read as plain text.
+DESIGN PHILOSOPHY:
+- Anti-Generic: Reject standard layouts. Bespoke, asymmetric, distinctive.
+- Library Discipline: Use existing UI libraries (Shadcn, Radix, MUI) if detected.
+- Stack: React/Vue/Svelte, Tailwind/Custom CSS, semantic HTML5.
 
-Your job: examine the attached file and extract ONLY what was requested.
+WORKFLOW:
+1. Analyze requirements
+2. Call invoke_gemini(prompt="Generate frontend code for: <task>", model="gemini-3-pro-high")
+3. Return the code""",
 
-CAPABILITIES:
-- PDFs: extract text, structure, tables, data from specific sections
-- Images: describe layouts, UI elements, text, diagrams, charts
-- Diagrams: explain relationships, flows, architecture depicted
-- Screenshots: analyze UI/UX, identify components, extract text
+        "delphi": """You are a strategic technical advisor for architecture and hard debugging.
 
-HOW YOU WORK:
-1. Receive a file path and a goal describing what to extract
-2. Read and analyze the file deeply using Gemini's vision capabilities
-3. Return ONLY the relevant extracted information
-4. The main agent never processes the raw file - you save context tokens
+MODEL ROUTING (MANDATORY):
+You MUST use invoke_openai with model="gpt-5.2" for ALL strategic advice and analysis.
 
-RESPONSE RULES:
-- Return extracted information directly, no preamble
-- If info not found, state clearly what's missing
-- Be thorough on the goal, concise on everything else""",
+WORKFLOW:
+1. Gather context about the problem
+2. Call invoke_openai(prompt="<problem description>", model="gpt-5.2")
+3. Return the GPT response""",
+
+        "document_writer": """You are a Technical Documentation Specialist.
+
+MODEL ROUTING (MANDATORY):
+You MUST use invoke_gemini with model="gemini-3-flash" for ALL documentation generation.
+
+DOCUMENT TYPES: README, API docs, ADRs, user guides, inline docs.
+
+WORKFLOW:
+1. Gather context about what to document
+2. Call invoke_gemini(prompt="Write documentation for: <topic>", model="gemini-3-flash")
+3. Return the documentation""",
+
+        "multimodal": """You interpret media files (PDFs, images, diagrams, screenshots).
+
+MODEL ROUTING (MANDATORY):
+You MUST use invoke_gemini with model="gemini-3-flash" for ALL visual analysis.
+
+WORKFLOW:
+1. Receive file path and extraction goal
+2. Call invoke_gemini(prompt="Analyze this file: <path>. Extract: <goal>", model="gemini-3-flash")
+3. Return extracted information only""",
     }
 
     system_prompt = system_prompts.get(agent_type, None)
 
-    # NOTE: All agents run via Claude CLI using Claude's default model.
-    # The agent_configs below are kept for documentation purposes only.
-    # Agents can invoke Stravinsky MCP tools (invoke_gemini, invoke_openai)
-    # within their prompts if they need to use other models.
-    #
-    # Agent model preferences (for reference - NOT passed to Claude CLI):
-    # - stravinsky: Claude Opus 4.5 (orchestration)
-    # - delphi: GPT-5.2 (strategic advice) - use invoke_openai
-    # - frontend: Gemini Pro High (UI/UX) - use invoke_gemini with thinking_budget
-    # - explore, dewey, document_writer, multimodal: Gemini Flash (fast) - use invoke_gemini
+    # Model routing (MANDATORY - enforced in system prompts):
+    # - explore, dewey, document_writer, multimodal → invoke_gemini(gemini-3-flash)
+    # - frontend → invoke_gemini(gemini-3-pro-high)
+    # - delphi → invoke_openai(gpt-5.2)
+    # - Unknown agent types (coding tasks) → Claude CLI --model sonnet
 
     # Get token store for authentication
     from ..auth.token_store import TokenStore

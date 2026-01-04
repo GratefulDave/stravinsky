@@ -159,45 +159,49 @@ STOP searching when:
 **DO NOT over-explore. Time is precious.**"""
 
 
-STRAVINSKY_PHASE2B_PRE_IMPLEMENTATION = """## Phase 2B - Implementation
+STRAVINSKY_PHASE2B_PRE_IMPLEMENTATION = """## ⚠️ CRITICAL: PARALLEL-FIRST WORKFLOW
 
-### Pre-Implementation:
-1. If task has 2+ steps -> Create todo list IMMEDIATELY, IN SUPER DETAIL. No announcements--just create it.
-2. Mark current task `in_progress` before starting
-3. Mark `completed` as soon as done (don't batch) - OBSESSIVELY TRACK YOUR WORK USING TODO TOOLS
-4. **PARALLEL DELEGATION (CRITICAL)**:
-   - Identify which todos are INDEPENDENT (can run simultaneously)
-   - Spawn `agent_spawn` for EACH independent todo in a SINGLE response
-   - NEVER process independent todos sequentially
-   - Pattern: N independent todos → N agent_spawn calls in ONE response → collect all → mark complete
+**BLOCKING REQUIREMENT**: For implementation tasks, your response structure MUST be:
 
-### WRONG Pattern (Sequential - DO NOT DO THIS):
 ```
-Create TODO list with 5 items
-Mark TODO 1 in_progress → Work → Complete
-Mark TODO 2 in_progress → Work → Complete  // SEQUENTIAL = SLOW!
-Mark TODO 3 in_progress → Work → Complete
+1. todowrite (create all items)
+2. SAME RESPONSE: Multiple agent_spawn() calls for ALL independent TODOs
+3. NEVER mark in_progress until agents return
 ```
 
-### CORRECT Pattern (Parallel - ALWAYS DO THIS):
-```
-Create TODO list with 5 items
-Identify independent: 1, 2, 3, 4, 5
+After todowrite, your VERY NEXT action in the SAME response must be spawning agents for each independent TODO. Do NOT:
+- Mark any TODO as in_progress first
+- Work on any TODO directly
+- Wait for user confirmation
+- Send a response without the agent_spawn calls
 
-# ONE response with ALL agent_spawn calls:
+### CORRECT (one response with all tool calls):
+```python
+todowrite([todo1, todo2, todo3, todo4, todo5])
 agent_spawn(agent_type="explore", prompt="TODO 1...")
 agent_spawn(agent_type="explore", prompt="TODO 2...")
 agent_spawn(agent_type="explore", prompt="TODO 3...")
 agent_spawn(agent_type="explore", prompt="TODO 4...")
 agent_spawn(agent_type="explore", prompt="TODO 5...")
+# All 6 tool calls in ONE response - then collect results
+```
 
-# Collect ALL results:
-agent_output(task_id="id1")
-agent_output(task_id="id2")
-...
+### WRONG (defeats parallelism):
+```python
+todowrite([todo1, todo2, todo3])
+# Response ends here - WRONG!
+# Next response: Mark todo1 in_progress, work on it - WRONG!
+```
 
-# THEN mark TODOs complete
-```"""
+---
+
+## Phase 2B - Implementation Details
+
+### Pre-Implementation:
+1. Create todo list IMMEDIATELY with super detail
+2. SAME RESPONSE: Spawn agent_spawn for ALL independent todos
+3. Collect results with agent_output
+4. THEN mark todos complete"""
 
 
 STRAVINSKY_DELEGATION_PROMPT_STRUCTURE = """### Delegation Prompt Structure (MANDATORY - ALL 7 sections):

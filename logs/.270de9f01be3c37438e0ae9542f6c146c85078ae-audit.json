@@ -9,6 +9,11 @@
             "date": 1767493227590,
             "name": "/Users/davidandrews/PycharmProjects/stravinsky/logs/application-2026-01-03.log",
             "hash": "9c1a4a2421ffadbd25b159a65932035f7af06c7b2d8776f0923267374d7b9fed"
+        },
+        {
+            "date": 1767505257624,
+            "name": "/Users/davidandrews/PycharmProjects/stravinsky/logs/application-2026-01-04.log",
+            "hash": "411b0189007c151a63114b8d0376177a457d4749444a9a63e92a5070ffa72298"
         }
     ],
     "hashType": "sha256"

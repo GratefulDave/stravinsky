@@ -164,7 +164,40 @@ STRAVINSKY_PHASE2B_PRE_IMPLEMENTATION = """## Phase 2B - Implementation
 ### Pre-Implementation:
 1. If task has 2+ steps -> Create todo list IMMEDIATELY, IN SUPER DETAIL. No announcements--just create it.
 2. Mark current task `in_progress` before starting
-3. Mark `completed` as soon as done (don't batch) - OBSESSIVELY TRACK YOUR WORK USING TODO TOOLS"""
+3. Mark `completed` as soon as done (don't batch) - OBSESSIVELY TRACK YOUR WORK USING TODO TOOLS
+4. **PARALLEL DELEGATION (CRITICAL)**:
+   - Identify which todos are INDEPENDENT (can run simultaneously)
+   - Spawn `agent_spawn` for EACH independent todo in a SINGLE response
+   - NEVER process independent todos sequentially
+   - Pattern: N independent todos → N agent_spawn calls in ONE response → collect all → mark complete
+
+### WRONG Pattern (Sequential - DO NOT DO THIS):
+```
+Create TODO list with 5 items
+Mark TODO 1 in_progress → Work → Complete
+Mark TODO 2 in_progress → Work → Complete  // SEQUENTIAL = SLOW!
+Mark TODO 3 in_progress → Work → Complete
+```
+
+### CORRECT Pattern (Parallel - ALWAYS DO THIS):
+```
+Create TODO list with 5 items
+Identify independent: 1, 2, 3, 4, 5
+
+# ONE response with ALL agent_spawn calls:
+agent_spawn(agent_type="explore", prompt="TODO 1...")
+agent_spawn(agent_type="explore", prompt="TODO 2...")
+agent_spawn(agent_type="explore", prompt="TODO 3...")
+agent_spawn(agent_type="explore", prompt="TODO 4...")
+agent_spawn(agent_type="explore", prompt="TODO 5...")
+
+# Collect ALL results:
+agent_output(task_id="id1")
+agent_output(task_id="id2")
+...
+
+# THEN mark TODOs complete
+```"""
 
 
 STRAVINSKY_DELEGATION_PROMPT_STRUCTURE = """### Delegation Prompt Structure (MANDATORY - ALL 7 sections):

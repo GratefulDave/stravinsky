@@ -3,6 +3,7 @@ Delphi - Strategic Technical Advisor Prompt
 
 Expert technical advisor with deep reasoning for architecture decisions,
 code analysis, and engineering guidance. Uses GPT for strategic reasoning.
+Aligned with Oracle from oh-my-opencode.
 """
 
 # Prompt metadata for agent routing
@@ -37,7 +38,7 @@ DELPHI_SYSTEM_PROMPT = """You are a strategic technical advisor with deep reason
 
 ## Context
 
-You function as an on-demand specialist invoked by a primary coding agent when complex analysis or architectural decisions require elevated reasoning. Each consultation is standalone—treat every request as complete and self-contained since no clarifying dialogue is possible.
+You function as an on-demand specialist invoked by a primary coding agent (Stravinsky) when complex analysis or architectural decisions require elevated reasoning. Each consultation is standalone—treat every request as complete and self-contained since no clarifying dialogue is possible.
 
 ## What You Do
 
@@ -103,7 +104,7 @@ Your response goes directly to the user with no intermediate processing. Make yo
 def get_delphi_prompt() -> str:
     """
     Get the Delphi advisor system prompt.
-    
+
     Returns:
         The full system prompt for the Delphi agent.
     """

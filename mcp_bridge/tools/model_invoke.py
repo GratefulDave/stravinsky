@@ -6,6 +6,7 @@ API requests to external model providers.
 """
 
 import logging
+import os
 import time
 
 logger = logging.getLogger(__name__)
@@ -48,9 +49,118 @@ from tenacity import (
 )
 
 from ..auth.token_store import TokenStore
-from ..auth.oauth import refresh_access_token as gemini_refresh, ANTIGRAVITY_HEADERS
+from ..auth.oauth import (
+    refresh_access_token as gemini_refresh,
+    ANTIGRAVITY_HEADERS,
+    ANTIGRAVITY_ENDPOINTS,
+    ANTIGRAVITY_DEFAULT_PROJECT_ID,
+    ANTIGRAVITY_API_VERSION,
+)
 from ..auth.openai_oauth import refresh_access_token as openai_refresh
 from ..hooks.manager import get_hook_manager
+
+# ========================
+# SESSION & HTTP MANAGEMENT
+# ========================
+
+# Session cache for thinking signature persistence across multi-turn conversations
+# Key: conversation_key (or "default"), Value: session UUID
+_SESSION_CACHE: dict[str, str] = {}
+
+# Pooled HTTP client for connection reuse
+_HTTP_CLIENT: httpx.AsyncClient | None = None
+
+
+def _get_session_id(conversation_key: str | None = None) -> str:
+    """
+    Get or create persistent session ID for thinking signature caching.
+
+    Per Antigravity API: session IDs must persist across multi-turn to maintain
+    thinking signature cache. Creating new UUID per call breaks this.
+
+    Args:
+        conversation_key: Optional key to scope session (e.g., per-agent)
+
+    Returns:
+        Stable session UUID for this conversation
+    """
+    import uuid
+
+    key = conversation_key or "default"
+    if key not in _SESSION_CACHE:
+        _SESSION_CACHE[key] = str(uuid.uuid4())
+    return _SESSION_CACHE[key]
+
+
+def clear_session_cache() -> None:
+    """Clear session cache (for thinking recovery on error)."""
+    _SESSION_CACHE.clear()
+
+
+async def _get_http_client() -> httpx.AsyncClient:
+    """
+    Get or create pooled HTTP client for connection reuse.
+
+    Reusing a single client across requests improves performance
+    by maintaining connection pools.
+    """
+    global _HTTP_CLIENT
+    if _HTTP_CLIENT is None or _HTTP_CLIENT.is_closed:
+        _HTTP_CLIENT = httpx.AsyncClient(timeout=120.0)
+    return _HTTP_CLIENT
+
+
+def _extract_gemini_response(data: dict) -> str:
+    """
+    Extract text from Gemini response, handling thinking blocks.
+
+    Per Antigravity API, responses may contain:
+    - text: Regular response text
+    - thought: Thinking block content (when thinkingConfig enabled)
+    - thoughtSignature: Signature for caching (ignored)
+
+    Args:
+        data: Raw API response JSON
+
+    Returns:
+        Extracted text, with thinking blocks formatted as <thinking>...</thinking>
+    """
+    try:
+        # Unwrap the outer "response" envelope if present
+        inner_response = data.get("response", data)
+        candidates = inner_response.get("candidates", [])
+
+        if not candidates:
+            return "No response generated"
+
+        content = candidates[0].get("content", {})
+        parts = content.get("parts", [])
+
+        if not parts:
+            return "No response parts"
+
+        text_parts = []
+        thinking_parts = []
+
+        for part in parts:
+            if "thought" in part:
+                thinking_parts.append(part["thought"])
+            elif "text" in part:
+                text_parts.append(part["text"])
+            # Skip thoughtSignature parts
+
+        # Combine results
+        result = "".join(text_parts)
+
+        # Prepend thinking blocks if present
+        if thinking_parts:
+            thinking_content = "".join(thinking_parts)
+            result = f"<thinking>\n{thinking_content}\n</thinking>\n\n{result}"
+
+        return result if result.strip() else "No response generated"
+
+    except (KeyError, IndexError, TypeError) as e:
+        return f"Error parsing response: {e}"
 
 
 async def _ensure_valid_token(token_store: TokenStore, provider: str) -> str:
@@ -174,17 +284,9 @@ async def invoke_gemini(
     # Resolve user-friendly model name to actual API model ID
     api_model = resolve_gemini_model(model)
 
-    # Per API spec: autopush endpoint is UNAVAILABLE, only use daily (dev) and prod
-    ANTIGRAVITY_ENDPOINTS = [
-        "https://daily-cloudcode-pa.sandbox.googleapis.com",  # dev (primary)
-        "https://cloudcode-pa.googleapis.com",  # prod (fallback)
-    ]
-
-    # Generate session ID and project ID per reference
-    import uuid
-
-    session_id = str(uuid.uuid4())
-    project_id = "rising-fact-p41fc"
+    # Use persistent session ID for thinking signature caching
+    session_id = _get_session_id()
+    project_id = os.getenv("STRAVINSKY_ANTIGRAVITY_PROJECT_ID", ANTIGRAVITY_DEFAULT_PROJECT_ID)
 
     headers = {
         "Authorization": f"Bearer {access_token}",
@@ -206,9 +308,10 @@ async def invoke_gemini(
     # Add thinking budget if supported by model/API
     if thinking_budget > 0:
         # For Gemini 2.0+ Thinking models
+        # Per Antigravity API: use "thinkingBudget", NOT "tokenLimit"
         inner_payload["generationConfig"]["thinkingConfig"] = {
             "includeThoughts": True,
-            "tokenLimit": thinking_budget,
+            "thinkingBudget": thinking_budget,
         }
 
     # Wrap request body per reference implementation
@@ -220,16 +323,20 @@ async def invoke_gemini(
         "request": inner_payload,
     }
 
-    # Try endpoints in fallback order
+    # Get pooled HTTP client for connection reuse
+    client = await _get_http_client()
+
+    # Try endpoints in fallback order with thinking recovery
     response = None
     last_error = None
+    max_retries = 2  # For thinking recovery
 
-    for endpoint in ANTIGRAVITY_ENDPOINTS:
-        # Reference uses: {endpoint}/v1internal:generateContent (NOT /models/{model})
-        api_url = f"{endpoint}/v1internal:generateContent"
+    for retry_attempt in range(max_retries):
+        for endpoint in ANTIGRAVITY_ENDPOINTS:
+            # Reference uses: {endpoint}/v1internal:generateContent (NOT /models/{model})
+            api_url = f"{endpoint}/v1internal:generateContent"
 
-        try:
-            async with httpx.AsyncClient() as client:
+            try:
                 response = await client.post(
                     api_url,
                     headers=headers,
@@ -245,16 +352,37 @@ async def invoke_gemini(
                     last_error = Exception(f"{response.status_code} from {endpoint}")
                     continue
 
+                # Check for thinking-related errors that need recovery
+                if response.status_code in (400, 500):
+                    error_text = response.text.lower()
+                    if "thinking" in error_text or "signature" in error_text:
+                        logger.warning(
+                            f"[Gemini] Thinking error detected, clearing session cache and retrying"
+                        )
+                        clear_session_cache()
+                        # Update session ID for retry
+                        wrapped_payload["request"]["sessionId"] = _get_session_id()
+                        last_error = Exception(f"Thinking error: {response.text[:200]}")
+                        break  # Break inner loop to retry with new session
+
                 # If we got a non-retryable response (success or 4xx client error), use it
                 if response.status_code < 500 and response.status_code != 429:
                     break
 
-        except httpx.TimeoutException as e:
-            last_error = e
+            except httpx.TimeoutException as e:
+                last_error = e
+                continue
+            except Exception as e:
+                last_error = e
+                continue
+        else:
+            # Inner loop completed without break - no thinking recovery needed
+            break
+
+        # If we broke out of inner loop for thinking recovery, continue outer retry loop
+        if response and response.status_code in (400, 500):
             continue
-        except Exception as e:
-            last_error = e
-            continue
+        break
 
     if response is None:
         raise ValueError(f"All Antigravity endpoints failed: {last_error}")
@@ -262,23 +390,8 @@ async def invoke_gemini(
     response.raise_for_status()
     data = response.json()
 
-    # Extract text from response
-    # Antigravity API wraps response in {"response": {...}, "traceId": ...}
-    try:
-        # Unwrap the outer "response" envelope if present
-        inner_response = data.get("response", data)
-        candidates = inner_response.get("candidates", [])
-        if candidates:
-            content = candidates[0].get("content", {})
-            parts = content.get("parts", [])
-            if parts:
-                # Find text part (skip thoughtSignature parts)
-                for part in parts:
-                    if "text" in part:
-                        return part["text"]
-        return "No response generated"
-    except (KeyError, IndexError) as e:
-        return f"Error parsing response: {e}"
+    # Extract text from response using thinking-aware parser
+    return _extract_gemini_response(data)
 
 
 # ========================
@@ -429,17 +542,11 @@ async def invoke_gemini_agentic(
     access_token = await _ensure_valid_token(token_store, "gemini")
     api_model = resolve_gemini_model(model)
 
-    # Per API spec: autopush endpoint is UNAVAILABLE, only use daily (dev) and prod
-    ANTIGRAVITY_ENDPOINTS = [
-        "https://daily-cloudcode-pa.sandbox.googleapis.com",  # dev (primary)
-        "https://cloudcode-pa.googleapis.com",  # prod (fallback)
-    ]
+    # Use persistent session ID for this conversation
+    session_id = _get_session_id(conversation_key="agentic")
 
-    # Generate session ID for this conversation (per reference)
-    session_id = str(uuid.uuid4())
-
-    # Default project ID from reference
-    project_id = "rising-fact-p41fc"
+    # Project ID from environment or default
+    project_id = os.getenv("STRAVINSKY_ANTIGRAVITY_PROJECT_ID", ANTIGRAVITY_DEFAULT_PROJECT_ID)
 
     headers = {
         "Authorization": f"Bearer {access_token}",
@@ -449,6 +556,9 @@ async def invoke_gemini_agentic(
 
     # Initialize conversation
     contents = [{"role": "user", "parts": [{"text": prompt}]}]
+
+    # Get pooled HTTP client for connection reuse
+    client = await _get_http_client()
 
     for turn in range(max_turns):
         # Build inner request payload (what goes inside "request" wrapper)
@@ -481,29 +591,28 @@ async def invoke_gemini_agentic(
             api_url = f"{endpoint}/v1internal:generateContent"
 
             try:
-                async with httpx.AsyncClient() as client:
-                    response = await client.post(
-                        api_url,
-                        headers=headers,
-                        json=wrapped_payload,
-                        timeout=float(timeout),
-                    )
+                response = await client.post(
+                    api_url,
+                    headers=headers,
+                    json=wrapped_payload,
+                    timeout=float(timeout),
+                )
 
-                    # 401/403 might be endpoint-specific, try next endpoint
-                    if response.status_code in (401, 403):
-                        logger.warning(
-                            f"[AgenticGemini] Endpoint {endpoint} returned {response.status_code}, trying next"
-                        )
-                        last_error = Exception(f"{response.status_code} from {endpoint}")
-                        continue
-
-                    # If we got a non-retryable response (success or 4xx client error), use it
-                    if response.status_code < 500 and response.status_code != 429:
-                        break
-
+                # 401/403 might be endpoint-specific, try next endpoint
+                if response.status_code in (401, 403):
                     logger.warning(
                         f"[AgenticGemini] Endpoint {endpoint} returned {response.status_code}, trying next"
                     )
+                    last_error = Exception(f"{response.status_code} from {endpoint}")
+                    continue
+
+                # If we got a non-retryable response (success or 4xx client error), use it
+                if response.status_code < 500 and response.status_code != 429:
+                    break
+
+                logger.warning(
+                    f"[AgenticGemini] Endpoint {endpoint} returned {response.status_code}, trying next"
+                )
 
             except httpx.TimeoutException as e:
                 last_error = e

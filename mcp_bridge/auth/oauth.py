@@ -37,11 +37,25 @@ ANTIGRAVITY_SCOPES = [
 ]
 
 # API Endpoints
-# Per API spec: autopush endpoint is UNAVAILABLE, only use daily (dev) and prod
+# NOTE: Prefer production; sandbox endpoints may require special access.
+ANTIGRAVITY_ENDPOINT_PROD = "https://cloudcode-pa.googleapis.com"
+ANTIGRAVITY_ENDPOINT_DAILY = "https://daily-cloudcode-pa.sandbox.googleapis.com"
+ANTIGRAVITY_ENDPOINT_AUTOPUSH = "https://autopush-cloudcode-pa.sandbox.googleapis.com"
+
+# Default to production only.
+# Set STRAVINSKY_ANTIGRAVITY_ENABLE_SANDBOX_ENDPOINTS=1 to also try sandbox endpoints.
 ANTIGRAVITY_ENDPOINTS = [
-    "https://daily-cloudcode-pa.sandbox.googleapis.com",  # dev (primary)
-    "https://cloudcode-pa.googleapis.com",  # prod (fallback)
+    ANTIGRAVITY_ENDPOINT_PROD,
 ]
+
+if os.getenv("STRAVINSKY_ANTIGRAVITY_ENABLE_SANDBOX_ENDPOINTS") in {"1", "true", "True"}:
+    ANTIGRAVITY_ENDPOINTS.extend(
+        [
+            ANTIGRAVITY_ENDPOINT_DAILY,
+            ANTIGRAVITY_ENDPOINT_AUTOPUSH,
+        ]
+    )
+
 
 # Default Project ID
 ANTIGRAVITY_DEFAULT_PROJECT_ID = "rising-fact-p41fc"
@@ -51,17 +65,16 @@ ANTIGRAVITY_API_VERSION = "v1internal"
 
 # Request Headers
 # Per API spec: User-Agent should be "antigravity/{version} {platform}/{arch}"
-import platform
-
 ANTIGRAVITY_HEADERS = {
-    "User-Agent": f"antigravity/1.11.5 {platform.system().lower()}/{platform.machine()}",
+    "User-Agent": "antigravity/1.11.5 windows/amd64",
     "X-Goog-Api-Client": "google-cloud-sdk vscode_cloudshelleditor/0.1",
     "Client-Metadata": json.dumps(
         {
             "ideType": "IDE_UNSPECIFIED",
             "platform": "PLATFORM_UNSPECIFIED",
             "pluginType": "GEMINI",
-        }
+        },
+        separators=(",", ":"),
     ),
 }
 
@@ -382,7 +395,7 @@ def perform_oauth_flow(
         # Build auth URL and open browser
         auth_url, verifier = build_auth_url(port, project_id)
 
-        print(f"\nOpening browser for Google authentication...")
+        print("\nOpening browser for Google authentication...")
         print(f"If browser doesn't open, visit:\n{auth_url}\n")
 
         webbrowser.open(auth_url)

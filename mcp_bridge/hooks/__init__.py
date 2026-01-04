@@ -14,6 +14,10 @@ from .keyword_detector import keyword_detector_hook
 from .comment_checker import comment_checker_hook
 from .context_monitor import context_monitor_hook
 from .agent_reminder import agent_reminder_hook
+from .preemptive_compaction import preemptive_compaction_hook
+from .auto_slash_command import auto_slash_command_hook
+from .session_recovery import session_recovery_hook
+from .empty_message_sanitizer import empty_message_sanitizer_hook
 
 
 def initialize_hooks():
@@ -25,11 +29,14 @@ def initialize_hooks():
     manager.register_post_tool_call(edit_error_recovery_hook)
     manager.register_post_tool_call(comment_checker_hook)
     manager.register_post_tool_call(agent_reminder_hook)
+    manager.register_post_tool_call(session_recovery_hook)
 
     # Tier 2: Pre-model-invoke (context management)
     manager.register_pre_model_invoke(directory_context_hook)
     manager.register_pre_model_invoke(context_compaction_hook)
     manager.register_pre_model_invoke(context_monitor_hook)
+    manager.register_pre_model_invoke(preemptive_compaction_hook)
+    manager.register_pre_model_invoke(empty_message_sanitizer_hook)
 
     # Tier 3: Pre-model-invoke (performance optimization)
     manager.register_pre_model_invoke(budget_optimizer_hook)
@@ -37,3 +44,6 @@ def initialize_hooks():
     # Tier 4: Pre-model-invoke (behavior enforcement)
     manager.register_pre_model_invoke(keyword_detector_hook)
     manager.register_pre_model_invoke(todo_continuation_hook)
+    manager.register_pre_model_invoke(auto_slash_command_hook)
+
+    return manager

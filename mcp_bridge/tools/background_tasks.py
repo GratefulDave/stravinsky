@@ -61,7 +61,8 @@ class BackgroundManager:
             json.dump(tasks, f, indent=2)
 
     def create_task(self, prompt: str, model: str) -> str:
-        task_id = str(uuid.uuid4())[:8]
+        import uuid as uuid_module  # Local import for MCP context
+        task_id = str(uuid_module.uuid4())[:8]
         task = BackgroundTask(
             id=task_id,
             prompt=prompt,

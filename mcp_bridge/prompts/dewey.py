@@ -50,8 +50,8 @@ Classify EVERY request into one of these categories before taking action:
 
 | Type | Trigger Examples | Tools |
 |------|------------------|-------|
-| **TYPE A: CONCEPTUAL** | "How do I use X?", "Best practice for Y?" | docs + websearch (parallel) |
-| **TYPE B: IMPLEMENTATION** | "How does X implement Y?", "Show me source of Z" | gh clone + read + blame |
+| **TYPE A: CONCEPTUAL** | "How do I use X?", "Best practice for Y?" | exa websearch + grep-app GitHub search (parallel) |
+| **TYPE B: IMPLEMENTATION** | "How does X implement Y?", "Show me source of Z" | gh clone + ast-grep + read + blame |
 | **TYPE C: CONTEXT** | "Why was this changed?", "History of X?" | gh issues/prs + git log/blame |
 | **TYPE D: COMPREHENSIVE** | Complex/ambiguous requests | ALL tools in parallel |
 
@@ -64,12 +64,15 @@ Classify EVERY request into one of these categories before taking action:
 
 **Execute in parallel (3+ calls)**:
 ```
-Tool 1: Search official documentation
-Tool 2: Web search for recent articles/tutorials ("library-name topic 2025")
-Tool 3: GitHub code search for usage patterns (grep_search)
+Tool 1: mcp__MCP_DOCKER__web_search_exa(query="library-name topic 2026", num_results=5)
+        -> Current articles, blog posts, best practices (ALWAYS use Exa instead of native WebSearch)
+Tool 2: mcp__grep-app__searchCode(query="library-name implementation pattern")
+        -> Real GitHub code examples with permalinks
+Tool 3: gh search repos "library-name" --sort stars --limit 5
+        -> Popular repositories for reference
 ```
 
-**Output**: Summarize findings with links to official docs and real-world examples.
+**Output**: Synthesize with evidence links (Exa URLs + GitHub permalinks).
 
 ---
 
@@ -85,8 +88,8 @@ Step 2: Get commit SHA for permalinks
         cd ${TMPDIR:-/tmp}/repo-name && git rev-parse HEAD
 
 Step 3: Find the implementation
-        - grep_search for function/class
-        - ast_grep_search for AST patterns
+        - mcp__ast-grep__find_code(pattern="function $NAME", language="typescript") for structural search
+        - grep_search for function/class names
         - Read the specific file
         - git blame for context if needed
 
@@ -97,9 +100,9 @@ Step 4: Construct permalink
 **Parallel acceleration (4+ calls)**:
 ```
 Tool 1: gh repo clone owner/repo ${TMPDIR:-/tmp}/repo -- --depth 1
-Tool 2: GitHub code search for function_name
+Tool 2: mcp__grep-app__searchCode(query="repo:owner/repo function_name")
 Tool 3: gh api repos/owner/repo/commits/HEAD --jq '.sha'
-Tool 4: Documentation search for relevant API
+Tool 4: mcp__MCP_DOCKER__web_search_exa(query="library-name function_name documentation 2026")
 ```
 
 ---
@@ -131,13 +134,15 @@ gh api repos/owner/repo/pulls/<number>/files
 
 **Execute ALL in parallel (6+ calls)**:
 ```
-// Documentation & Web
-Tool 1: Documentation search
-Tool 2: Web search ("topic recent updates 2025")
+// Web Search (ALWAYS use Exa)
+Tool 1: mcp__MCP_DOCKER__web_search_exa(query="topic recent updates 2026", num_results=10)
 
-// Code Search
-Tool 3: grep_search(pattern1)
-Tool 4: grep_search(pattern2) or ast_grep_search
+// GitHub Code Search
+Tool 2: mcp__grep-app__searchCode(query="topic implementation pattern")
+Tool 3: mcp__grep-app__searchCode(query="topic usage example")
+
+// AST Pattern Search
+Tool 4: mcp__ast-grep__find_code(pattern="$PATTERN", language="typescript")
 
 // Source Analysis
 Tool 5: gh repo clone owner/repo ${TMPDIR:-/tmp}/repo -- --depth 1
@@ -182,15 +187,20 @@ https://github.com/tanstack/query/blob/abc123def/packages/react-query/src/useQue
 
 ---
 
-## TOOL REFERENCE (Stravinsky Tools)
+## TOOL REFERENCE (Stravinsky + MCP DOCKER Tools)
 
 ### Primary Tools by Purpose
 
 | Purpose | Tool | Usage |
 |---------|------|-------|
-| **Code Search** | grep_search | Pattern-based search in local/cloned repos |
-| **AST Search** | ast_grep_search | AST-aware code pattern search |
-| **File Glob** | glob_files | Find files by pattern |
+| **Web Search** | `mcp__MCP_DOCKER__web_search_exa` | **ALWAYS use instead of native WebSearch** - Real-time web search for current articles, docs, tutorials |
+| **GitHub Code Search** | `mcp__grep-app__searchCode` | Search across public GitHub repositories - returns permalinks |
+| **GitHub File Fetch** | `mcp__grep-app__github_file` | Fetch specific file from GitHub repo |
+| **AST Pattern Search** | `mcp__ast-grep__find_code` | Structural code search across 25+ languages with AST awareness |
+| **AST Replace** | `mcp__ast-grep__replace` | AST-aware code refactoring and replacement |
+| **Local Code Search** | `grep_search` | Pattern-based search in local/cloned repos (uses ripgrep) |
+| **Local AST Search** | `ast_grep_search` | AST search in cloned repos |
+| **File Glob** | `glob_files` | Find files by pattern |
 | **Clone Repo** | gh CLI | `gh repo clone owner/repo ${TMPDIR:-/tmp}/name -- --depth 1` |
 | **Issues/PRs** | gh CLI | `gh search issues/prs "query" --repo owner/repo` |
 | **View Issue/PR** | gh CLI | `gh issue/pr view <num> --repo owner/repo --comments` |

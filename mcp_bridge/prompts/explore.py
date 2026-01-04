@@ -96,14 +96,52 @@ Your response has **FAILED** if:
 - **No emojis**: Keep output clean and parseable
 - **No file creation**: Report findings as message text, never write files
 
-## Tool Strategy
+## Tool Strategy & Available Tools
 
-Use the right tool for the job:
-- **Semantic search** (definitions, references): LSP tools
-- **Structural patterns** (function shapes, class structures): ast_grep_search  
-- **Text patterns** (strings, comments, logs): grep
-- **File patterns** (find by name/extension): glob
-- **History/evolution** (when added, who changed): git commands
+### Local Codebase Tools
+- **Semantic search** (definitions, references): `lsp_goto_definition`, `lsp_find_references`, `lsp_workspace_symbols`
+- **Structural patterns** (function shapes, class structures): `ast_grep_search` (local), `mcp__ast-grep__find_code` (enhanced)
+- **Text patterns** (strings, comments, logs): `grep_search` (local ripgrep)
+- **File patterns** (find by name/extension): `glob_files`
+- **History/evolution** (when added, who changed): git commands (`git log`, `git blame`)
+
+### MCP DOCKER Enhanced Tools (ALWAYS prefer these when searching)
+- **`mcp__MCP_DOCKER__web_search_exa`**: Real-time web search for documentation, articles, best practices
+  - Use when: Researching external libraries, finding current tutorials, checking API docs
+  - Example: `mcp__MCP_DOCKER__web_search_exa(query="library-name best practices 2026", num_results=5)`
+
+### GitHub Code Search (MCP grep-app)
+- **`mcp__grep-app__searchCode`**: Search across ALL public GitHub repositories
+  - Use when: Finding implementation examples, usage patterns, community solutions
+  - Returns: GitHub permalinks with full context
+  - Example: `mcp__grep-app__searchCode(query="repo:owner/repo pattern")`
+- **`mcp__grep-app__github_file`**: Fetch specific files from GitHub repos
+  - Use when: Need to read implementation from remote repo
+  - Example: `mcp__grep-app__github_file(owner="facebook", repo="react", path="src/hooks/useEffect.ts")`
+
+### AST-Aware Search (MCP ast-grep)
+- **`mcp__ast-grep__find_code`**: Structural code search across 25+ languages
+  - Use when: Finding code patterns by structure, not just text
+  - Supports: TypeScript, Python, Rust, Go, Java, JavaScript, and 20+ more
+  - Example: `mcp__ast-grep__find_code(pattern="function $NAME($$$ARGS) { $$$ }", language="typescript")`
+- **`mcp__ast-grep__find_code_by_rule`**: Advanced AST search with YAML rules
+  - Use when: Complex pattern matching with constraints
+  - Example: Find all async functions that don't handle errors
+
+### Parallel Search Strategy
+
+**ALWAYS spawn 4-6 tools in parallel** for comprehensive search:
+
+```
+# Example: "Find authentication implementation"
+Parallel execution:
+1. lsp_workspace_symbols(query="auth")
+2. mcp__ast-grep__find_code(pattern="function $AUTH", language="typescript")
+3. mcp__grep-app__searchCode(query="repo:your-org/repo authentication")
+4. grep_search(pattern="authenticate|login|verify")
+5. glob_files(pattern="**/*auth*.ts")
+6. mcp__MCP_DOCKER__web_search_exa(query="library-name authentication implementation 2026")
+```
 
 Flood with parallel calls. Cross-validate findings across multiple tools."""
 

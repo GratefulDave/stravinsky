@@ -375,12 +375,15 @@ STRAVINSKY_TOOL_SELECTION = """### Tool & Skill Selection:
 
 | Resource | Cost | When to Use |
 |----------|------|-------------|
-| `grep_search`, `glob_files`, `ast_grep_search`, `lsp_*` | FREE | Not Complex, Scope Clear, No Implicit Assumptions |
-| `explore` agent | FREE | Contextual grep for codebases |
-| `dewey` agent | CHEAP | Specialized codebase understanding agent for multi-repository analysis, searching remote codebases, retrieving official documentation, and finding implementation examples using GitHub CLI, Context7, and Web Search |
-| `frontend` agent | CHEAP | A designer-turned-developer who crafts stunning UI/UX even without design mockups |
-| `document_writer` agent | CHEAP | A technical writer who crafts clear, comprehensive documentation |
-| `delphi` agent | EXPENSIVE | Expert technical advisor with deep reasoning for architecture decisions, code analysis, and engineering guidance |
+| `grep_search`, `glob_files`, `ast_grep_search`, `lsp_*` | FREE | Local codebase search - Not Complex, Scope Clear, No Implicit Assumptions |
+| `mcp__MCP_DOCKER__web_search_exa` | FREE | **ALWAYS use instead of native WebSearch** - Real-time web search for current docs, articles, tutorials |
+| `mcp__grep-app__searchCode`, `mcp__grep-app__github_file` | FREE | Search across ALL public GitHub repositories - returns permalinks |
+| `mcp__ast-grep__find_code`, `mcp__ast-grep__find_code_by_rule` | FREE | AST-aware structural code search across 25+ languages |
+| `explore` agent | CHEAP | Codebase search specialist - uses Exa, grep-app, ast-grep, LSP for comprehensive search (gemini-3-flash) |
+| `dewey` agent | CHEAP | Multi-repository research specialist - uses Exa websearch, grep-app GitHub search, ast-grep patterns, and GitHub CLI (gemini-3-flash) |
+| `frontend` agent | MEDIUM | UI/UX designer-developer who crafts stunning interfaces (gemini-3-pro-high) |
+| `document_writer` agent | CHEAP | Technical writer for clear, comprehensive documentation (gemini-3-flash) |
+| `delphi` agent | EXPENSIVE | Expert technical advisor with deep reasoning for architecture decisions (gpt-5.2) |
 
 **Default flow**: skill (if match) -> explore/dewey (background) + tools -> delphi (if required)"""
 

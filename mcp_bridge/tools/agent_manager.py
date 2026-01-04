@@ -40,6 +40,17 @@ AGENT_MODEL_ROUTING = {
     "_default": "sonnet",
 }
 
+# Cost tier classification (from oh-my-opencode pattern)
+AGENT_COST_TIERS = {
+    "explore": "CHEAP",  # Uses gemini-3-flash
+    "dewey": "CHEAP",  # Uses gemini-3-flash
+    "document_writer": "CHEAP",  # Uses gemini-3-flash
+    "multimodal": "CHEAP",  # Uses gemini-3-flash
+    "frontend": "MEDIUM",  # Uses gemini-3-pro-high
+    "delphi": "EXPENSIVE",  # Uses gpt-5.2 (OpenAI GPT)
+    "_default": "EXPENSIVE",  # Claude Sonnet 4.5 via CLI
+}
+
 
 @dataclass
 class AgentTask:

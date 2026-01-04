@@ -13,17 +13,16 @@ logger = logging.getLogger(__name__)
 
 # Model name mapping: user-friendly names -> Antigravity API model IDs
 # Per API spec: https://github.com/NoeFabris/opencode-antigravity-auth/blob/main/docs/ANTIGRAVITY_API_SPEC.md
-# VERIFIED GEMINI MODELS (as of 2025-12):
-#   - gemini-3-pro-high, gemini-3-pro-low
-# NOTE: There is NO gemini-3-flash in the API - all flash aliases map to gemini-3-pro-low
+# VERIFIED GEMINI MODELS (as of 2026-01):
+#   - gemini-3-flash, gemini-3-pro-high, gemini-3-pro-low
 # NOTE: Claude models should use Anthropic API directly, NOT Antigravity
 GEMINI_MODEL_MAP = {
     # Antigravity verified Gemini models (pass-through)
     "gemini-3-pro-low": "gemini-3-pro-low",
     "gemini-3-pro-high": "gemini-3-pro-high",
-    # Aliases for convenience (map to closest verified model)
-    "gemini-flash": "gemini-3-pro-low",
-    "gemini-3-flash": "gemini-3-pro-low",  # NOT a real model - redirect to pro-low
+    "gemini-3-flash": "gemini-3-flash",
+    # Aliases for convenience
+    "gemini-flash": "gemini-3-flash",
     "gemini-pro": "gemini-3-pro-low",
     "gemini-3-pro": "gemini-3-pro-low",
     "gemini": "gemini-3-pro-low",  # Default gemini alias

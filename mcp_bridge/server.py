@@ -95,10 +95,56 @@ async def list_tools() -> list[Tool]:
     return get_tool_definitions()
 
 
+def _format_tool_log(name: str, arguments: dict[str, Any]) -> str:
+    """Format a concise log message for tool calls."""
+    # LSP tools - show file:line
+    if name.startswith("lsp_"):
+        file_path = arguments.get("file_path", "")
+        if file_path:
+            # Shorten path to last 2 components
+            parts = file_path.split("/")
+            short_path = "/".join(parts[-2:]) if len(parts) > 2 else file_path
+            line = arguments.get("line", "")
+            if line:
+                return f"→ {name}: {short_path}:{line}"
+            return f"→ {name}: {short_path}"
+        query = arguments.get("query", "")
+        if query:
+            return f"→ {name}: query='{query[:40]}'"
+        return f"→ {name}"
+
+    # Model invocation - show agent context if present
+    if name in ("invoke_gemini", "invoke_openai"):
+        agent_ctx = arguments.get("agent_context", {})
+        agent_type = agent_ctx.get("agent_type", "direct") if agent_ctx else "direct"
+        model = arguments.get("model", "default")
+        prompt = arguments.get("prompt", "")
+        # Summarize prompt
+        summary = " ".join(prompt.split())[:80] + "..." if len(prompt) > 80 else prompt
+        return f"[{agent_type}] → {model}: {summary}"
+
+    # Search tools - show pattern
+    if name in ("grep_search", "ast_grep_search", "ast_grep_replace"):
+        pattern = arguments.get("pattern", "")[:50]
+        return f"→ {name}: pattern='{pattern}'"
+
+    # Agent tools - show agent type/task_id
+    if name == "agent_spawn":
+        agent_type = arguments.get("agent_type", "explore")
+        desc = arguments.get("description", "")[:40]
+        return f"→ {name}: [{agent_type}] {desc}"
+    if name in ("agent_output", "agent_cancel", "agent_progress"):
+        task_id = arguments.get("task_id", "")
+        return f"→ {name}: {task_id}"
+
+    # Default - just tool name
+    return f"→ {name}"
+
+
 @server.call_tool()
 async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
     """Handle tool calls with deep lazy loading of implementations."""
-    logger.info(f"Tool call: {name}")
+    logger.info(_format_tool_log(name, arguments))
     hook_manager = get_hook_manager_lazy()
     token_store = get_token_store()
 
@@ -115,7 +161,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             result_content = await invoke_gemini(
                 token_store=token_store,
                 prompt=arguments["prompt"],
-                model=arguments.get("model", "gemini-2.0-flash-exp"),
+                model=arguments.get("model", "gemini-3-flash"),
                 temperature=arguments.get("temperature", 0.7),
                 max_tokens=arguments.get("max_tokens", 8192),
                 thinking_budget=arguments.get("thinking_budget", 0),
@@ -127,7 +173,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             result_content = await invoke_openai(
                 token_store=token_store,
                 prompt=arguments["prompt"],
-                model=arguments.get("model", "gpt-4o"),
+                model=arguments.get("model", "gpt-5.2-codex"),
                 temperature=arguments.get("temperature", 0.7),
                 max_tokens=arguments.get("max_tokens", 4096),
                 thinking_budget=arguments.get("thinking_budget", 0),
@@ -223,10 +269,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             )
 
         elif name == "stravinsky_version":
-            from . import __version__
-            import sys
-            import os
-
+            # sys and os already imported at module level
             result_content = [
                 TextContent(
                     type="text",
@@ -410,8 +453,11 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         return [TextContent(type="text", text=str(result_content))]
 
     except Exception as e:
-        logger.error(f"Error calling tool {name}: {e}")
-        return [TextContent(type="text", text=f"Error: {str(e)}")]
+        import traceback
+
+        tb = traceback.format_exc()
+        logger.error(f"Error calling tool {name}: {e}\n{tb}")
+        return [TextContent(type="text", text=f"Error: {str(e)}\n\nTraceback:\n{tb}")]
 
 
 @server.list_prompts()

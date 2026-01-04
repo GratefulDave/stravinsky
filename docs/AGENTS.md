@@ -8,15 +8,21 @@ Detailed guide to specialized agent configurations.
 
 Stravinsky provides 7 specialized agent types, each optimized for specific tasks:
 
-| Agent | Model | Purpose |
-|-------|-------|---------|
-| `stravinsky` | Claude | Task orchestration, planning |
-| `delphi` | GPT-5.2 | Strategic advice, hard debugging |
-| `dewey` | Claude | Documentation research |
-| `explore` | Claude | Codebase search, analysis |
-| `frontend` | Gemini | UI/UX work, components |
-| `document_writer` | Claude | Technical documentation |
-| `multimodal` | Gemini | Visual analysis |
+| Agent | Model | Thinking Budget | Purpose |
+|-------|-------|-----------------|---------|
+| `stravinsky` | Claude Opus 4.5 | N/A | Task orchestration, planning |
+| `delphi` | GPT-5.2 | N/A | Strategic advice, hard debugging |
+| `dewey` | Gemini Pro | 0 (flash) | Documentation research |
+| `explore` | Gemini Pro | 0 (flash) | Codebase search, analysis |
+| `frontend` | Gemini Pro | 32k (high) | UI/UX work, components |
+| `document_writer` | Gemini Pro | 0 (flash) | Technical documentation |
+| `multimodal` | Gemini Pro | 0 (flash) | Visual analysis |
+
+**Note:** Gemini tiers are controlled by `thinking_budget`:
+- **High (32k)**: Extended reasoning for complex UI/UX work
+- **Medium (16k)**: Balanced reasoning
+- **Low (8k)**: Basic reasoning
+- **0 (flash)**: Fast responses, no extended thinking
 
 ---
 

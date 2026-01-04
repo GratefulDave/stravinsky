@@ -663,12 +663,24 @@ RESPONSE RULES:
 
     system_prompt = system_prompts.get(agent_type, None)
 
-    # Override model based on agent type for optimal performance
-    agent_model_overrides = {
-        "frontend": "gemini-3-pro",  # Pro for UI/UX complexity
-        "delphi": "gpt-5.2-medium",  # OpenAI for strategic reasoning
+    # Override model and thinking_budget based on agent type for optimal performance
+    # Per project requirements:
+    # - Gemini tiers are controlled by thinking_budget, NOT model name
+    # - high: 32000, medium: 16000, low: 8000 thinking tokens
+    # - "gemini-3-pro-high" = gemini-3-pro-low + thinking_budget=32000
+    # - "gemini-3-flash" equivalent = gemini-3-pro-low + thinking_budget=0
+    agent_configs = {
+        "stravinsky": {"model": "claude-opus-4-5", "thinking_budget": 0},
+        "frontend": {"model": "gemini-3-pro-low", "thinking_budget": 32000},  # HIGH tier
+        "document_writer": {"model": "gemini-3-pro-low", "thinking_budget": 0},  # Flash equiv
+        "multimodal": {"model": "gemini-3-pro-low", "thinking_budget": 0},  # Flash equiv
+        "explore": {"model": "gemini-3-pro-low", "thinking_budget": 0},  # Flash equiv
+        "delphi": {"model": "gpt-5.2", "thinking_budget": 0},  # GPT-5.2 strategic
+        "dewey": {"model": "gemini-3-pro-low", "thinking_budget": 0},  # Flash equiv
     }
-    actual_model = agent_model_overrides.get(agent_type, model)
+    config = agent_configs.get(agent_type, {"model": model, "thinking_budget": thinking_budget})
+    actual_model = config["model"]
+    actual_thinking_budget = config["thinking_budget"]
 
     # Get token store for authentication
     from ..auth.token_store import TokenStore
@@ -682,7 +694,7 @@ RESPONSE RULES:
         description=description or prompt[:50],
         system_prompt=system_prompt,
         model=actual_model,
-        thinking_budget=thinking_budget,
+        thinking_budget=actual_thinking_budget,
         timeout=timeout,
     )
 
@@ -690,8 +702,8 @@ RESPONSE RULES:
 
 **Task ID**: {task_id}
 **Agent Type**: {agent_type}
-**Model**: {model}
-**Thinking Budget**: {thinking_budget if thinking_budget > 0 else "N/A"}
+**Model**: {actual_model}
+**Thinking Budget**: {actual_thinking_budget if actual_thinking_budget > 0 else "N/A"}
 **Description**: {description or prompt[:50]}
 
 The agent is now running. Use:

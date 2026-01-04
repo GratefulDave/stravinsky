@@ -1,6 +1,7 @@
 from mcp.types import Tool, Prompt
 from typing import List
 
+
 def get_tool_definitions() -> List[Tool]:
     """Return all Tool definitions for the Stravinsky MCP server."""
     return [
@@ -37,8 +38,8 @@ def get_tool_definitions() -> List[Tool]:
                     },
                     "model": {
                         "type": "string",
-                        "description": "Gemini model to use (default: gemini-2.0-flash-exp)",
-                        "default": "gemini-2.0-flash-exp",
+                        "description": "Gemini model to use (default: gemini-3-flash)",
+                        "default": "gemini-3-flash",
                     },
                     "temperature": {
                         "type": "number",
@@ -54,6 +55,24 @@ def get_tool_definitions() -> List[Tool]:
                         "type": "integer",
                         "description": "Tokens reserved for internal reasoning (if model supports it)",
                         "default": 0,
+                    },
+                    "agent_context": {
+                        "type": "object",
+                        "description": "Optional agent metadata for logging (agent_type, task_id, description)",
+                        "properties": {
+                            "agent_type": {
+                                "type": "string",
+                                "description": "Type of agent (explore, delphi, frontend, etc.)",
+                            },
+                            "task_id": {
+                                "type": "string",
+                                "description": "Background task ID if running as agent",
+                            },
+                            "description": {
+                                "type": "string",
+                                "description": "Short description of what the agent is doing",
+                            },
+                        },
                     },
                 },
                 "required": ["prompt"],
@@ -76,8 +95,8 @@ def get_tool_definitions() -> List[Tool]:
                     },
                     "model": {
                         "type": "string",
-                        "description": "OpenAI model to use (default: gpt-4o)",
-                        "default": "gpt-4o",
+                        "description": "OpenAI model to use (default: gpt-5.2-codex)",
+                        "default": "gpt-5.2-codex",
                     },
                     "temperature": {
                         "type": "number",
@@ -93,6 +112,24 @@ def get_tool_definitions() -> List[Tool]:
                         "type": "integer",
                         "description": "Tokens reserved for internal reasoning (e.g. o1 / o3)",
                         "default": 0,
+                    },
+                    "agent_context": {
+                        "type": "object",
+                        "description": "Optional agent metadata for logging (agent_type, task_id, description)",
+                        "properties": {
+                            "agent_type": {
+                                "type": "string",
+                                "description": "Type of agent (explore, delphi, frontend, etc.)",
+                            },
+                            "task_id": {
+                                "type": "string",
+                                "description": "Background task ID if running as agent",
+                            },
+                            "description": {
+                                "type": "string",
+                                "description": "Short description of what the agent is doing",
+                            },
+                        },
                     },
                 },
                 "required": ["prompt"],
@@ -123,7 +160,11 @@ def get_tool_definitions() -> List[Tool]:
                 "type": "object",
                 "properties": {
                     "file_path": {"type": "string", "description": "Path to file to analyze"},
-                    "severity": {"type": "string", "description": "Filter: error, warning, all", "default": "all"},
+                    "severity": {
+                        "type": "string",
+                        "description": "Filter: error, warning, all",
+                        "default": "all",
+                    },
                 },
                 "required": ["file_path"],
             },
@@ -135,7 +176,11 @@ def get_tool_definitions() -> List[Tool]:
                 "type": "object",
                 "properties": {
                     "pattern": {"type": "string", "description": "ast-grep pattern"},
-                    "directory": {"type": "string", "description": "Directory to search", "default": "."},
+                    "directory": {
+                        "type": "string",
+                        "description": "Directory to search",
+                        "default": ".",
+                    },
                     "language": {"type": "string", "description": "Filter by language"},
                 },
                 "required": ["pattern"],
@@ -148,7 +193,11 @@ def get_tool_definitions() -> List[Tool]:
                 "type": "object",
                 "properties": {
                     "pattern": {"type": "string", "description": "Search pattern (regex)"},
-                    "directory": {"type": "string", "description": "Directory to search", "default": "."},
+                    "directory": {
+                        "type": "string",
+                        "description": "Directory to search",
+                        "default": ".",
+                    },
                     "file_pattern": {"type": "string", "description": "Glob filter (e.g. *.py)"},
                 },
                 "required": ["pattern"],
@@ -161,7 +210,11 @@ def get_tool_definitions() -> List[Tool]:
                 "type": "object",
                 "properties": {
                     "pattern": {"type": "string", "description": "Glob pattern (e.g. **/*.py)"},
-                    "directory": {"type": "string", "description": "Base directory", "default": "."},
+                    "directory": {
+                        "type": "string",
+                        "description": "Base directory",
+                        "default": ".",
+                    },
                 },
                 "required": ["pattern"],
             },
@@ -233,11 +286,14 @@ def get_tool_definitions() -> List[Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "prompt": {"type": "string", "description": "The prompt for the background agent"},
+                    "prompt": {
+                        "type": "string",
+                        "description": "The prompt for the background agent",
+                    },
                     "model": {
-                        "type": "string", 
+                        "type": "string",
                         "description": "Model to use (gemini-3-flash or gpt-4o)",
-                        "default": "gemini-3-flash"
+                        "default": "gemini-3-flash",
                     },
                 },
                 "required": ["prompt"],
@@ -273,13 +329,19 @@ def get_tool_definitions() -> List[Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "prompt": {"type": "string", "description": "The task for the agent to perform"},
+                    "prompt": {
+                        "type": "string",
+                        "description": "The task for the agent to perform",
+                    },
                     "agent_type": {
                         "type": "string",
                         "description": "Agent type: explore, dewey, frontend (gemini-3-pro), delphi (gpt-5.2-medium), document_writer, multimodal",
                         "default": "explore",
                     },
-                    "description": {"type": "string", "description": "Short description for status display"},
+                    "description": {
+                        "type": "string",
+                        "description": "Short description for status display",
+                    },
                     "model": {
                         "type": "string",
                         "description": "Model: gemini-3-flash (default) or claude",
@@ -306,8 +368,14 @@ def get_tool_definitions() -> List[Tool]:
                 "type": "object",
                 "properties": {
                     "task_id": {"type": "string", "description": "The ID of the task to retry"},
-                    "new_prompt": {"type": "string", "description": "Optional refined prompt for the retry"},
-                    "new_timeout": {"type": "integer", "description": "Optional new timeout in seconds"},
+                    "new_prompt": {
+                        "type": "string",
+                        "description": "Optional refined prompt for the retry",
+                    },
+                    "new_timeout": {
+                        "type": "integer",
+                        "description": "Optional new timeout in seconds",
+                    },
                 },
                 "required": ["task_id"],
             },
@@ -319,7 +387,11 @@ def get_tool_definitions() -> List[Tool]:
                 "type": "object",
                 "properties": {
                     "task_id": {"type": "string", "description": "The agent task ID"},
-                    "block": {"type": "boolean", "description": "Wait for completion", "default": False},
+                    "block": {
+                        "type": "boolean",
+                        "description": "Wait for completion",
+                        "default": False,
+                    },
                 },
                 "required": ["task_id"],
             },
@@ -350,7 +422,11 @@ def get_tool_definitions() -> List[Tool]:
                 "type": "object",
                 "properties": {
                     "task_id": {"type": "string", "description": "The agent task ID"},
-                    "lines": {"type": "integer", "description": "Number of recent lines to show", "default": 20},
+                    "lines": {
+                        "type": "integer",
+                        "description": "Number of recent lines to show",
+                        "default": 20,
+                    },
                 },
                 "required": ["task_id"],
             },
@@ -363,7 +439,10 @@ def get_tool_definitions() -> List[Tool]:
                 "properties": {
                     "file_path": {"type": "string", "description": "Absolute path to the file"},
                     "line": {"type": "integer", "description": "Line number (1-indexed)"},
-                    "character": {"type": "integer", "description": "Character position (0-indexed)"},
+                    "character": {
+                        "type": "integer",
+                        "description": "Character position (0-indexed)",
+                    },
                 },
                 "required": ["file_path", "line", "character"],
             },
@@ -376,7 +455,10 @@ def get_tool_definitions() -> List[Tool]:
                 "properties": {
                     "file_path": {"type": "string", "description": "Absolute path to the file"},
                     "line": {"type": "integer", "description": "Line number (1-indexed)"},
-                    "character": {"type": "integer", "description": "Character position (0-indexed)"},
+                    "character": {
+                        "type": "integer",
+                        "description": "Character position (0-indexed)",
+                    },
                 },
                 "required": ["file_path", "line", "character"],
             },
@@ -389,8 +471,15 @@ def get_tool_definitions() -> List[Tool]:
                 "properties": {
                     "file_path": {"type": "string", "description": "Absolute path to the file"},
                     "line": {"type": "integer", "description": "Line number (1-indexed)"},
-                    "character": {"type": "integer", "description": "Character position (0-indexed)"},
-                    "include_declaration": {"type": "boolean", "description": "Include the declaration itself", "default": True},
+                    "character": {
+                        "type": "integer",
+                        "description": "Character position (0-indexed)",
+                    },
+                    "include_declaration": {
+                        "type": "boolean",
+                        "description": "Include the declaration itself",
+                        "default": True,
+                    },
                 },
                 "required": ["file_path", "line", "character"],
             },
@@ -412,8 +501,15 @@ def get_tool_definitions() -> List[Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "query": {"type": "string", "description": "Symbol name to search for (fuzzy match)"},
-                    "directory": {"type": "string", "description": "Workspace directory", "default": "."},
+                    "query": {
+                        "type": "string",
+                        "description": "Symbol name to search for (fuzzy match)",
+                    },
+                    "directory": {
+                        "type": "string",
+                        "description": "Workspace directory",
+                        "default": ".",
+                    },
                 },
                 "required": ["query"],
             },
@@ -426,7 +522,10 @@ def get_tool_definitions() -> List[Tool]:
                 "properties": {
                     "file_path": {"type": "string", "description": "Absolute path to the file"},
                     "line": {"type": "integer", "description": "Line number (1-indexed)"},
-                    "character": {"type": "integer", "description": "Character position (0-indexed)"},
+                    "character": {
+                        "type": "integer",
+                        "description": "Character position (0-indexed)",
+                    },
                 },
                 "required": ["file_path", "line", "character"],
             },
@@ -439,9 +538,16 @@ def get_tool_definitions() -> List[Tool]:
                 "properties": {
                     "file_path": {"type": "string", "description": "Absolute path to the file"},
                     "line": {"type": "integer", "description": "Line number (1-indexed)"},
-                    "character": {"type": "integer", "description": "Character position (0-indexed)"},
+                    "character": {
+                        "type": "integer",
+                        "description": "Character position (0-indexed)",
+                    },
                     "new_name": {"type": "string", "description": "New name for the symbol"},
-                    "dry_run": {"type": "boolean", "description": "Preview changes without applying", "default": True},
+                    "dry_run": {
+                        "type": "boolean",
+                        "description": "Preview changes without applying",
+                        "default": True,
+                    },
                 },
                 "required": ["file_path", "line", "character", "new_name"],
             },
@@ -454,7 +560,10 @@ def get_tool_definitions() -> List[Tool]:
                 "properties": {
                     "file_path": {"type": "string", "description": "Absolute path to the file"},
                     "line": {"type": "integer", "description": "Line number (1-indexed)"},
-                    "character": {"type": "integer", "description": "Character position (0-indexed)"},
+                    "character": {
+                        "type": "integer",
+                        "description": "Character position (0-indexed)",
+                    },
                 },
                 "required": ["file_path", "line", "character"],
             },
@@ -473,16 +582,34 @@ def get_tool_definitions() -> List[Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "pattern": {"type": "string", "description": "ast-grep pattern to search (e.g., 'console.log($A)')"},
-                    "replacement": {"type": "string", "description": "Replacement pattern (e.g., 'logger.debug($A)')"},
-                    "directory": {"type": "string", "description": "Directory to search in", "default": "."},
-                    "language": {"type": "string", "description": "Filter by language (typescript, python, etc.)"},
-                    "dry_run": {"type": "boolean", "description": "Preview changes without applying", "default": True},
+                    "pattern": {
+                        "type": "string",
+                        "description": "ast-grep pattern to search (e.g., 'console.log($A)')",
+                    },
+                    "replacement": {
+                        "type": "string",
+                        "description": "Replacement pattern (e.g., 'logger.debug($A)')",
+                    },
+                    "directory": {
+                        "type": "string",
+                        "description": "Directory to search in",
+                        "default": ".",
+                    },
+                    "language": {
+                        "type": "string",
+                        "description": "Filter by language (typescript, python, etc.)",
+                    },
+                    "dry_run": {
+                        "type": "boolean",
+                        "description": "Preview changes without applying",
+                        "default": True,
+                    },
                 },
                 "required": ["pattern", "replacement"],
             },
         ),
     ]
+
 
 def get_prompt_definitions() -> List[Prompt]:
     """Return all Prompt definitions for the Stravinsky MCP server."""

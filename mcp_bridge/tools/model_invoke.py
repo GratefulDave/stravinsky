@@ -8,8 +8,73 @@ API requests to external model providers.
 import logging
 import os
 import time
+import uuid
+import base64
+import json as json_module
 
 logger = logging.getLogger(__name__)
+
+
+def _summarize_prompt(prompt: str, max_length: int = 120) -> str:
+    """
+    Generate a short summary of the prompt for logging.
+
+    Args:
+        prompt: The full prompt text
+        max_length: Maximum characters to include in summary
+
+    Returns:
+        Truncated prompt suitable for logging (single line, max_length chars)
+    """
+    if not prompt:
+        return "(empty prompt)"
+
+    # Normalize whitespace: collapse newlines and multiple spaces
+    clean = " ".join(prompt.split())
+
+    if len(clean) <= max_length:
+        return clean
+
+    return clean[:max_length] + "..."
+
+
+# Cache for Codex instructions (fetched from GitHub)
+_CODEX_INSTRUCTIONS_CACHE = {}
+_CODEX_INSTRUCTIONS_RELEASE_TAG = "rust-v0.77.0"  # Update as needed
+
+
+async def _fetch_codex_instructions(model: str = "gpt-5.2-codex") -> str:
+    """
+    Fetch official Codex instructions from GitHub.
+    Caches results to avoid repeated fetches.
+    """
+    import httpx
+
+    if model in _CODEX_INSTRUCTIONS_CACHE:
+        return _CODEX_INSTRUCTIONS_CACHE[model]
+
+    # Map model to prompt file
+    prompt_file_map = {
+        "gpt-5.2-codex": "gpt-5.2-codex_prompt.md",
+        "gpt-5.1-codex": "gpt_5_codex_prompt.md",
+        "gpt-5.1-codex-max": "gpt_5_codex_max_prompt.md",
+    }
+
+    prompt_file = prompt_file_map.get(model, "gpt-5.2-codex_prompt.md")
+    url = f"https://raw.githubusercontent.com/openai/codex/{_CODEX_INSTRUCTIONS_RELEASE_TAG}/codex-rs/core/{prompt_file}"
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, timeout=30.0)
+            response.raise_for_status()
+            instructions = response.text
+            _CODEX_INSTRUCTIONS_CACHE[model] = instructions
+            return instructions
+    except Exception as e:
+        logger.error(f"Failed to fetch Codex instructions: {e}")
+        # Return basic fallback instructions
+        return "You are Codex, based on GPT-5. You are running as a coding agent."
+
 
 # Model name mapping: user-friendly names -> Antigravity API model IDs
 # Per API spec: https://github.com/NoeFabris/opencode-antigravity-auth/blob/main/docs/ANTIGRAVITY_API_SPEC.md
@@ -83,11 +148,11 @@ def _get_session_id(conversation_key: str | None = None) -> str:
     Returns:
         Stable session UUID for this conversation
     """
-    import uuid
+    import uuid as uuid_module  # Local import workaround
 
     key = conversation_key or "default"
     if key not in _SESSION_CACHE:
-        _SESSION_CACHE[key] = str(uuid.uuid4())
+        _SESSION_CACHE[key] = str(uuid_module.uuid4())
     return _SESSION_CACHE[key]
 
 
@@ -260,6 +325,7 @@ async def invoke_gemini(
         ValueError: If not authenticated with Gemini
         httpx.HTTPStatusError: If API request fails
     """
+    logger.info(f"[DEBUG] invoke_gemini called, uuid module check: {uuid}")
     # Execute pre-model invoke hooks
     params = {
         "prompt": prompt,
@@ -279,6 +345,14 @@ async def invoke_gemini(
     temperature = params["temperature"]
     max_tokens = params["max_tokens"]
     thinking_budget = params["thinking_budget"]
+
+    # Extract agent context for logging (may be passed via params or original call)
+    agent_context = params.get("agent_context", {})
+    agent_type = agent_context.get("agent_type", "direct")
+    prompt_summary = _summarize_prompt(prompt)
+
+    # Log with agent context and prompt summary
+    logger.info(f"[{agent_type}] → {model}: {prompt_summary}")
 
     access_token = await _ensure_valid_token(token_store, "gemini")
 
@@ -316,11 +390,19 @@ async def invoke_gemini(
         }
 
     # Wrap request body per reference implementation
+    try:
+        import uuid as uuid_module  # Local import workaround for MCP context issue
+
+        request_id = f"invoke-{uuid_module.uuid4()}"
+    except Exception as e:
+        logger.error(f"UUID IMPORT FAILED: {e}")
+        raise RuntimeError(f"CUSTOM ERROR: UUID import failed: {e}")
+
     wrapped_payload = {
         "project": project_id,
         "model": api_model,
         "userAgent": "antigravity",
-        "requestId": f"invoke-{uuid.uuid4()}",
+        "requestId": request_id,
         "request": inner_payload,
     }
 
@@ -538,8 +620,6 @@ async def invoke_gemini_agentic(
     Returns:
         Final text response from the model
     """
-    import uuid
-
     access_token = await _ensure_valid_token(token_store, "gemini")
     api_model = resolve_gemini_model(model)
 
@@ -575,11 +655,13 @@ async def invoke_gemini_agentic(
 
         # Wrap request body per reference implementation
         # From request.ts wrapRequestBody()
+        import uuid as uuid_module  # Local import workaround
+
         wrapped_payload = {
             "project": project_id,
             "model": api_model,
             "userAgent": "antigravity",
-            "requestId": f"agent-{uuid.uuid4()}",
+            "requestId": f"agent-{uuid_module.uuid4()}",
             "request": inner_payload,
         }
 
@@ -689,7 +771,7 @@ async def invoke_gemini_agentic(
 async def invoke_openai(
     token_store: TokenStore,
     prompt: str,
-    model: str = "gpt-5.2",
+    model: str = "gpt-5.2-codex",
     temperature: float = 0.7,
     max_tokens: int = 4096,
     thinking_budget: int = 0,
@@ -731,52 +813,115 @@ async def invoke_openai(
     max_tokens = params["max_tokens"]
     thinking_budget = params["thinking_budget"]
 
+    # Extract agent context for logging (may be passed via params or original call)
+    agent_context = params.get("agent_context", {})
+    agent_type = agent_context.get("agent_type", "direct")
+    prompt_summary = _summarize_prompt(prompt)
+
+    # Log with agent context and prompt summary
+    logger.info(f"[{agent_type}] → {model}: {prompt_summary}")
+
     access_token = await _ensure_valid_token(token_store, "openai")
+    logger.info(f"[invoke_openai] Got access token")
 
-    # OpenAI Chat Completions API
-    api_url = "https://api.openai.com/v1/chat/completions"
+    # ChatGPT Backend API - Uses Codex Responses endpoint
+    # Replicates opencode-openai-codex-auth plugin behavior
+    api_url = "https://chatgpt.com/backend-api/codex/responses"
 
+    # Extract account ID from JWT token
+    logger.info(f"[invoke_openai] Extracting account ID from JWT")
+    try:
+        parts = access_token.split(".")
+        payload_b64 = parts[1]
+        padding = 4 - len(payload_b64) % 4
+        if padding != 4:
+            payload_b64 += "=" * padding
+        jwt_payload = json_module.loads(base64.urlsafe_b64decode(payload_b64))
+        account_id = jwt_payload.get("https://api.openai.com/auth", {}).get("chatgpt_account_id")
+    except Exception as e:
+        logger.error(f"Failed to extract account ID from JWT: {e}")
+        account_id = None
+
+    # Fetch official Codex instructions from GitHub
+    instructions = await _fetch_codex_instructions(model)
+
+    # Headers matching opencode-openai-codex-auth plugin
     headers = {
         "Authorization": f"Bearer {access_token}",
         "Content-Type": "application/json",
+        "Accept": "text/event-stream",  # SSE stream
+        "openai-beta": "responses=experimental",
+        "openai-originator": "codex_cli_rs",
     }
 
+    if account_id:
+        headers["x-openai-account-id"] = account_id
+
+    # Request body matching opencode transformation
     payload = {
         "model": model,
-        "messages": [{"role": "user", "content": prompt}],
-        "temperature": temperature,
+        "store": False,  # Required by ChatGPT backend
+        "stream": True,  # Always stream (handler converts to non-stream if needed)
+        "instructions": instructions,
+        "input": [{"role": "user", "content": prompt}],
+        "reasoning": {"effort": "high" if thinking_budget > 0 else "medium", "summary": "auto"},
+        "text": {"verbosity": "medium"},
+        "include": ["reasoning.encrypted_content"],
     }
 
-    # Handle thinking budget for O1/O3 style models (GPT-5.2)
-    if thinking_budget > 0:
-        payload["max_completion_tokens"] = max_tokens + thinking_budget
-        # For O1, temperature must be 1.0 or omitted usually, but we'll try to pass it
-    else:
-        payload["max_tokens"] = max_tokens
+    # Stream the response and collect text
+    text_chunks = []
 
-    async with httpx.AsyncClient() as client:
-        response = await client.post(
-            api_url,
-            headers=headers,
-            json=payload,
-            timeout=120.0,
-        )
+    logger.info(f"[invoke_openai] Calling {api_url} with model {model}")
+    logger.info(f"[invoke_openai] Payload keys: {list(payload.keys())}")
+    logger.info(f"[invoke_openai] Instructions length: {len(instructions)}")
 
-        if response.status_code == 401:
-            raise ValueError(
-                "OpenAI authentication failed. Run: python -m mcp_bridge.auth.cli login openai"
-            )
+    try:
+        async with httpx.AsyncClient() as client:
+            async with client.stream(
+                "POST", api_url, headers=headers, json=payload, timeout=120.0
+            ) as response:
+                logger.info(f"[invoke_openai] Response status: {response.status_code}")
+                if response.status_code == 401:
+                    raise ValueError(
+                        "OpenAI authentication failed. Run: stravinsky-auth login openai"
+                    )
 
-        response.raise_for_status()
+                if response.status_code >= 400:
+                    error_body = await response.aread()
+                    error_text = error_body.decode("utf-8")
+                    logger.error(f"OpenAI API error {response.status_code}: {error_text}")
+                    logger.error(f"Request payload was: {payload}")
+                    logger.error(f"Request headers were: {headers}")
+                    raise ValueError(f"OpenAI API error {response.status_code}: {error_text}")
 
-        data = response.json()
+                # Parse SSE stream for text deltas
+                async for line in response.aiter_lines():
+                    if line.startswith("data: "):
+                        data_json = line[6:]  # Remove "data: " prefix
+                        try:
+                            data = json_module.loads(data_json)
+                            event_type = data.get("type")
 
-        # Extract text from response
-        try:
-            choices = data.get("choices", [])
-            if choices:
-                message = choices[0].get("message", {})
-                return message.get("content", "")
+                            # Extract text deltas from SSE stream
+                            if event_type == "response.output_text.delta":
+                                delta = data.get("delta", "")
+                                text_chunks.append(delta)
+
+                        except json_module.JSONDecodeError:
+                            pass  # Skip malformed JSON
+                        except Exception as e:
+                            logger.warning(f"Error processing SSE event: {e}")
+
+        # Return collected text
+        result = "".join(text_chunks)
+        if not result:
             return "No response generated"
-        except (KeyError, IndexError) as e:
-            return f"Error parsing response: {e}"
+        return result
+
+    except httpx.HTTPStatusError as e:
+        logger.error(f"HTTP error: {e}")
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error in invoke_openai: {e}")
+        raise ValueError(f"Failed to invoke OpenAI: {e}")

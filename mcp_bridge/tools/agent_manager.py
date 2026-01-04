@@ -119,7 +119,7 @@ class AgentManager:
 
         # In-memory tracking for running processes
         self._processes: Dict[str, subprocess.Popen] = {}
-        self._notification_queue: Dict[str, List[AgentTask]] = {}
+        self._notification_queue: Dict[str, List[Dict[str, Any]]] = {}
 
     def _load_tasks(self) -> Dict[str, Any]:
         """Load tasks from persistent storage."""
@@ -189,6 +189,7 @@ class AgentManager:
             Task ID for tracking
         """
         import uuid as uuid_module  # Local import for MCP context
+
         task_id = f"agent_{uuid_module.uuid4().hex[:8]}"
 
         task = AgentTask(
@@ -459,9 +460,13 @@ class AgentManager:
             start = datetime.now()
             while (datetime.now() - start).total_seconds() < timeout:
                 task = self.get_task(task_id)
-                if task["status"] != "running":
+                if not task or task["status"] != "running":
                     break
                 time.sleep(0.5)
+
+        # Refresh task state after potential blocking wait
+        if not task:
+            return f"Task {task_id} not found."
 
         status = task["status"]
         description = task.get("description", "")
@@ -656,9 +661,8 @@ Use Claude's native tools (Read, Grep, Glob) ONLY for file access, then pass con
 
 WORKFLOW:
 1. Use Read/Grep/Glob to get file contents
-2. Call invoke_gemini(prompt="Analyze this: <content>", model="gemini-3-flash") for analysis
+2. Call invoke_gemini(prompt="Analyze this: <content>", model="gemini-3-flash", agent_context={"agent_type": "explore"}) for analysis
 3. Return the Gemini response""",
-
         "dewey": """You are a documentation and research specialist. Find implementation examples and official docs.
 
 MODEL ROUTING (MANDATORY):
@@ -666,9 +670,8 @@ You MUST use invoke_gemini with model="gemini-3-flash" for ALL analysis, summari
 
 WORKFLOW:
 1. Gather information using available tools
-2. Call invoke_gemini(prompt="<task>", model="gemini-3-flash") for processing
+2. Call invoke_gemini(prompt="<task>", model="gemini-3-flash", agent_context={"agent_type": "dewey"}) for processing
 3. Return the Gemini response""",
-
         "frontend": """You are a Senior Frontend Architect & UI Designer.
 
 MODEL ROUTING (MANDATORY):
@@ -681,9 +684,8 @@ DESIGN PHILOSOPHY:
 
 WORKFLOW:
 1. Analyze requirements
-2. Call invoke_gemini(prompt="Generate frontend code for: <task>", model="gemini-3-pro-high")
+2. Call invoke_gemini(prompt="Generate frontend code for: <task>", model="gemini-3-pro-high", agent_context={"agent_type": "frontend"})
 3. Return the code""",
-
         "delphi": """You are a strategic technical advisor for architecture and hard debugging.
 
 MODEL ROUTING (MANDATORY):
@@ -691,9 +693,8 @@ You MUST use invoke_openai with model="gpt-5.2" for ALL strategic advice and ana
 
 WORKFLOW:
 1. Gather context about the problem
-2. Call invoke_openai(prompt="<problem description>", model="gpt-5.2")
+2. Call invoke_openai(prompt="<problem description>", model="gpt-5.2", agent_context={"agent_type": "delphi"})
 3. Return the GPT response""",
-
         "document_writer": """You are a Technical Documentation Specialist.
 
 MODEL ROUTING (MANDATORY):
@@ -703,9 +704,8 @@ DOCUMENT TYPES: README, API docs, ADRs, user guides, inline docs.
 
 WORKFLOW:
 1. Gather context about what to document
-2. Call invoke_gemini(prompt="Write documentation for: <topic>", model="gemini-3-flash")
+2. Call invoke_gemini(prompt="Write documentation for: <topic>", model="gemini-3-flash", agent_context={"agent_type": "document_writer"})
 3. Return the documentation""",
-
         "multimodal": """You interpret media files (PDFs, images, diagrams, screenshots).
 
 MODEL ROUTING (MANDATORY):
@@ -713,9 +713,8 @@ You MUST use invoke_gemini with model="gemini-3-flash" for ALL visual analysis.
 
 WORKFLOW:
 1. Receive file path and extraction goal
-2. Call invoke_gemini(prompt="Analyze this file: <path>. Extract: <goal>", model="gemini-3-flash")
+2. Call invoke_gemini(prompt="Analyze this file: <path>. Extract: <goal>", model="gemini-3-flash", agent_context={"agent_type": "multimodal"})
 3. Return extracted information only""",
-
         "planner": """You are a pre-implementation planning specialist. You analyze requests and produce structured implementation plans BEFORE any code changes begin.
 
 PURPOSE:

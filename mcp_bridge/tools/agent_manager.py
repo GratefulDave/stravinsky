@@ -65,6 +65,9 @@ class AgentManager:
     CLAUDE_CLI = "/opt/homebrew/bin/claude"
 
     def __init__(self, base_dir: Optional[str] = None):
+        # Initialize lock FIRST - used by _save_tasks and _load_tasks
+        self._lock = threading.RLock()
+
         if base_dir:
             self.base_dir = Path(base_dir)
         else:
@@ -82,7 +85,6 @@ class AgentManager:
         # In-memory tracking for running processes
         self._processes: Dict[str, subprocess.Popen] = {}
         self._notification_queue: Dict[str, List[AgentTask]] = {}
-        self._lock = threading.RLock()
 
     def _load_tasks(self) -> Dict[str, Any]:
         """Load tasks from persistent storage."""

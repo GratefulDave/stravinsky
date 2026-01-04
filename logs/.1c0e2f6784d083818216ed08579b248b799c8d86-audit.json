@@ -1,0 +1,15 @@
+{
+    "keep": {
+        "days": true,
+        "amount": 14
+    },
+    "auditLog": "/Users/davidandrews/PycharmProjects/stravinsky/logs/.1c0e2f6784d083818216ed08579b248b799c8d86-audit.json",
+    "files": [
+        {
+            "date": 1767493227591,
+            "name": "/Users/davidandrews/PycharmProjects/stravinsky/logs/error-2026-01-03.log",
+            "hash": "94d86a0f370797d237e04b63792f8062566e51b8307e27c83f14ccc3f89e1669"
+        }
+    ],
+    "hashType": "sha256"
+}

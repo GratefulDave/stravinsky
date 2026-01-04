@@ -220,6 +220,7 @@ class AgentManager:
                     full_prompt,
                     "--output-format",
                     "text",
+                    "--dangerously-skip-permissions",  # Critical: bypass permission prompts
                 ]
 
                 # NOTE: We intentionally do NOT pass --model to Claude CLI
@@ -240,6 +241,7 @@ class AgentManager:
                 # (Previously used file handle which was closed before process finished)
                 process = subprocess.Popen(
                     cmd,
+                    stdin=subprocess.DEVNULL,  # Critical: prevent stdin blocking
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     text=True,

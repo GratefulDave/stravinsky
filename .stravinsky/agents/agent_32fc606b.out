@@ -1,0 +1,123 @@
+Perfect! Based on my exploration of the Stravinsky codebase, here's a comprehensive analysis of how agents invoke Gemini and OpenAI:
+
+## 📋 Summary: Agent Model Invocation in Stravinsky
+
+### 1. **Agent Spawn Implementation**
+
+The `agent_spawn()` function in `mcp_bridge/tools/agent_manager.py` is the core mechanism:
+
+- **Entry Point**: `agent_spawn(prompt, agent_type, description, model, thinking_budget, timeout)`
+- **Returns**: Task ID for tracking
+- **Execution**: Spawns Claude CLI subprocess with `claude -p <prompt> --dangerously-skip-permissions`
+- **Storage**: Tasks stored in `.stravinsky/agents/` directory
+
+### 2. **Model Routing Architecture**
+
+**Key Innovation**: Specialized agents DON'T use Claude directly - they're instructed via system prompts to call `invoke_gemini` or `invoke_openai`:
+
+```python
+AGENT_MODEL_ROUTING = {
+    "explore": None,           # No CLI model - uses invoke_gemini
+    "dewey": None,             # No CLI model - uses invoke_gemini  
+    "document_writer": None,   # No CLI model - uses invoke_gemini
+    "multimodal": None,        # No CLI model - uses invoke_gemini
+    "frontend": None,          # No CLI model - uses invoke_gemini
+    "delphi": None,            # No CLI model - uses invoke_openai
+    "planner": "opus",         # Direct Claude Opus via CLI
+    "_default": "sonnet",      # Direct Claude Sonnet via CLI
+}
+```
+
+### 3. **System Prompt Enforcement**
+
+Each agent type gets a mandatory system prompt that enforces model routing:
+
+**Example - Explore Agent** (lines 656-665):
+```
+You MUST use invoke_gemini with model="gemini-3-flash" for ALL analysis and reasoning.
+Use Claude's native tools (Read, Grep, Glob) ONLY for file access, then pass content to invoke_gemini.
+
+WORKFLOW:
+1. Use Read/Grep/Glob to get file contents
+2. Call invoke_gemini(prompt="Analyze this: <content>", model="gemini-3-flash") for analysis
+3. Return the Gemini response
+```
+
+**Example - Delphi Agent** (lines 692-696):
+```
+You MUST use invoke_openai with model="gpt-5.2" for ALL strategic advice and analysis.
+
+WORKFLOW:
+1. Gather context about the problem
+2. Call invoke_openai(prompt="<problem description>", model="gpt-5.2")
+3. Return the GPT response
+```
+
+### 4. **invoke_gemini Implementation**
+
+Located in `mcp_bridge/tools/model_invoke.py`:
+
+- **OAuth Flow**: Uses TokenStore with automatic refresh
+- **API**: Calls Google Antigravity API (`/v1internal:generateContent`)
+- **Features**: Session persistence for thinking cache, endpoint fallback, retry logic
+- **Thinking Support**: Supports `thinking_budget` parameter for extended reasoning
+
+### 5. **invoke_openai Implementation**
+
+Also in `model_invoke.py`:
+
+- **OAuth Flow**: Uses OpenAI ChatGPT OAuth tokens
+- **API**: Calls `chatgpt.com/backend-api/codex/responses` (SSE streaming)
+- **Features**: JWT account ID extraction, Codex instructions fetching from GitHub
+- **Streaming**: Parses SSE events for `response.output_text.delta`
+
+### 6. **Output and Logging Structure**
+
+For each spawned agent task:
+
+```
+.stravinsky/agents/
+├── agent_abc123.out      # stdout - final response from agent
+├── agent_abc123.log      # stderr - errors/warnings
+└── agent_abc123.system   # system prompt file (if custom)
+```
+
+**Key logging points**:
+- Line 248: "Spawning Claude CLI agent {task_id} ({agent_type})"
+- Line 316: "Agent {task_id} completed successfully"
+- Line 327: "Agent {task_id} failed: {error_msg}"
+
+### 7. **Agent Context & Metadata**
+
+The `AgentTask` dataclass tracks:
+
+```python
+@dataclass
+class AgentTask:
+    id: str                           # Task identifier (e.g., "agent_abc123")
+    prompt: str                       # Full task prompt
+    agent_type: str                   # explore, dewey, delphi, etc.
+    description: str                  # Short display description
+    status: str                       # pending/running/completed/failed/cancelled
+    created_at: str                   # ISO timestamp
+    started_at: Optional[str]         # When execution began
+    completed_at: Optional[str]       # When finished
+    result: Optional[str]             # Final output
+    error: Optional[str]              # Error message if failed
+    pid: Optional[int]                # Process ID for cancellation
+    timeout: int = 300                # Max execution time
+    parent_session_id: Optional[str]  # For notifications
+    progress: Optional[Dict]          # Real-time progress tracking
+```
+
+### 8. **Key Architectural Patterns**
+
+✅ **Separation of Concerns**: Claude CLI handles tool access, external models (Gemini/GPT) handle reasoning
+✅ **Cost Optimization**: Cheap models (gemini-3-flash) for exploration, expensive models (gpt-5.2) for strategy
+✅ **Non-Blocking**: All agents run in background threads, allowing parallel execution
+✅ **Persistence**: Task state survives process restarts via JSON storage
+✅ **Zombie Detection**: Progress tracking checks if PIDs still exist (line 541-555)
+
+---
+
+**Bottom Line**: Stravinsky agents are Claude CLI subprocesses that are **instructed via system prompts** to delegate their actual reasoning to Gemini or OpenAI by calling `invoke_gemini`/`invoke_openai` MCP tools. This creates a multi-model orchestration layer where Claude manages tool usage while specialized models handle domain-specific reasoning.

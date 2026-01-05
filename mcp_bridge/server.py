@@ -428,6 +428,14 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
 
             result_content = await lsp_servers()
 
+        elif name == "lsp_diagnostics":
+            from .tools.code_search import lsp_diagnostics
+
+            result_content = await lsp_diagnostics(
+                file_path=arguments["file_path"],
+                severity=arguments.get("severity", "all"),
+            )
+
         else:
             result_content = f"Unknown tool: {name}"
 
@@ -441,7 +449,10 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 processed_text = await hook_manager.execute_post_tool_call(
                     name, arguments, result_content[0].text
                 )
-                result_content[0].text = processed_text
+                # Only update if processed_text is non-empty to avoid empty text blocks
+                # (API error: cache_control cannot be set for empty text blocks)
+                if processed_text:
+                    result_content[0].text = processed_text
             elif isinstance(result_content, str):
                 result_content = await hook_manager.execute_post_tool_call(
                     name, arguments, result_content

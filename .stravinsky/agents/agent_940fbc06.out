@@ -1,0 +1,170 @@
+Perfect! Now let me provide you with a comprehensive summary of how Stravinsky handles skills:
+
+---
+
+## 🔍 Stravinsky Skills System Analysis
+
+Based on my analysis of the codebase, here's how Stravinsky currently handles skills vs commands:
+
+### 1. **How Skills/Commands Are Loaded**
+
+Stravinsky uses a **two-tier discovery system**:
+
+**Discovery Locations:**
+- **Project-local**: `{project}/.claude/commands/**/*.md` (recursive)
+- **User-global**: `~/.claude/commands/**/*.md` (recursive)
+
+**Loading Process:**
+1. `discover_skills()` scans both directories using glob patterns (`**/*.md`)
+2. Each `.md` file is parsed for frontmatter (YAML between `---` markers)
+3. The filename (stem) becomes the skill name: `refactor.md` → `/refactor`
+4. Skills are tagged with a scope: `"project"` or `"user"`
+5. Metadata extracted: `description`, `allowed-tools`, plus the instruction body
+
+**Access Methods:**
+- **MCP Tools**: `skill_list`, `skill_get` 
+- **Auto-detection**: The `auto_slash_command_hook` intercepts `/command` patterns
+
+---
+
+### 2. **"Skill" vs "Command" Distinction**
+
+There is **no technical distinction** in Stravinsky—the terms are used **interchangeably**:
+
+- **"Skill"** = The resource (the `.md` file with metadata and instructions)
+- **"Command"** = The interface (the `/trigger` used to invoke it)
+
+**Evidence of interchangeability:**
+- Directory name: `.claude/commands/`
+- Tool names: `skill_list`, `skill_get`
+- Hook name: `auto_slash_command_hook`
+- Documentation uses both terms freely
+
+**Conceptual model:**
+```
+Slash Command (/deploy) → invokes → Skill (deploy.md)
+```
+
+---
+
+### 3. **File Structure & Metadata Format**
+
+**Location:** `.claude/commands/my-skill.md`
+
+**Format:**
+```markdown
+---
+description: Brief explanation of what this skill does
+allowed-tools: grep_search, ast_grep_search, lsp_hover
+---
+
+# Main Instructions
+
+You are a specialist in [X]. When invoked:
+1. Use the allowed tools to...
+2. Format output as...
+```
+
+**Metadata Fields:**
+- `description` (optional): Shown in `skill_list` output
+- `allowed-tools` (optional): Comma-separated list (currently **not enforced**, just a hint)
+
+**File naming:**
+- Filename becomes command: `stravinsky.md` → `/stravinsky`
+- Supports subdirectories: `.claude/commands/strav/deploy.md` → `/deploy`
+
+---
+
+### 4. **Auto Slash Command Hook Workflow**
+
+The `auto_slash_command_hook` operates as a **transparent prompt preprocessor**:
+
+```
+User Input → Regex Scan → Skill Lookup → Prompt Injection → Model
+```
+
+**Step-by-step:**
+1. **Detection**: Scans input for `/[a-zA-Z][a-zA-Z0-9_-]*` pattern
+2. **Extraction**: Deduplicates commands (multiple `/test` → one lookup)
+3. **Lookup**: Searches project + global directories (case-insensitive)
+4. **Injection**:
+   - **Found**: Prepends skill content with `[AUTO-SKILL INJECTION]` header
+   - **Not Found**: Prepends warning message
+5. **Recursion Prevention**: Checks for injection header to avoid double-processing
+
+**Injected Format:**
+```markdown
+> **[AUTO-SKILL INJECTION]**
+> Skills loaded: stravinsky
+
+---
+## Skill: /stravinsky
+**Source**: /path/to/skill.md
+**Description**: Task orchestrator
+**Allowed Tools**: agent_spawn, grep_search
+
+### Instructions:
+[Skill body content here]
+---
+
+[Original user prompt]
+```
+
+---
+
+### 5. **Inconsistencies & Issues Found**
+
+| Issue | Impact | Location |
+|-------|--------|----------|
+| **Terminology drift** | Confusion between "skill" and "command" | Throughout codebase |
+| **Directory vs tool naming** | `.claude/commands/` but `skill_list` tool | File structure vs API |
+| **allowed-tools not enforced** | Metadata is descriptive, not restrictive | `skill_loader.py` |
+| **Case sensitivity** | Case-insensitive lookup but case-sensitive filesystem | `auto_slash_command.py:59` |
+| **Path heuristics** | `get_project_path_from_prompt` may fail | Hook may miss local skills |
+| **No skill directory** | All skills in `.claude/commands/`, no separate `/skills` | File structure |
+
+---
+
+### 6. **Key Findings Summary**
+
+✅ **Skills ARE commands** - The terms are synonymous  
+✅ **Two-tier loading** - Project + user global directories  
+✅ **Markdown + frontmatter** - YAML metadata + instruction body  
+✅ **Auto-injection** - Slash commands trigger automatic prompt preprocessing  
+✅ **Filename = command name** - `deploy.md` becomes `/deploy`  
+✅ **MCP tool access** - `skill_list` and `skill_get` for programmatic access  
+
+⚠️ **No enforcement** - `allowed-tools` is informational only  
+⚠️ **Naming inconsistency** - Mix of "skill" and "command" terminology  
+⚠️ **No dedicated skills directory** - Everything lives in `.claude/commands/`  
+
+---
+
+### 📊 Architecture Diagram
+
+```
+.claude/commands/
+├── stravinsky.md        → /stravinsky (project scope)
+├── deploy.md            → /deploy (project scope)
+└── [subdirs allowed]
+
+~/.claude/commands/
+├── personal-helper.md   → /personal-helper (user scope)
+└── [subdirs allowed]
+
+    ↓
+skill_loader.discover_skills()
+    ↓
+skill_list (MCP Tool) / skill_get (MCP Tool)
+    ↓
+auto_slash_command_hook (preprocessor)
+    ↓
+LLM Context (with injected instructions)
+```
+
+---
+
+Would you like me to:
+1. Propose a refactoring to clarify skill/command terminology?
+2. Investigate how to enforce `allowed-tools` restrictions?
+3. Create a dedicated `/skills` architecture separate from commands?

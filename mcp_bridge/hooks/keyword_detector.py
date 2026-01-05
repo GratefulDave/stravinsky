@@ -84,11 +84,41 @@ IF COMPLEX (architecture, multi-system, debugging after 2+ failures):
 SYNTHESIZE findings before proceeding.
 """
 
+ULTRATHINK_MODE = """[ultrathink-mode]
+ENGAGE MAXIMUM REASONING CAPACITY.
+
+Extended thinking mode activated with 32k token thinking budget.
+This enables exhaustive deep reasoning and multi-dimensional analysis.
+
+## REASONING PRINCIPLES
+- **Deep Analysis**: Consider edge cases, security implications, performance impacts
+- **Multi-Perspective**: Analyze from user, developer, system, and security viewpoints
+- **Strategic Planning**: Consult delphi agent for architecture decisions and hard problems
+- **Root Cause**: Don't treat symptoms - identify and address underlying causes
+- **Risk Assessment**: Evaluate trade-offs, failure modes, and mitigation strategies
+
+## THINKING WORKFLOW
+1. Problem decomposition into atomic components
+2. Parallel exploration of solution space (spawn agents for research)
+3. Consult delphi for strategic guidance on complex decisions
+4. Multi-dimensional trade-off analysis
+5. Solution synthesis with verification plan
+
+## VERIFICATION
+- Test assumptions against reality
+- Challenge your own reasoning
+- Seek disconfirming evidence
+- Consider second-order effects
+
+Use delphi agent for strategic consultation on architecture, debugging, and complex trade-offs.
+"""
+
 KEYWORD_PATTERNS = {
     r"\bironstar\b": IRONSTAR_MODE,
     r"\birs\b": IRONSTAR_MODE,
     r"\bultrawork\b": IRONSTAR_MODE,
     r"\bulw\b": IRONSTAR_MODE,
+    r"\bultrathink\b": ULTRATHINK_MODE,
     r"\bsearch\b": SEARCH_MODE,
     r"\banalyze\b": ANALYZE_MODE,
     r"\banalysis\b": ANALYZE_MODE,

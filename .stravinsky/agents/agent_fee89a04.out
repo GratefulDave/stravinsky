@@ -1,0 +1,81 @@
+Perfect! Now let me provide a comprehensive summary based on my analysis and Gemini's insights:
+
+## Summary: Prompt Display/Logging in Stravinsky MCP Bridge
+
+Based on my exploration of the Stravinsky codebase, here's what I found:
+
+### 1. **Logging When invoke_gemini/invoke_openai is Called**
+
+**invoke_gemini** (model_invoke.py):
+- Line 301: Logs a debug UUID check message
+- **Does NOT log the full prompt text** to avoid log bloat
+- Prompt length is not explicitly logged for Gemini
+
+**invoke_openai** (model_invoke.py):
+- Line 779: `logger.info(f"[invoke_openai] START - model={model}, prompt_len={len(prompt)}")`
+- Lines 839-841: Logs API URL, payload keys, and instructions length
+- Line 846: Logs response status code
+- **Does NOT log the full prompt content**, only its length
+
+### 2. **How Tool Results Are Returned**
+
+The complete flow is:
+```
+User Request → call_tool() → invoke_gemini/openai() 
+→ API Response → _extract_gemini_response() or SSE parsing
+→ Plain text string → Wrapped in TextContent 
+→ Returned to Claude via MCP
+```
+
+Key points:
+- **server.py lines 407-410**: Results are wrapped as `[TextContent(type="text", text=str(result_content))]`
+- **No truncation of responses** at the server level
+- Responses go directly back to the caller
+
+### 3. **Existing Summarization/Truncation Logic**
+
+**Pre-Model Hooks Only** (hooks/preemptive_compaction.py):
+- **Before API call**: The `PreemptiveCompaction` hook can:
+  - Apply `apply_dcp_truncation()` to reduce prompt size by 30-40%
+  - Use `summarize_with_gemini()` to summarize the truncated content
+  - Logs: `"Applied aggressive/moderate compaction: X -> Y chars"`
+  
+**No Post-Model Truncation**:
+- Responses from models are **NOT** truncated or summarized after receiving them
+- They are returned to Claude in full
+
+### 4. **Response Formatting**
+
+**Gemini** (`_extract_gemini_response`, lines 150-201):
+- Extracts text from API response
+- **Thinking blocks** are wrapped: `<thinking>\n{content}\n</thinking>\n\n{response}`
+- Returns plain text string
+
+**OpenAI** (lines 860-882):
+- Parses SSE stream for text deltas
+- Joins chunks into plain string
+- No special formatting applied
+
+**MCP Wrapping** (server.py):
+- All responses wrapped in `TextContent` objects before returning to Claude
+
+### 5. **Missing Piece: Response Content Logging**
+
+**Critical Finding**: There is **NO logging of response content**
+- Logs show status codes, prompt lengths, API calls
+- **Response text is NOT logged** anywhere in the codebase
+- Responses go silently from API → extraction → MCP return
+- This appears intentional to avoid:
+  - Log bloat (responses can be thousands of tokens)
+  - Privacy concerns
+  - Performance overhead
+
+### Key Architectural Points:
+
+1. **Prompt logging is minimal** - only lengths, not content
+2. **Response logging is absent** - no visibility into what models return
+3. **Truncation is pre-emptive** - only affects prompts going TO models, not responses FROM models
+4. **Thinking blocks are preserved** - Gemini's thinking is formatted but not removed
+5. **Hook system** - The `pre_model_invoke` hooks can modify prompts before sending
+
+This architecture prioritizes performance and privacy over observability. If you need to see what prompts/responses look like, you'd need to add custom logging or use a debugging tool.

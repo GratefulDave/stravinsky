@@ -54,6 +54,18 @@ AGENT_COST_TIERS = {
     "_default": "EXPENSIVE",  # Claude Sonnet 4.5 via CLI
 }
 
+# Display model names for output formatting (user-visible)
+AGENT_DISPLAY_MODELS = {
+    "explore": "gemini-3-flash",
+    "dewey": "gemini-3-flash",
+    "document_writer": "gemini-3-flash",
+    "multimodal": "gemini-3-flash",
+    "frontend": "gemini-3-pro-high",
+    "delphi": "gpt-5.2",
+    "planner": "opus-4.5",
+    "_default": "sonnet-4.5",
+}
+
 
 @dataclass
 class AgentTask:
@@ -631,6 +643,7 @@ async def agent_spawn(
     model: str = "gemini-3-flash",
     thinking_budget: int = 0,
     timeout: int = 300,
+    blocking: bool = False,
 ) -> str:
     """
     Spawn a background agent.
@@ -642,9 +655,10 @@ async def agent_spawn(
         model: Model to use (gemini-3-flash, gemini-2.0-flash, claude)
         thinking_budget: Reserved reasoning tokens
         timeout: Execution timeout in seconds
+        blocking: If True, wait for completion and return result directly (use for delphi)
 
     Returns:
-        Task ID and instructions
+        Task ID and instructions, or full result if blocking=True
     """
     manager = get_manager()
 
@@ -788,16 +802,18 @@ CONSTRAINTS:
         timeout=timeout,
     )
 
-    return f"""🚀 Background agent spawned successfully.
+    # Get display model for concise output
+    display_model = AGENT_DISPLAY_MODELS.get(agent_type, AGENT_DISPLAY_MODELS["_default"])
+    short_desc = (description or prompt[:50]).strip()
 
-**Task ID**: {task_id}
-**Agent Type**: {agent_type}
-**Description**: {description or prompt[:50]}
+    # If blocking mode (recommended for delphi), wait for completion
+    if blocking:
+        result = manager.get_output(task_id, block=True, timeout=timeout)
+        return f"{agent_type}:{display_model}('{short_desc}') [BLOCKING]\n\n{result}"
 
-The agent is now running. Use:
-- `agent_progress(task_id="{task_id}")` to monitor real-time progress
-- `agent_output(task_id="{task_id}")` to get final result
-- `agent_cancel(task_id="{task_id}")` to stop the agent"""
+    # Concise format: AgentType:model('description')
+    return f"""{agent_type}:{display_model}('{short_desc}')
+task_id={task_id}"""
 
 
 async def agent_output(task_id: str, block: bool = False) -> str:
@@ -887,7 +903,7 @@ async def agent_list() -> str:
     if not tasks:
         return "No background agent tasks found."
 
-    lines = ["**Background Agent Tasks**", ""]
+    lines = []
 
     for t in sorted(tasks, key=lambda x: x.get("created_at", ""), reverse=True):
         status_emoji = {
@@ -898,8 +914,11 @@ async def agent_list() -> str:
             "cancelled": "⚠️",
         }.get(t["status"], "❓")
 
+        agent_type = t.get("agent_type", "unknown")
+        display_model = AGENT_DISPLAY_MODELS.get(agent_type, AGENT_DISPLAY_MODELS["_default"])
         desc = t.get("description", t.get("prompt", "")[:40])
-        lines.append(f"- {status_emoji} [{t['id']}] {t['agent_type']}: {desc}")
+        # Concise format: status agent:model('desc') id=xxx
+        lines.append(f"{status_emoji} {agent_type}:{display_model}('{desc}') id={t['id']}")
 
     return "\n".join(lines)
 

@@ -1,0 +1,124 @@
+Based on my exploration of the Stravinsky codebase, here is the comprehensive analysis of LSP diagnostics implementation and verification integration points:
+
+---
+
+## 📋 LSP Diagnostics & Verification Phase Analysis
+
+### 1. `lsp_diagnostics` Tool Implementation
+
+**File**: `/Users/davidandrews/PycharmProjects/stravinsky/mcp_bridge/tools/code_search.py`
+**Lines**: 15-70
+
+```
+Key Implementation Details:
+- Lines 15-28: Function signature and docstring
+- Lines 29-31: File existence validation  
+- Lines 33-47: TypeScript/JavaScript handling (uses `npx tsc --noEmit`)
+- Lines 49-60: Python handling (uses `ruff check`)
+- Lines 62-70: Error handling and fallback
+```
+
+The tool is invoked via:
+- **Server dispatch**: `mcp_bridge/server.py` lines 431-435
+- **Tool registration**: `mcp_bridge/server_tools.py` line 157
+
+---
+
+### 2. Verification Phase Locations
+
+#### Primary: Stravinsky Prompt Verification Section
+**File**: `/Users/davidandrews/PycharmProjects/stravinsky/mcp_bridge/prompts/stravinsky.py`
+**Lines**: 293-319 (`STRAVINSKY_CODE_CHANGES` constant)
+
+Key verification triggers (lines 301-306):
+```python
+### Verification:
+
+Run `lsp_diagnostics` on changed files at:
+- End of a logical task unit
+- Before marking a todo item complete
+- Before reporting completion to user
+```
+
+Evidence requirements (lines 310-317):
+```python
+| File edit | `lsp_diagnostics` clean on changed files |
+```
+
+#### Secondary: /verify Slash Command
+**File**: `/Users/davidandrews/PycharmProjects/stravinsky/.claude/commands/verify.md`
+**Lines**: 1-60
+
+Verification flow:
+1. Lines 16-19: Get modified files via `git diff`
+2. Lines 21-25: Run `lsp_diagnostics` on each file
+3. Lines 27-33: Run tests
+4. Lines 35-43: Run build/lint
+5. Lines 45-46: Verify todo completion
+
+---
+
+### 3. AI-Comment Pattern Detection Integration Points
+
+#### **Primary Integration Point (RECOMMENDED)**
+**File**: `/Users/davidandrews/PycharmProjects/stravinsky/mcp_bridge/tools/code_search.py`
+**Insert After**: Line 70 (after `lsp_diagnostics` function)
+
+**Rationale**: 
+- Co-located with existing diagnostics
+- Can be called alongside `lsp_diagnostics` 
+- Follows the same subprocess pattern
+
+**New Function Skeleton**:
+```python
+async def check_ai_comment_patterns(file_path: str) -> str:
+    """
+    Detect placeholder/AI-generated comment patterns that indicate incomplete work.
+    
+    Patterns detected:
+    - # TODO: implement, # FIXME, # placeholder
+    - // TODO, // FIXME, // placeholder  
+    - "AI-generated", "implement this", "add logic here"
+    
+    Returns:
+        List of detected patterns with line numbers.
+    """
+    # Implementation here
+```
+
+#### **Secondary Integration Point**
+**File**: `/Users/davidandrews/PycharmProjects/stravinsky/.claude/commands/verify.md`
+**Insert After**: Line 25 (after LSP diagnostics step)
+
+Add new step 2.5:
+```markdown
+### 2.5 Check for AI Comment Patterns
+For each modified file, check for placeholder patterns:
+- Use `check_ai_comment_patterns` tool (or grep-based check)
+- Flag any TODO, FIXME, placeholder, or "implement" comments in new code
+- Report as warnings (not blocking, but visible)
+```
+
+---
+
+### 4. Stravinsky Prompt Update Location
+
+**File**: `/Users/davidandrews/PycharmProjects/stravinsky/mcp_bridge/prompts/stravinsky.py`
+**Lines 310-318**: Update Evidence Requirements table
+
+Add row:
+```python
+| File edit | `lsp_diagnostics` clean + no AI placeholder comments |
+```
+
+---
+
+## Summary: Integration Points Map
+
+| Priority | File | Lines | Purpose |
+|----------|------|-------|---------|
+| **1** | `mcp_bridge/tools/code_search.py` | After 70 | New `check_ai_comment_patterns()` function |
+| **2** | `.claude/commands/verify.md` | After 25 | Add step 2.5 for pattern checking |
+| **3** | `mcp_bridge/prompts/stravinsky.py` | 310-318 | Update evidence requirements |
+| **4** | `mcp_bridge/server.py` | After 435 | Add tool dispatch for new function |
+| **5** | `mcp_bridge/server_tools.py` | After 157 | Register new tool |

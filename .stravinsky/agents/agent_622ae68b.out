@@ -1,0 +1,119 @@
+The Gemini response got stuck in a loop. Let me provide the analysis directly based on my exploration findings:
+
+---
+
+## 🔍 Multimodal Agent Implementation & Token Handling Analysis
+
+### 1. **Multimodal Agent Prompt and Configuration**
+
+| File | Lines | Description |
+|------|-------|-------------|
+| `mcp_bridge/prompts/multimodal.py` | **1-59** | Full multimodal agent system prompt |
+| `mcp_bridge/prompts/multimodal.py` | **9-14** | Metadata: `cost: "CHEAP"`, `category: "utility"` |
+| `mcp_bridge/prompts/multimodal.py` | **17-48** | System prompt defining visual analysis workflow |
+| `mcp_bridge/prompts/multimodal.py` | **51-58** | `get_multimodal_prompt()` function |
+
+**Multimodal prompt key instruction (Line 36-37):**
+> "The main agent never processes the raw file - you save context tokens"
+
+---
+
+### 2. **How Multimodal Agent is Invoked**
+
+| File | Lines | Description |
+|------|-------|-------------|
+| `mcp_bridge/tools/agent_manager.py` | **27** | `"multimodal": None` - No CLI model flag, uses `invoke_gemini` |
+| `mcp_bridge/tools/agent_manager.py` | **50** | `"multimodal": "CHEAP"` - Cost tier |
+| `mcp_bridge/tools/agent_manager.py` | **63** | `"multimodal": "gemini-3-flash"` - Display model |
+| `mcp_bridge/tools/agent_manager.py` | **721-729** | System prompt injected at spawn time |
+| `mcp_bridge/server.py` | **485-494** | Prompt exposed via MCP `get_prompt()` |
+
+**Agent spawn flow:**
+1. `agent_spawn(agent_type="multimodal", prompt="...")` called
+2. System prompt from lines 721-729 injected
+3. Claude CLI spawned with `--dangerously-skip-permissions`
+4. Agent uses `invoke_gemini(model="gemini-3-flash")` for visual analysis
+
+---
+
+### 3. **🚨 CRITICAL FINDING: No Image Processing in invoke_gemini**
+
+| File | Lines | Issue |
+|------|-------|-------|
+| `mcp_bridge/tools/model_invoke.py` | **374-375** | Only TEXT parts supported |
+
+**Current implementation (Line 374-375):**
+```python
+inner_payload = {
+    "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+```
+
+**Missing:** 
+- No `inlineData` parts for base64-encoded images
+- No image loading/encoding logic
+- No PDF-to-image conversion
+- No Gemini Vision API integration
+
+**The multimodal agent DESCRIBES what it would do but CANNOT actually process images/PDFs**
+
+---
+
+### 4. **Existing Token/Context Management**
+
+| File | Lines | Feature |
+|------|-------|---------|
+| `mcp_bridge/hooks/preemptive_compaction.py` | **21-28** | Token thresholds (70%/85% of 200K) |
+| `mcp_bridge/hooks/preemptive_compaction.py` | **42-97** | DCP truncation strategy |
+| `mcp_bridge/hooks/preemptive_compaction.py` | **130-170** | Uses `invoke_gemini(max_tokens=2000)` for summarization |
+| `mcp_bridge/hooks/pre_compact.py` | **47-62** | Memory anchors system (10 max) |
+| `mcp_bridge/hooks/pre_compact.py` | **119-177** | Uses `invoke_gemini(max_tokens=2000)` for context extraction |
+| `mcp_bridge/hooks/context_monitor.py` | **30-33** | Thresholds: 70% reminder, 85% warning |
+| `mcp_bridge/tools/model_invoke.py` | **306** | Default `max_tokens=4096` |
+| `mcp_bridge/tools/model_invoke.py` | **378** | `maxOutputTokens` in API request |
+
+---
+
+### 5. **Where Token Optimization via Vision Summarization Could Be Added**
+
+| Location | Lines | Integration Point |
+|----------|-------|-------------------|
+| `mcp_bridge/tools/model_invoke.py` | **374-380** | Add image/PDF loading + `inlineData` parts |
+| `mcp_bridge/tools/model_invoke.py` | **301-310** | New parameter: `image_path: Optional[str]` |
+| `mcp_bridge/hooks/pre_compact.py` | **119-150** | Add vision-based summarization hook |
+| `mcp_bridge/tools/agent_manager.py` | **721-729** | Update multimodal prompt to call enhanced `invoke_gemini` |
+
+**Recommended implementation locations:**
+
+1. **New function in `model_invoke.py`** (after line 478):
+```python
+async def invoke_gemini_vision(
+    token_store: TokenStore,
+    prompt: str,
+    image_path: str,  # NEW
+    model: str = "gemini-3-flash",
+    max_tokens: int = 2000,  # Smaller for summaries
+) -> str:
+```
+
+2. **New hook in `hooks/vision_summarizer.py`**:
+   - Intercepts large image/PDF contexts
+   - Converts to summarized text using Gemini Vision
+   - Reduces token usage by 80-95%
+
+3. **Pre-model invoke hook** (register in `hooks/__init__.py` line 51):
+```python
+manager.register_pre_model_invoke(vision_summarization_hook)
+```
+
+---
+
+### Summary
+
+| Component | Status | Location |
+|-----------|--------|----------|
+| Multimodal prompt | ✅ Complete | `prompts/multimodal.py:17-48` |
+| Agent routing | ✅ Complete | `agent_manager.py:27,50,63` |
+| invoke_gemini | ⚠️ Text-only | `model_invoke.py:374-375` |
+| Image processing | ❌ **Missing** | Needs implementation |
+| Token management | ✅ Complete | Hooks at 70%/85% thresholds |
+| Vision summarization | ❌ **Missing** | Recommended addition |

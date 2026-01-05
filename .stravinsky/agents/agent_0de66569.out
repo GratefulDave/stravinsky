@@ -1,0 +1,117 @@
+I have the complete picture now. Here's the comprehensive summary:
+
+---
+
+## Claude Code Hooks Structure in Stravinsky - Complete Analysis
+
+### 1. Hook Files Location
+
+**Native hooks directory:** `/Users/davidandrews/PycharmProjects/stravinsky/mcp_bridge/native_hooks/`
+- `context.py` - UserPromptSubmit hook (injects README/CLAUDE.md context)
+- `edit_recovery.py` - PostToolUse for Edit error recovery
+- `stravinsky_mode.py` - PreToolUse to block native tools in orchestrator mode
+- `todo_delegation.py` - PostToolUse for TodoWrite parallel enforcement
+- `truncator.py` - PostToolUse for response truncation
+
+### 2. Configuration Format (`.claude/settings.json`)
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Read,Search,Grep,Bash,Edit,MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /absolute/path/to/hook.py"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /absolute/path/to/context.py"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [...]
+      },
+      {
+        "matcher": "TodoWrite",
+        "hooks": [...]
+      }
+    ]
+  }
+}
+```
+
+**Key configuration properties:**
+- `matcher`: Tool names (comma-separated) or `"*"` for all
+- `type`: `"command"` for shell commands
+- `command`: Full command to execute
+
+### 3. UserPromptSubmit Hook Pattern (context.py)
+
+```python
+import os
+import sys
+import json
+from pathlib import Path
+
+def main():
+    # 1. Read JSON input from stdin
+    try:
+        data = json.load(sys.stdin)
+        prompt = data.get("prompt", "")
+    except Exception:
+        return
+
+    # 2. Get working directory from env
+    cwd = Path(os.environ.get("CLAUDE_CWD", "."))
+    
+    # 3. Load context or modify prompt
+    new_prompt = f"[CONTEXT]\n{context}\n\n[USER PROMPT]\n{prompt}"
+    
+    # 4. Output modified prompt to stdout
+    print(new_prompt)
+
+if __name__ == "__main__":
+    main()
+```
+
+### 4. Environment Variables Available
+- `CLAUDE_CWD` - Current working directory
+- `CLAUDE_SESSION_ID` - Session ID
+- `CLAUDE_TOOL_NAME` - Tool name (for tool hooks)
+- `CLAUDE_TOOL_INPUT` - JSON of tool input
+
+### 5. Exit Codes
+- `0` - Continue normally
+- `1` - Block/deny operation
+- `2+` - Error (logged, continues)
+
+### 6. Hook Types Summary
+
+| Hook Type | Input (stdin) | Output (stdout) | Purpose |
+|-----------|---------------|-----------------|---------|
+| `UserPromptSubmit` | `{"prompt": "..."}` | Modified prompt string | Augment user prompts |
+| `PreToolUse` | `{"tool_name": "...", "tool_input": {...}}` | Exit code controls execution | Block/allow tools |
+| `PostToolUse` | `{"tool_name": "...", "tool_response": "..."}` | Modified response | Transform tool output |
+| `Stop` | Session context | Continuation prompt | Follow-up actions |
+
+### 7. For Todo Continuation Hook Implementation
+
+To create a new UserPromptSubmit hook for todo continuation:
+
+1. **Create hook file:** `.claude/hooks/todo_reminder.py`
+2. **Pattern:** Read stdin JSON → Check TODO.md or TodoWrite state → Print augmented prompt
+3. **Register in settings.json:** Add to `UserPromptSubmit` array with `"matcher": "*"`

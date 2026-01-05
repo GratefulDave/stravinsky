@@ -357,6 +357,11 @@ def get_tool_definitions() -> List[Tool]:
                         "description": "Maximum execution time in seconds",
                         "default": 300,
                     },
+                    "blocking": {
+                        "type": "boolean",
+                        "description": "If true, wait for agent completion and return result directly. Recommended for delphi consultations.",
+                        "default": False,
+                    },
                 },
                 "required": ["prompt"],
             },

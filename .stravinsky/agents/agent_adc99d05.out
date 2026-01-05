@@ -1,0 +1,128 @@
+Let me provide the analysis directly based on the code I've read:
+
+## Analysis Complete: Implementation Path for `blocking=true` Parameter
+
+### Key Findings
+
+#### 1. **agent_spawn Tool Function** (Lines 639-809)
+**Location**: `/Users/davidandrews/PycharmProjects/stravinsky/mcp_bridge/tools/agent_manager.py`
+
+**Current signature (line 639-646)**:
+```python
+async def agent_spawn(
+    prompt: str,
+    agent_type: str = "explore",
+    description: str = "",
+    model: str = "gemini-3-flash",
+    thinking_budget: int = 0,
+    timeout: int = 300,
+) -> str:
+```
+
+**Need to add**: `blocking: bool = False` parameter
+
+---
+
+#### 2. **AgentManager.spawn Method** (Lines 176-229)
+**Current signature (line 176-187)**:
+```python
+def spawn(
+    self,
+    token_store: Any,
+    prompt: str,
+    agent_type: str = "explore",
+    description: str = "",
+    parent_session_id: Optional[str] = None,
+    system_prompt: Optional[str] = None,
+    model: str = "gemini-3-flash",
+    thinking_budget: int = 0,
+    timeout: int = 300,
+) -> str:
+```
+
+**Need to add**: `blocking: bool = False` parameter and return result instead of just task_id when blocking
+
+---
+
+#### 3. **_execute_agent Method** (Lines 231-379)
+**Key section (lines 377-379)**:
+```python
+# Run in background thread
+thread = threading.Thread(target=run_agent, daemon=True)
+thread.start()
+```
+
+**For blocking mode**: Instead of fire-and-forget, need to `thread.join()` and return the result
+
+---
+
+#### 4. **get_output Already Supports Blocking** (Lines 454-527)
+The `get_output` method already has blocking logic at lines 470-477:
+```python
+if block and task["status"] == "running":
+    # Poll for completion
+    start = datetime.now()
+    while (datetime.now() - start).total_seconds() < timeout:
+        task = self.get_task(task_id)
+        if not task or task["status"] != "running":
+            break
+        time.sleep(0.5)
+```
+
+---
+
+#### 5. **Tool Schema Definition** (server_tools.py lines 321-362)
+**Location**: `/Users/davidandrews/PycharmProjects/stravinsky/mcp_bridge/server_tools.py`
+
+**Need to add to inputSchema properties**:
+```python
+"blocking": {
+    "type": "boolean",
+    "description": "If true, wait for agent completion and return result directly",
+    "default": False,
+},
+```
+
+---
+
+### Implementation Path
+
+| Step | File | Lines | Change |
+|------|------|-------|--------|
+| 1 | `server_tools.py` | 329-361 | Add `blocking` property to inputSchema |
+| 2 | `agent_manager.py` | 639-646 | Add `blocking: bool = False` parameter to `async def agent_spawn()` |
+| 3 | `agent_manager.py` | 176-187 | Add `blocking: bool = False` parameter to `def spawn()` |
+| 4 | `agent_manager.py` | 225-229 | Modify to optionally wait for completion |
+| 5 | `agent_manager.py` | 377-379 | Conditionally `thread.join()` instead of fire-and-forget |
+| 6 | `agent_manager.py` | 792-809 | Return full result (not just task_id) when blocking |
+
+### How Blocking Mode Should Work
+
+1. **Current flow (background)**:
+   - `agent_spawn()` → `manager.spawn()` → starts thread → returns `task_id` immediately
+   - User calls `agent_output(task_id, block=true)` later to get result
+
+2. **New flow (blocking=true)**:
+   - `agent_spawn(blocking=true)` → `manager.spawn(blocking=true)` → starts thread → `thread.join()` → returns full result directly
+   - No need for separate `agent_output` call
+
+### Critical Modification Points
+
+**`_execute_agent` method (lines 231-379)** needs refactoring:
+- Currently uses `threading.Thread(daemon=True)` and fires without waiting
+- For blocking mode, need to either:
+  - A) Join the thread and return result from `run_agent()` 
+  - B) Use the existing polling mechanism from `get_output()`
+
+**Recommended approach**: Reuse `get_output()` logic after spawning:
+```python
+# In agent_spawn() around line 800
+task_id = manager.spawn(...)
+
+if blocking:
+    # Wait for completion and return result directly
+    return manager.get_output(task_id, block=True, timeout=timeout)
+else:
+    # Current behavior - return task_id
+    return f"{agent_type}:{display_model}('{short_desc}')\ntask_id={task_id}"
+```

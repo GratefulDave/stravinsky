@@ -2,11 +2,16 @@
 Templates for stravinsky repository initialization.
 """
 
-CLAUDE_MD_TEMPLATE = """## stravinsky MCP (Parallel Agents)
+CLAUDE_MD_TEMPLATE = """## stravinsky MCP (Multi-Model Orchestration)
 
-Use stravinsky MCP tools. **DEFAULT: spawn parallel agents for multi-step tasks.**
+Stravinsky provides multi-model AI orchestration with parallel agent execution.
 
-### Agent Tools
+### Architecture
+- **Native Subagent**: Stravinsky orchestrator (.claude/agents/stravinsky.md) auto-delegates complex tasks
+- **MCP Tools**: agent_spawn, invoke_gemini, invoke_openai, LSP tools, code search
+- **Specialist Agents**: explore, dewey, frontend, delphi, multimodal, document_writer
+
+### Agent Tools (via MCP)
 - `agent_spawn(prompt, agent_type, description)` - Spawn background agent with full tool access
 - `agent_output(task_id, block)` - Get results (block=True to wait)
 - `agent_progress(task_id)` - Check real-time progress
@@ -14,15 +19,17 @@ Use stravinsky MCP tools. **DEFAULT: spawn parallel agents for multi-step tasks.
 - `agent_cancel(task_id)` - Stop a running agent
 
 ### Agent Types
-- `explore` - Codebase search, "where is X?" questions
-- `dewey` - Documentation research, implementation examples
-- `frontend` - UI/UX work, component design
-- `delphi` - Strategic advice, architecture review
+- `explore` - Codebase search, structural analysis (Gemini 3 Flash)
+- `dewey` - Documentation research, web search (Gemini 3 Flash + Web)
+- `frontend` - UI/UX implementation (Gemini 3 Pro High)
+- `delphi` - Strategic advice, architecture review (GPT-5.2 Medium)
+- `multimodal` - Visual analysis, screenshots (Gemini 3 Flash Vision)
+- `document_writer` - Technical documentation (Gemini 3 Flash)
 
-### Parallel Execution (IRONSTAR)
+### Parallel Execution (MANDATORY)
 For ANY task with 2+ independent steps:
 1. **Immediately use agent_spawn** for each independent component
-2. Fire all agents simultaneously, don't wait
+2. Fire all agents simultaneously in ONE response, don't wait
 3. Monitor with agent_progress, collect with agent_output
 
 ### Trigger Commands
@@ -30,6 +37,12 @@ For ANY task with 2+ independent steps:
 - **ULTRATHINK**: Engage exhaustive deep reasoning, multi-dimensional analysis
 - **SEARCH**: Maximize search effort across codebase and external resources
 - **ANALYZE**: Deep analysis mode with delphi consultation for complex issues
+
+### Native Subagent Benefits
+- ✅ Auto-delegation (no manual /stravinsky invocation)
+- ✅ Context isolation (orchestrator runs as subagent)
+- ✅ Full MCP tool access (agent_spawn, invoke_gemini/openai, LSP, etc.)
+- ✅ Multi-model routing (Gemini for UI/research, GPT for strategy)
 """
 
 COMMAND_STRAVINSKY = """---
@@ -74,15 +87,16 @@ stravinsky:agent_spawn(prompt="Task 3...", agent_type="dewey", description="Task
 stravinsky:agent_output(task_id="[id]", block=true)
 ```
 
-### DO NOT USE:
-- ❌ Built-in Read tool for file reading
-- ❌ Built-in Search/Glob for searching
-- ❌ Built-in Task tool for subagents
+### Recommended Tool Usage:
+- For file operations within agents: Use standard Read/Edit tools
+- For parallel agent spawning: Use stravinsky:agent_spawn (supports nesting, unlike native Task tool)
+- For collecting results: Use stravinsky:agent_output
+- For monitoring agents: Use stravinsky:agent_list
 
-### ALWAYS USE:
-- ✅ stravinsky:agent_spawn for ALL exploration
-- ✅ stravinsky:agent_output for collecting results
-- ✅ stravinsky:agent_list to see running agents
+### Native Subagent Integration:
+- Stravinsky orchestrator configured as native Claude Code subagent (.claude/agents/stravinsky.md)
+- Native subagents CAN call Stravinsky MCP tools (agent_spawn, invoke_gemini, etc.)
+- This enables auto-delegation without manual /stravinsky invocation
 
 ### Execution Modes:
 - `ironstar` / `irs` / `ultrawork` - Maximum parallel execution (10+ agents)

@@ -305,11 +305,13 @@ async def invoke_gemini(
     temperature: float = 0.7,
     max_tokens: int = 4096,
     thinking_budget: int = 0,
+    image_path: str | None = None,
 ) -> str:
     """
     Invoke a Gemini model with the given prompt.
 
     Uses OAuth authentication with Antigravity credentials.
+    Supports vision API for image/PDF analysis when image_path is provided.
 
     Args:
         token_store: Token store for OAuth credentials
@@ -317,6 +319,8 @@ async def invoke_gemini(
         model: Gemini model to use
         temperature: Sampling temperature (0.0-2.0)
         max_tokens: Maximum tokens in response
+        thinking_budget: Tokens reserved for internal reasoning
+        image_path: Optional path to image/PDF for vision analysis (token optimization)
 
     Returns:
         The model's response text.
@@ -371,8 +375,43 @@ async def invoke_gemini(
 
     # Build inner request payload
     # Per API spec: contents must include role ("user" or "model")
+
+    # Build parts list - text prompt plus optional image
+    parts = [{"text": prompt}]
+
+    # Add image data for vision analysis (token optimization for multimodal)
+    if image_path:
+        import base64
+        from pathlib import Path
+
+        image_file = Path(image_path)
+        if image_file.exists():
+            # Determine MIME type
+            suffix = image_file.suffix.lower()
+            mime_types = {
+                ".png": "image/png",
+                ".jpg": "image/jpeg",
+                ".jpeg": "image/jpeg",
+                ".gif": "image/gif",
+                ".webp": "image/webp",
+                ".pdf": "application/pdf",
+            }
+            mime_type = mime_types.get(suffix, "image/png")
+
+            # Read and base64 encode
+            image_data = base64.b64encode(image_file.read_bytes()).decode("utf-8")
+
+            # Add inline image data for Gemini Vision API
+            parts.append({
+                "inlineData": {
+                    "mimeType": mime_type,
+                    "data": image_data,
+                }
+            })
+            logger.info(f"[multimodal] Added vision data: {image_path} ({mime_type})")
+
     inner_payload = {
-        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+        "contents": [{"role": "user", "parts": parts}],
         "generationConfig": {
             "temperature": temperature,
             "maxOutputTokens": max_tokens,
@@ -468,6 +507,26 @@ async def invoke_gemini(
         break
 
     if response is None:
+        # FALLBACK: Try Claude sonnet-4.5 for agents that support it
+        agent_context = params.get("agent_context", {})
+        agent_type = agent_context.get("agent_type", "unknown")
+
+        if agent_type in ("dewey", "explore", "document_writer", "multimodal"):
+            logger.warning(f"[{agent_type}] Gemini failed, falling back to Claude sonnet-4.5")
+            try:
+                import subprocess
+                fallback_result = subprocess.run(
+                    ["claude", "-p", prompt, "--model", "sonnet", "--output-format", "text"],
+                    capture_output=True,
+                    text=True,
+                    timeout=120,
+                    cwd=os.getcwd(),
+                )
+                if fallback_result.returncode == 0 and fallback_result.stdout.strip():
+                    return fallback_result.stdout.strip()
+            except Exception as fallback_error:
+                logger.error(f"Fallback to Claude also failed: {fallback_error}")
+
         raise ValueError(f"All Antigravity endpoints failed: {last_error}")
 
     response.raise_for_status()

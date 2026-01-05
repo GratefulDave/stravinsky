@@ -80,6 +80,16 @@ async def pre_compact_hook(params: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     if _in_preservation:
         return None
 
+    # Clear rules injection cache on compaction to allow re-injection
+    session_id = params.get("session_id")
+    if session_id:
+        try:
+            from .rules_injector import clear_session_cache
+            clear_session_cache(session_id)
+            logger.debug(f"[PreCompactHook] Cleared rules cache for session {session_id}")
+        except Exception as e:
+            logger.warning(f"[PreCompactHook] Failed to clear rules cache: {e}")
+
     prompt = params.get("prompt", "")
 
     # Only activate for compaction-related prompts

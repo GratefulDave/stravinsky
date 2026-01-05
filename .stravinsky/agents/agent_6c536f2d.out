@@ -1,0 +1,103 @@
+The Gemini response attempted to spawn sub-agents but that's not how the MCP tool works - it just returns text. Let me provide the complete analysis based on the code I've already read:
+
+---
+
+## Analysis: Agent Model Selection and Fallback Logic
+
+### 1. AGENT_MODEL_ROUTING Configuration
+
+**File:** `/Users/davidandrews/PycharmProjects/stravinsky/mcp_bridge/tools/agent_manager.py`
+
+**Lines 31-43:**
+```python
+AGENT_MODEL_ROUTING = {
+    # Specialized agents - no CLI model flag, they call invoke_* tools
+    "explore": None,
+    "dewey": None,           # ← Dewey is None (uses invoke_gemini via system prompt)
+    "document_writer": None,
+    "multimodal": None,
+    "frontend": None,
+    "delphi": None,
+    # Planner uses Opus for superior reasoning
+    "planner": "opus",
+    # Default for unknown agent types - use Sonnet 4.5
+    "_default": "sonnet",
+}
+```
+
+### 2. How invoke_gemini is Called for Dewey
+
+**Lines 679-686** - The dewey system prompt *instructs* the agent to call invoke_gemini:
+```python
+"dewey": """You are a documentation and research specialist...
+
+MODEL ROUTING (MANDATORY):
+You MUST use invoke_gemini with model="gemini-3-flash" for ALL analysis...
+
+WORKFLOW:
+2. Call invoke_gemini(prompt="<task>", model="gemini-3-flash", agent_context={"agent_type": "dewey"})
+```
+
+**Key Insight:** Dewey does NOT directly call invoke_gemini in code. The system prompt instructs the Claude CLI subprocess to use the MCP tool `invoke_gemini`.
+
+### 3. Error Handling in invoke_gemini
+
+**File:** `/Users/davidandrews/PycharmProjects/stravinsky/mcp_bridge/tools/model_invoke.py`
+
+| Location | Error Type | Current Behavior |
+|----------|-----------|------------------|
+| Lines 293-300 | 429/5xx | Retry with exponential backoff (5 attempts) |
+| Lines 455-460 | Timeout/Exception | Try next Antigravity endpoint |
+| Line 471 | All endpoints fail | Raises `ValueError("All Antigravity endpoints failed")` |
+
+**No fallback to another model exists** - total failure just raises an exception.
+
+### 4. Where Fallback Logic Could Be Added
+
+| Option | Location | Description |
+|--------|----------|-------------|
+| **A** | `model_invoke.py:471` | After all Gemini endpoints fail, invoke Claude |
+| **B** | `agent_manager.py:679-686` | Modify dewey system prompt to try sonnet on failure |
+| **C** | `agent_manager.py:31-43` | Add `AGENT_FALLBACK_ROUTING` config |
+
+### 5. Recommended Approach: Option A (Tool-Level Fallback)
+
+**Why:** Most robust - handles failure at the source, no prompt changes needed, centralized logic.
+
+**Implementation location:** `model_invoke.py` after line 471
+
+**Code snippet to add:**
+
+```python
+# In model_invoke.py, after line 470 (if response is None)
+if response is None:
+    # FALLBACK: Try Claude sonnet-4.5 via subprocess
+    agent_context = params.get("agent_context", {})
+    agent_type = agent_context.get("agent_type", "unknown")
+    
+    if agent_type in ("dewey", "explore", "document_writer", "multimodal"):
+        logger.warning(f"[{agent_type}] Gemini failed, falling back to Claude sonnet-4.5")
+        try:
+            import subprocess
+            result = subprocess.run(
+                ["claude", "-p", prompt, "--model", "sonnet", "--output-format", "text"],
+                capture_output=True, text=True, timeout=120
+            )
+            if result.returncode == 0:
+                return result.stdout.strip()
+        except Exception as fallback_error:
+            logger.error(f"Fallback to Claude also failed: {fallback_error}")
+    
+    raise ValueError(f"All Antigravity endpoints failed: {last_error}")
+```
+
+### Summary Table
+
+| Item | Location | Line |
+|------|----------|------|
+| AGENT_MODEL_ROUTING dict | agent_manager.py | 31-43 |
+| Dewey system prompt | agent_manager.py | 679-686 |
+| Model routing in _execute_agent | agent_manager.py | 276-283 |
+| invoke_gemini retry decorator | model_invoke.py | 293-300 |
+| **Fallback injection point** | model_invoke.py | 471 |
+| is_retryable_exception | model_invoke.py | 286-290 |

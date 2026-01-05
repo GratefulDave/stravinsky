@@ -15,11 +15,13 @@
 
 - 🔐 **OAuth Authentication** - Secure browser-based auth for Google (Gemini) and OpenAI (ChatGPT)
 - 🤖 **Multi-Model Support** - Seamlessly invoke Gemini and GPT models from Claude
+- 🎯 **Native Subagent Orchestration** - Auto-delegating orchestrator with parallel execution (zero CLI overhead)
 - 🛠️ **31 MCP Tools** - Model invocation, code search, LSP integrations, session management, and more
-- 🧠 **7 Specialized Agents** - Stravinsky (orchestrator), Delphi (advisor), Dewey (documentation), and more
-- 🔄 **Background Tasks** - Spawn parallel agents with full tool access via Claude Code CLI
+- 🧠 **7 Specialized Native Agents** - Stravinsky (orchestrator), Delphi (GPT-5.2 advisor), Dewey (documentation), Explore (code search), Frontend (Gemini 3 Pro High UI/UX), Code Reviewer, Debugger
+- 🔄 **Hook-Based Delegation** - PreToolUse hooks enforce delegation patterns with hard boundaries (exit code 2)
 - 📝 **LSP Integration** - Full Language Server Protocol support for Python (jedi)
 - 🔍 **AST-Aware Search** - Structural code search and refactoring with ast-grep
+- ⚡ **Cost-Optimized Routing** - Free/cheap agents (explore, dewey) always async, expensive (delphi) only when needed
 
 ## Quick Start
 
@@ -68,42 +70,39 @@ Commands can be organized in subdirectories (e.g., `.claude/commands/strav/strav
 
 ````
 
-## Add to Your CLAUDE.md
+## Native Subagent Architecture
 
-After installing globally, add this to your project's `CLAUDE.md`:
+Stravinsky uses **native Claude Code subagents** (.claude/agents/) with automatic delegation:
 
-```markdown
-## Stravinsky MCP (Parallel Agents)
+### How It Works
 
-Use Stravinsky MCP tools. **DEFAULT: spawn parallel agents for multi-step tasks.**
-
-### Agent Tools
-
-- `agent_spawn(prompt, agent_type, description)` - Spawn background agent with full tool access
-- `agent_output(task_id, block)` - Get results (block=True to wait)
-- `agent_progress(task_id)` - Check real-time progress
-- `agent_list()` - Overview of all running agents
-- `agent_cancel(task_id)` - Stop a running agent
+1. **Auto-Delegation**: Claude Code automatically delegates complex tasks to the Stravinsky orchestrator
+2. **Hook-Based Control**: PreToolUse hooks intercept direct tool calls and enforce delegation patterns
+3. **Parallel Execution**: Task tool enables true parallel execution of specialist agents
+4. **Multi-Model Routing**: Specialists use invoke_gemini/openai MCP tools for multi-model access
 
 ### Agent Types
 
-- `explore` - Codebase search, "where is X?" questions
-- `dewey` - Documentation research, implementation examples
-- `frontend` - UI/UX work, component design
-- `delphi` - Strategic advice, architecture review
+| Agent | Model | Cost | Use For |
+|-------|-------|------|---------|
+| **stravinsky** | Claude Sonnet 4.5 (32k thinking) | Moderate | Auto-delegating orchestrator (primary) |
+| **explore** | Gemini 3 Flash (via MCP) | Free | Code search, always async |
+| **dewey** | Gemini 3 Flash + WebSearch | Cheap | Documentation research, always async |
+| **code-reviewer** | Claude Sonnet (native) | Cheap | Quality analysis, always async |
+| **debugger** | Claude Sonnet (native) | Medium | Root cause (after 2+ failures) |
+| **frontend** | Gemini 3 Pro High (via MCP) | Medium | ALL visual changes (blocking) |
+| **delphi** | GPT-5.2 Medium (via MCP) | Expensive | Architecture (after 3+ failures) |
 
-### Parallel Execution (MANDATORY)
+### Delegation Rules (oh-my-opencode Pattern)
 
-For ANY task with 2+ independent steps:
-
-1. **Immediately use agent_spawn** for each independent component
-2. Fire all agents simultaneously, don't wait
-3. Monitor with agent_progress, collect with agent_output
+- **Always Async**: explore, dewey, code-reviewer (free/cheap)
+- **Blocking**: debugger (2+ failures), frontend (ALL visual), delphi (3+ failures or architecture)
+- **Never Work Alone**: Orchestrator blocks Read/Grep/Bash via PreToolUse hooks
 
 ### ULTRATHINK / ULTRAWORK
 
-- **ULTRATHINK**: Engage exhaustive deep reasoning, multi-dimensional analysis
-- **ULTRAWORK**: Maximum parallel execution - spawn agents aggressively for every subtask
+- **ULTRATHINK**: Engage exhaustive deep reasoning with extended thinking budget (32k tokens)
+- **ULTRAWORK**: Maximum parallel execution - spawn all async agents immediately
 ````
 
 ## Tools (31)
@@ -118,17 +117,19 @@ For ANY task with 2+ independent steps:
 | **Sessions**     | `session_list`, `session_read`, `session_search`                                   |
 | **Skills**       | `skill_list`, `skill_get`                                                          |
 
-## Agent Prompts (7)
+## Native Subagents (7)
 
-| Prompt            | Purpose                                                       |
-| ----------------- | ------------------------------------------------------------- |
-| `stravinsky`      | Task orchestration, planning, and goal-oriented execution.    |
-| `delphi`          | Strategic technical advisor (GPT-based) for hard debugging.   |
-| `dewey`           | Documentation and multi-repository research specialist.       |
-| `explore`         | Specialized for codebase-wide search and structural analysis. |
-| `frontend`        | UI/UX Engineer (Gemini-optimized) for component prototyping.  |
-| `document_writer` | Technical documentation and specification writer.             |
-| `multimodal`      | Visual analysis expert for UI screenshots and diagrams.       |
+Configured in `.claude/agents/*.md`:
+
+| Agent            | Purpose                                                               | Location |
+| ---------------- | --------------------------------------------------------------------- | -------- |
+| `stravinsky`     | Task orchestration with 32k extended thinking (Sonnet 4.5)            | .claude/agents/stravinsky.md |
+| `explore`        | Codebase search and structural analysis (Gemini 3 Flash)              | .claude/agents/explore.md |
+| `dewey`          | Documentation research and web search (Gemini 3 Flash)                | .claude/agents/dewey.md |
+| `code-reviewer`  | Security, quality, and best practice analysis (Claude Sonnet)         | .claude/agents/code-reviewer.md |
+| `debugger`       | Root cause analysis and fix strategies (Claude Sonnet)                | .claude/agents/debugger.md |
+| `frontend`       | UI/UX implementation with creative generation (Gemini 3 Pro High)     | .claude/agents/frontend.md |
+| `delphi`         | Strategic architecture advisor with 32k thinking (GPT-5.2 Medium)     | .claude/agents/delphi.md |
 
 ## Development
 
@@ -144,14 +145,90 @@ stravinsky
 
 ```
 stravinsky/
-├── mcp_bridge/           # Python MCP server
-│   ├── server.py         # Entry point
-│   ├── auth/             # OAuth (Google & OpenAI)
-│   ├── tools/            # Model invoke, search, skills
-│   ├── prompts/          # Agent system prompts
-│   └── config/           # Bridge configuration
-├── pyproject.toml        # Build system
-└── README.md             # This file
+├── .claude/                      # Claude Code configuration
+│   ├── agents/                   # Native subagent configurations (7 agents)
+│   │   ├── stravinsky.md         # Orchestrator (auto-delegated)
+│   │   ├── explore.md            # Code search specialist
+│   │   ├── dewey.md              # Documentation research
+│   │   ├── code-reviewer.md      # Quality analysis
+│   │   ├── debugger.md           # Root cause analysis
+│   │   ├── frontend.md           # UI/UX specialist
+│   │   ├── delphi.md             # Strategic advisor (GPT-5.2)
+│   │   └── HOOKS.md              # Hook architecture guide
+│   ├── commands/                 # Slash commands (skills)
+│   │   ├── stravinsky.md         # /stravinsky orchestrator
+│   │   ├── delphi.md             # /delphi strategic advisor
+│   │   ├── dewey.md              # /dewey documentation research
+│   │   ├── publish.md            # /publish PyPI release
+│   │   ├── review.md             # /review code review
+│   │   ├── verify.md             # /verify post-implementation
+│   │   └── version.md            # /version diagnostic info
+│   ├── hooks/                    # Native Claude Code hooks (7 hooks)
+│   │   ├── stravinsky_mode.py    # PreToolUse delegation enforcer
+│   │   ├── context.py            # UserPromptSubmit context injection
+│   │   ├── todo_continuation.py  # UserPromptSubmit todo continuation
+│   │   ├── truncator.py          # PostToolUse output truncation
+│   │   ├── tool_messaging.py     # PostToolUse user messaging
+│   │   ├── edit_recovery.py      # PostToolUse edit backup
+│   │   └── todo_delegation.py    # PostToolUse parallel reminder
+│   ├── skills/                   # Skill library (empty, skills in commands/)
+│   ├── settings.json             # Hook configuration
+│   └── HOOKS_INTEGRATION.md      # Hook integration guide
+├── mcp_bridge/                   # Python MCP server
+│   ├── server.py                 # MCP server entry point
+│   ├── server_tools.py           # Tool definitions
+│   ├── auth/                     # OAuth authentication
+│   │   ├── oauth.py              # Google OAuth (Gemini)
+│   │   ├── openai_oauth.py       # OpenAI OAuth (ChatGPT)
+│   │   ├── token_store.py        # Keyring storage
+│   │   ├── token_refresh.py      # Auto-refresh tokens
+│   │   └── cli.py                # stravinsky-auth CLI
+│   ├── tools/                    # MCP tool implementations
+│   │   ├── model_invoke.py       # invoke_gemini, invoke_openai
+│   │   ├── agent_manager.py      # agent_spawn, agent_output, etc.
+│   │   ├── code_search.py        # ast_grep, grep, glob
+│   │   ├── session_manager.py    # session_list, session_read, etc.
+│   │   ├── skill_loader.py       # skill_list, skill_get
+│   │   ├── project_context.py    # get_project_context
+│   │   ├── lsp/                  # LSP tool implementations
+│   │   └── templates.py          # Project templates
+│   ├── prompts/                  # Agent system prompts (legacy CLI)
+│   │   ├── stravinsky.py         # Legacy orchestrator prompt
+│   │   ├── delphi.py             # Legacy advisor prompt
+│   │   ├── dewey.py              # Legacy research prompt
+│   │   ├── explore.py            # Legacy search prompt
+│   │   ├── frontend.py           # Legacy UI/UX prompt
+│   │   └── multimodal.py         # Multimodal analysis prompt
+│   ├── hooks/                    # MCP internal hooks (17+ hooks)
+│   │   ├── manager.py            # Hook orchestration
+│   │   ├── truncator.py          # Output truncation
+│   │   ├── parallel_enforcer.py  # Parallel execution
+│   │   ├── todo_enforcer.py      # Todo continuation
+│   │   └── ...                   # 13+ more optimization hooks
+│   ├── native_hooks/             # Native Claude Code hooks
+│   │   ├── stravinsky_mode.py    # PreToolUse delegation enforcer
+│   │   ├── tool_messaging.py     # PostToolUse user messaging
+│   │   ├── todo_delegation.py    # TodoWrite parallel reminder
+│   │   ├── todo_continuation.py  # UserPromptSubmit todo injection
+│   │   ├── context.py            # UserPromptSubmit context
+│   │   ├── truncator.py          # PostToolUse truncation
+│   │   └── edit_recovery.py      # PostToolUse backup
+│   ├── cli/                      # CLI utilities
+│   │   └── session_report.py     # Session analysis
+│   ├── config/                   # Configuration
+│   │   └── hooks.py              # Hook configuration
+│   └── utils/                    # Utility functions
+├── .stravinsky/                  # Agent execution logs (gitignored)
+├── assets/                       # Logo, images
+├── docs/                         # Additional documentation
+├── logs/                         # Application logs
+├── tests/                        # Test suite
+├── pyproject.toml                # Build configuration
+├── uv.lock                       # Dependency lock
+├── ARCHITECTURE.md               # Architecture guide (oh-my-opencode comparison)
+├── CLAUDE.md                     # Project instructions
+├── INSTALL.md                    # Installation guide
+└── README.md                     # This file
 ```
 
 ## Troubleshooting

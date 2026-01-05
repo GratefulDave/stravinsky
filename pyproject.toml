@@ -1,6 +1,6 @@
 [project]
 name = "stravinsky"
-version = "0.2.52"
+version = "0.2.56"
 description = "MCP Bridge for Claude Code with Multi-Model Support. Install globally: claude mcp add --scope user stravinsky -- uvx stravinsky. Add to CLAUDE.md: See https://pypi.org/project/stravinsky/"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -43,6 +43,7 @@ dev = [
 [project.scripts]
 stravinsky = "mcp_bridge.server:main"
 stravinsky-auth = "mcp_bridge.auth.cli:main"
+stravinsky-sessions = "mcp_bridge.cli.session_report:main"
 
 [build-system]
 requires = ["hatchling"]

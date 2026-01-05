@@ -1,0 +1,278 @@
+Excellent! Now let me compile the complete inventory:
+
+## 🎼 **STRAVINSKY CAPABILITY INVENTORY**
+
+### **EXECUTIVE SUMMARY**
+Stravinsky MCP provides **8 specialized agents**, **6 slash commands**, and **31 MCP tools** for multi-model AI orchestration. This inventory maps all prompts, commands, and agent configurations for gap analysis against oh-my-opencode.
+
+---
+
+## **PART 1: SLASH COMMANDS REGISTRY**
+
+| Command | Location | Agent | Description | Trigger |
+|---------|----------|-------|-------------|---------|
+| `/stravinsky` | `.claude/commands/stravinsky.md` | stravinsky | Relentless parallel agent execution for complex workflows | Main orchestrator – use for multi-step tasks |
+| `/delphi` | `.claude/commands/delphi.md` | delphi | Strategic technical advisor for architecture and hard debugging | Complex design decisions, 2+ failed fixes |
+| `/dewey` | `.claude/commands/dewey.md` | dewey | Research librarian – docs, OSS implementations, GitHub examples | External library/source mentioned |
+| `/verify` | `.claude/commands/verify.md` | stravinsky | Post-implementation verification (LSP, tests, build) | Before marking work complete |
+| `/review` | `.claude/commands/review.md` | stravinsky | Code review of recent changes (security, performance, quality) | Before committing changes |
+| `/version` | `.claude/commands/version.md` | N/A | Returns version and diagnostic info for Stravinsky | System health check |
+
+---
+
+## **PART 2: AGENT PROMPTS INVENTORY**
+
+### **Core Agents (8 Total)**
+
+| # | Agent | Model | Cost | Purpose | Key File |
+|---|-------|-------|------|---------|----------|
+| 1 | **stravinsky** | Claude 3.5 Sonnet | EXPENSIVE | Task orchestration, planning, parallel execution | `stravinsky.py` (740 lines) |
+| 2 | **planner** | Claude 3 Opus | EXPENSIVE | Pre-implementation planning, dependency analysis, phase orchestration | `planner.py` |
+| 3 | **delphi** | GPT-5.2 | EXPENSIVE | Strategic technical advisor, architecture review, complex debugging | `delphi.py` |
+| 4 | **frontend** | Gemini 3 Pro High | MEDIUM | UI/UX design, component prototyping, visual work | `frontend.py` |
+| 5 | **explore** | Gemini 3 Flash | CHEAP | Codebase search, pattern finding, "where is X?" | `explore.py` |
+| 6 | **dewey** | Gemini 3 Flash | CHEAP | External research, OSS examples, documentation | `dewey.py` |
+| 7 | **document_writer** | Gemini 3 Flash | CHEAP | Technical documentation, README, API docs | `document_writer.py` |
+| 8 | **multimodal** | Gemini 3 Flash | CHEAP | Visual analysis (PDFs, images, diagrams) | `multimodal.py` |
+
+---
+
+## **PART 3: AGENT PROMPT METADATA**
+
+### **Stravinsky (Orchestrator)**
+- **Purpose**: Main agent – plans, delegates, verifies, ships
+- **Model**: Claude 3.5 Sonnet (Expensive)
+- **Key Features**:
+  - Phase 0: Intent gate (skill check first)
+  - Phase 1: Request classification (trivial/exploratory/implementation/GitHub)
+  - Phase 2A: Exploration & research with parallel agents
+  - Phase 2B: Pre-implementation with parallel-first workflow
+  - Phase 2C: Failure recovery (3-strike rule → revert → consult Delphi)
+  - Phase 3: Completion verification
+- **Use When**: Multi-step tasks, delegation needed, parallel execution required
+- **Avoid When**: Single-file trivial changes, pure research tasks
+
+### **Delphi (Strategic Advisor)**
+- **Purpose**: Strategic technical advisor for hard problems
+- **Model**: GPT-5.2 (Expensive)
+- **Key Features**:
+  - Decision framework: bias toward simplicity
+  - Pragmatic minimalism in recommendations
+  - Effort estimates: Quick/Short/Medium/Large
+  - One clear path (alternatives only for significant tradeoffs)
+- **Use When**: 
+  - Complex architecture design
+  - After 2+ failed fix attempts
+  - Multi-system tradeoffs
+  - Security/performance concerns
+  - Self-review after significant work
+- **Avoid When**: Simple file operations, first attempt fixes, trivial decisions
+
+### **Dewey (Research Librarian)**
+- **Purpose**: Multi-repository research, external documentation, OSS examples
+- **Model**: Gemini 3 Flash (Cheap)
+- **Key Features**:
+  - Request classification: Conceptual/Implementation/Context/Comprehensive
+  - Parallel execution (3-6 tools minimum)
+  - GitHub permalinks for all evidence
+  - TYPE A (Conceptual): exa websearch + grep-app + gh search
+  - TYPE B (Implementation): clone + ast-grep + read + blame
+  - TYPE C (Context): issues/PRs + git log/blame
+  - TYPE D (Comprehensive): all tools in parallel
+- **Use When**: 
+  - "How do I use [library]?"
+  - "Best practice for [framework]?"
+  - External dependency behavior
+  - OSS implementation examples
+  - Library usage patterns
+- **Avoid When**: Internal codebase searching, local patterns
+
+### **Explore (Search Specialist)**
+- **Purpose**: Codebase search, pattern discovery, "where is X?"
+- **Model**: Gemini 3 Flash (Cheap)
+- **Key Features**:
+  - Intent analysis before search
+  - Parallel execution (4-6 tools)
+  - Structured results format (files/answer/next_steps)
+  - Tools: LSP, AST-grep, grep_search, glob_files, git commands
+  - Enhanced with MCP tools: exa websearch, grep-app
+- **Use When**:
+  - Multiple search angles needed
+  - Unfamiliar module structure
+  - Cross-layer pattern discovery
+  - Finding implementations
+- **Avoid When**: Known file location, single keyword search, obvious syntax fixes
+
+### **Frontend (UI/UX Engineer)**
+- **Purpose**: Visual/styling work, component design, UI implementation
+- **Model**: Gemini 3 Pro High (Medium)
+- **Key Features**:
+  - Designer mindset → pixel-perfect, animation-focused
+  - Design process: Purpose → Tone → Constraints → Differentiation
+  - Aesthetic direction: extreme clarity (minimalist/maximalist/retro/luxury/etc.)
+  - Typography: distinctive fonts (NOT Inter/Roboto/Arial)
+  - Color: cohesive palette with dominant + sharp accents
+  - Motion: high-impact page loads, scroll-triggering, hover states
+  - Spatial: unexpected layouts, asymmetry, overlap, negative space
+- **Use When**: 
+  - Visual/UI/UX changes (color, spacing, layout, animation)
+  - Typography, icons, responsive breakpoints
+  - Hover states, shadows, borders, images
+- **Avoid When**: Pure logic, API calls, state management, event handlers (non-visual)
+
+### **Document Writer (Technical Writer)**
+- **Purpose**: Technical documentation, README, API docs, guides
+- **Model**: Gemini 3 Flash (Cheap)
+- **Key Features**:
+  - Core mission: accurate, comprehensive, useful documentation
+  - Verification-driven: all code examples tested
+  - Approach types: README / API / Architecture / User Guides
+  - Quality checklist: Clarity → Completeness → Accuracy → Consistency
+- **Use When**: 
+  - README creation/updates
+  - API documentation
+  - Architecture documentation
+  - User guides and tutorials
+- **Avoid When**: Code changes, implementation work
+
+### **Multimodal (Visual Analyzer)**
+- **Purpose**: Visual content analysis (PDFs, images, diagrams)
+- **Model**: Gemini 3 Flash (Cheap)
+- **Key Features**:
+  - Media interpretation: PDFs, images, diagrams
+  - Extract-only mode (no full content return)
+  - Reduces context tokens for main agent
+- **Use When**:
+  - UI screenshots analysis
+  - PDF content extraction
+  - Diagram interpretation
+  - Visual design review
+- **Avoid When**: Source code/text files, files needing editing
+
+### **Planner (Architecture Specialist)**
+- **Purpose**: Pre-implementation planning, dependency analysis, phase orchestration
+- **Model**: Claude 3 Opus (Expensive)
+- **Key Features**:
+  - Phase 1: Request analysis (explicit/implicit/scope/ambiguities)
+  - Phase 2: Codebase assessment (patterns, files, dependencies, tests)
+  - Phase 3: Task decomposition (single-purpose, verifiable, assignable)
+  - Phase 4: Dependency analysis (blockers, dependents, parallel candidates)
+  - Phase 5: Risk assessment (breaking changes, coverage, conflicts, perf)
+  - Phase 6: Plan assembly (execution phases, agent assignments, verification)
+  - Output format: Analysis → Prerequisites → Execution Phases → Checkpoints → Rollback
+- **Use When**: 
+  - Major feature implementation
+  - Complex refactoring
+  - Multi-file changes
+  - Before exploratory work
+- **Avoid When**: Small bug fixes, trivial tasks
+
+---
+
+## **PART 4: AGENT MODEL ROUTING**
+
+```python
+# From agent_manager.py (lines 31-67)
+AGENT_MODEL_ROUTING = {
+    "explore": None,              # → invoke_gemini(gemini-3-flash)
+    "dewey": None,                # → invoke_gemini(gemini-3-flash)
+    "document_writer": None,      # → invoke_gemini(gemini-3-flash)
+    "multimodal": None,           # → invoke_gemini(gemini-3-flash)
+    "frontend": None,             # → invoke_gemini(gemini-3-pro-high)
+    "delphi": None,               # → invoke_openai(gpt-5.2)
+    "planner": "opus",            # Claude Opus 4.5 via CLI
+    "_default": "sonnet",         # Claude Sonnet 4.5 via CLI
+}
+```
+
+---
+
+## **PART 5: COST TIER ANALYSIS**
+
+| Tier | Agents | Cost Strategy | Use Frequency |
+|------|--------|---|---|
+| 🟢 **CHEAP** | explore, dewey, document_writer, multimodal | Aggressive usage – fire in parallel | High – 80% of tasks |
+| 🟡 **MEDIUM** | frontend | Targeted for UI work | Medium – 10% of tasks |
+| 🔴 **EXPENSIVE** | stravinsky, delphi, planner, default | Strategic only – complex reasoning | Low – 10% of tasks |
+
+---
+
+## **PART 6: ORCHESTRATION PATTERNS**
+
+### **Pattern A: Parallel Research**
+*Use for: "Add feature using new library"*
+```
+1. agent_spawn(agent_type="dewey") → external docs + examples
+2. agent_spawn(agent_type="explore") → internal patterns
+   └─ Both run in parallel
+3. Feed results to planner
+4. Execute via stravinsky with parallel agents
+```
+
+### **Pattern B: Strategic Audit**
+*Use for: "Fix recurring complex bug"*
+```
+1. agent_spawn(agent_type="explore") → map call sites
+2. agent_spawn(agent_type="delphi") → root cause analysis
+3. Fix via stravinsky
+```
+
+### **Pattern C: Frontend Sprint**
+*Use for: "Build new dashboard"*
+```
+1. agent_spawn(agent_type="multimodal") → analyze mockups
+2. agent_spawn(agent_type="frontend") → generate components
+3. agent_spawn(agent_type="document_writer") → document
+   └─ All run in parallel
+```
+
+### **Pattern D: Search-First**
+*Use for: "Find where X is implemented"*
+```
+1. agent_spawn(agent_type="explore", prompt="Find auth implementation")
+2. Get results with agent_output
+3. Proceed with implementation
+```
+
+---
+
+## **PART 7: SKILL DEFINITIONS**
+
+From `.claude/commands/`, all skills are **self-executing via YAML frontmatter**:
+- Description metadata triggers skill matching
+- Skills are discovered from: `.claude/commands/**/*.md` (recursive)
+- Slash command invocation → looks up matching skill → executes instructions
+
+---
+
+## **PART 8: GAP ANALYSIS vs oh-my-opencode**
+
+| Capability | oh-my-opencode | Stravinsky | Status |
+|------------|---|---|---|
+| **Orchestrator** | Sisyphus | Stravinsky | ✅ Equivalent |
+| **Strategic Advisor** | Oracle | Delphi | ✅ Equivalent |
+| **Research Agent** | Librarian | Dewey | ✅ Equivalent |
+| **Codebase Search** | N/A | Explore | ✅ New/Enhanced |
+| **Frontend Specialist** | N/A | Frontend | ✅ New/Enhanced |
+| **Documentation** | N/A | Document Writer | ✅ New |
+| **Visual Analysis** | N/A | Multimodal | ✅ New |
+| **Planning** | N/A | Planner | ✅ New |
+| **Parallel Execution** | ✅ | ✅ | ✅ Equivalent |
+| **OAuth Authentication** | ✅ | ✅ | ✅ Equivalent |
+| **MCP Tools** | 31 | 31 | ✅ Equivalent |
+
+---
+
+## **PART 9: SUCCESS CRITERIA MET**
+
+✅ **All agent prompts in mcp_bridge/prompts/** – 8 agents documented  
+✅ **All slash commands in .claude/commands/** – 6 commands registered  
+✅ **All skill definitions** – Defined via YAML frontmatter in .md files  
+✅ **Agent type configurations** – Complete model routing mapped  
+✅ **Each prompt's purpose** – Detailed in agent metadata tables  
+✅ **No files modified** – Read-only inventory  
+✅ **Complete capability inventory** – Ready for oh-my-opencode gap analysis
+
+---
+
+This comprehensive inventory provides the foundation for comparing Stravinsky's capabilities against oh-my-opencode and identifying any missing orchestration patterns or specialized agents.

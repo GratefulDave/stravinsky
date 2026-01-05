@@ -49,7 +49,7 @@ async def lsp_diagnostics(file_path: str, severity: str = "all") -> str:
         elif suffix == ".py":
             # Use ruff for Python diagnostics
             result = subprocess.run(
-                ["ruff", "check", str(path), "--output-format=text"],
+                ["ruff", "check", str(path), "--output-format=concise"],
                 capture_output=True,
                 text=True,
                 timeout=30,
@@ -68,6 +68,64 @@ async def lsp_diagnostics(file_path: str, severity: str = "all") -> str:
         return "Diagnostics timed out"
     except Exception as e:
         return f"Error: {str(e)}"
+
+
+async def check_ai_comment_patterns(file_path: str) -> str:
+    """
+    Detect AI-generated or placeholder comment patterns that indicate incomplete work.
+
+    Patterns detected:
+    - # TODO: implement, # FIXME, # placeholder
+    - // TODO, // FIXME, // placeholder
+    - AI-style verbose comments: "This function handles...", "This method is responsible for..."
+    - Placeholder phrases: "implement this", "add logic here", "your code here"
+
+    Args:
+        file_path: Path to the file to check
+
+    Returns:
+        List of detected AI-style patterns with line numbers, or "No AI patterns detected"
+    """
+    path = Path(file_path)
+    if not path.exists():
+        return f"Error: File not found: {file_path}"
+
+    # Patterns that indicate AI-generated or placeholder code
+    ai_patterns = [
+        # Placeholder comments
+        r"#\s*(TODO|FIXME|XXX|HACK):\s*(implement|add|placeholder|your code)",
+        r"//\s*(TODO|FIXME|XXX|HACK):\s*(implement|add|placeholder|your code)",
+        # AI-style verbose descriptions
+        r"#\s*This (function|method|class) (handles|is responsible for|manages|processes)",
+        r"//\s*This (function|method|class) (handles|is responsible for|manages|processes)",
+        r'"""This (function|method|class) (handles|is responsible for|manages|processes)',
+        # Placeholder implementations
+        r"pass\s*#\s*(TODO|implement|placeholder)",
+        r"raise NotImplementedError.*implement",
+        # Common AI filler phrases
+        r"#.*\b(as needed|as required|as appropriate|if necessary)\b",
+        r"//.*\b(as needed|as required|as appropriate|if necessary)\b",
+    ]
+
+    import re
+
+    try:
+        content = path.read_text()
+        lines = content.split("\n")
+        findings = []
+
+        for i, line in enumerate(lines, 1):
+            for pattern in ai_patterns:
+                if re.search(pattern, line, re.IGNORECASE):
+                    findings.append(f"  Line {i}: {line.strip()[:80]}")
+                    break
+
+        if findings:
+            return f"AI/Placeholder patterns detected in {file_path}:\n" + "\n".join(findings)
+        return "No AI patterns detected"
+
+    except Exception as e:
+        return f"Error reading file: {str(e)}"
 
 
 async def ast_grep_search(pattern: str, directory: str = ".", language: str = "") -> str:

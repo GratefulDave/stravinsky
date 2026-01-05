@@ -1,0 +1,142 @@
+## Delphi's Strategic Analysis: Hook Consolidation & Circular Invocation
+
+The strategic advisor (GPT-5.2) has provided comprehensive architectural analysis. Here are the key recommendations:
+
+---
+
+## Question 1: Hook Consolidation Strategy
+
+### **Recommendation: Hybrid + Unified Interface**
+
+**Core Strategy:**
+- **Native Hooks**: Keep for tool access control and "must-block" behavior (security gates)
+- **MCP Hooks**: Keep for MCP tool dispatch, model routing, session lifecycle, budgeting
+- **Unified Interface**: Create shared hook protocol with adapters for both contexts
+
+### Key Insights
+
+**Technical Analysis:**
+- "All Native" or "All MCP" create impedance mismatches because Claude Code's native tools exist outside MCP
+- Current hybrid is technically sound IF boundaries are crisp
+- Performance: MCP hooks are faster (in-process), native hooks add subprocess overhead
+
+**Security Layering:**
+- **Native**: Hard gates (deny/allow) for Claude Code tools + pre-execution redaction
+- **MCP**: Soft/hard gates for MCP tools + model invocation policy, quotas, logging
+- This layered approach provides defense in depth
+
+**Industry Pattern:**
+Matches production agentic CLI designs:
+- Native = enforcement boundary (closest to execution)
+- MCP = orchestration layer (rich lifecycle management)
+
+### Actionable Migration Path
+
+1. **Define canonical event model**: `ToolEvent`, `ModelInvokeEvent`, `SessionEvent`
+2. **Wrap existing native hooks** with compatibility shim
+3. **Port MCP hooks tier-by-tier** into unified form (lowest risk first)
+4. **Single source of truth** for policies (allow/deny lists, budgets) consumed by both contexts
+
+### Success Metrics
+- % of hook logic shared vs duplicated
+- Hook-induced latency (p50/p95)
+- Incident rate for "unexpected block" / "policy mismatch" bugs
+- Trace completeness (native + MCP share `trace_id`)
+
+---
+
+## Question 2: Circular Invocation Pattern
+
+### **Recommendation: Keep Current (Option D) + Add Local Model Proxy**
+
+**Core Strategy:**
+Decouple model transport without losing Claude Code's tool ecosystem:
+
+```
+Claude Code (main)
+  ↓
+Stravinsky MCP Server
+  ↓
+agent_spawn → Claude CLI process (agent)
+  ↓
+Agent invokes tools (Read/Grep/Bash) + invoke_gemini
+  ↓
+MCP invoke_gemini → LOCAL MODEL PROXY (Unix socket/HTTP)
+  ↓
+Model Proxy → Google Antigravity / OpenAI API
+```
+
+### Key Benefits
+
+**Performance:**
+- Breaks tight "agent → MCP stdio → provider" coupling
+- Scales concurrency independent of MCP's stdio constraints
+- Moves heavy provider I/O out of MCP event loop
+
+**Security:**
+- Keeps centralized auth/token management
+- Enables per-provider circuit breakers and rate limits
+- Maintains audit logging with unified trace IDs
+
+**Flexibility:**
+- Hybrid routing: model-only tasks can use proxy directly (no subprocess)
+- Tasks needing tools still use `agent_spawn` with full Claude Code access
+
+### Failure Mode Analysis
+
+**Current Risks:**
+- Head-of-line blocking on single MCP stdio transport
+- Re-entrancy contention with many concurrent agents
+- Cascade failures from provider rate limits
+- Zombie agents outliving orchestrator
+
+**Mitigations:**
+- Circuit breaker per provider
+- Queue + concurrency limits
+- Agent cancellation propagation
+- Persistent task ledger for resumable state
+
+### Migration Path
+
+1. **Implement model proxy** with same request/response schema as current `invoke_*`
+2. **Switch MCP tools** to proxy-backed implementation (transparent change)
+3. **Add trace ID propagation** from Claude → agent → proxy
+4. **Optional: Add hybrid routing** for model-only tasks (Python worker calling proxy directly)
+
+### Success Metrics
+- End-to-end `invoke_*` latency (p50/p95) under N concurrent agents
+- MCP protocol stability (fewer hangs/timeouts)
+- Provider error rate and retry amplification
+- Reduction in spawned Claude processes for model-only work
+
+---
+
+## Long-Term Vision (5 Years)
+
+**Hook System:**
+- Unified interface enables porting to alternative frontends (other IDEs)
+- New hook types added without duplicating semantics
+- Positions Stravinsky as "policy + orchestration layer" vs tightly coupled to one mechanism
+
+**Model Architecture:**
+- Local proxy enables multiple frontends beyond Claude Code
+- Improved caching (prompt/result memoization)
+- Single telemetry point for all model interactions
+- Simpler adoption of new providers/models
+
+**Ecosystem Compatibility:**
+- MCP evolution (multi-client, richer transport) can be absorbed independently
+- Claude Code hook API changes minimized through unified hook spec
+- New use cases: team policy packs, per-project budgets, trace replay, offline simulation
+
+---
+
+## Next Steps
+
+The advisor offers to create an actionable design document with:
+- Module structure aligned with `mcp_bridge/hooks/` and `mcp_bridge/native_hooks/`
+- Event schemas for unified hook interface
+- Ordering rules and tier semantics
+- Minimal incremental milestone plan
+
+Would you like me to proceed with creating this design document?

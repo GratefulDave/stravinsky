@@ -1,0 +1,132 @@
+Perfect! Here's the comprehensive summary of the **oh-my-opencode** commands vs skills architecture:
+
+---
+
+# Commands vs. Skills Architecture in oh-my-opencode
+
+## 1. **Fundamental Distinction**
+
+| Feature | Commands (`/cmd`) | Skills (`skill`) |
+|---------|-------------------|------------------|
+| **Nature** | Lightweight slash-commands / macros | Encapsulated, specialized workflows |
+| **Autonomy** | User-triggered shortcuts for specific actions | Agent-triggered "expert modes" with autonomy |
+| **Tooling** | Uses existing environment tools | Can bundle and inject its own MCP servers |
+| **Precedence** | Low (standard tool/command resolution) | **Highest (Phase 0)**; checked before any action |
+| **Complexity** | Single markdown file | Directory-based with metadata and config |
+
+---
+
+## 2. **Folder Structure & Organization**
+
+### **Commands**
+Commands are discovered recursively from markdown files. The filename (sans extension) typically defines the slash command.
+
+**Locations:**
+- **User-Global**: `~/.claude/commands/**/*.md`
+- **Project-Local**: `./.claude/commands/**/*.md`
+- **System-Global**: `~/.config/opencode/command/`
+
+**Example:**
+```
+.claude/commands/
+├── refactor.md
+├── utils/
+│   └── clean-logs.md
+└── templates/
+    └── boilerplate.md
+```
+
+### **Skills**
+Skills are directory-based. A directory is recognized as a skill only if it contains a `SKILL.md` file.
+
+**Locations:**
+- **User-Global**: `~/.claude/skills/<skill-name>/SKILL.md`
+- **Project-Local**: `./.claude/skills/<skill-name>/SKILL.md`
+- **Built-in**: `src/features/builtin-skills/`
+
+**Example:**
+```
+.claude/skills/ui-refactor/
+├── SKILL.md          # Core logic and instructions
+├── mcp.json          # (Optional) Skill-specific MCP config
+└── utils.py          # (Optional) Supporting scripts
+```
+
+---
+
+## 3. **Loading & Invocation**
+
+### **Loading Mechanism**
+Both systems are toggled via the `oh-my-opencode.json` configuration:
+
+```json
+{
+  "claude_code": {
+    "commands": true,  // Load custom commands
+    "skills": true,    // Load custom skills
+    "agents": true,
+    "mcp": true,
+    "hooks": true
+  }
+}
+```
+
+Internal loaders:
+- **Commands**: `loadUserCommands()` / `loadProjectCommands()`
+- **Skills**: `loadUserSkills()` / `loadProjectSkills()`
+
+### **Invocation Pathway**
+- **Commands**: Invoked directly via the CLI or chat interface using the `/` prefix (e.g., `/refactor`)
+- **Skills**: Invoked via a dedicated `skill` tool. When an agent (like Sisyphus) identifies a task matching a skill's purpose, it calls `skill(name="skill_name", task="...")`
+
+---
+
+## 4. **Architectural Philosophy**
+
+The dual-layer architecture separates **User Convenience** (Commands) from **Agent Capability** (Skills).
+
+### **The "Phase 0" Precedence**
+In the agentic workflow, Skills occupy "Phase 0." Before the agent attempts to classify a task, plan multi-step execution, or select individual tools, it **must** scan for a matching Skill.
+
+**Why?** Skills are "pre-optimized" workflows. If a Skill exists for "Migrate to TypeScript," it is more efficient and safer than the agent trying to orchestrate `grep`, `read`, and `write` tools manually.
+
+### **Encapsulation of Complexity**
+While Commands provide a flat list of shortcuts, Skills allow for **Capability Injection**. By bundling an `mcp.json` within a skill directory, a skill can provide the agent with tools that don't exist in the global environment, keeping the base environment clean while enabling "Expert Mode" on demand.
+
+---
+
+## 5. **Key Use Cases**
+
+### **Use Commands For:**
+- **Environment Shortcuts**: `/clean-logs`, `/check-deps`
+- **Template Injection**: `/boilerplate-react-component`
+- **Simple Queries**: `/who-is-owner`
+- **Quick utilities**: One-off actions that don't require complex orchestration
+
+### **Use Skills For:**
+- **Complex Migrations**: Moving a codebase from one framework to another
+- **Deep Research**: A "Dewey" skill that knows how to traverse multiple repos and synthesize documentation
+- **Architectural Analysis**: A "Delphi" skill that runs AST-grep patterns to find anti-patterns and suggests structural changes
+- **Specialized Tooling**: Any task requiring a specific LSP or background service not needed for general coding
+- **Multi-step workflows**: Tasks requiring MCP server capabilities or specialized tool chains
+
+---
+
+## 6. **Key Architectural Insights**
+
+1. **Single File vs. Directory**: Commands are single markdown files; Skills are directories with `SKILL.md` plus optional config/tooling
+2. **User-Triggered vs. Agent-Triggered**: Commands respond to explicit user slash invocations; Skills are auto-discovered and invoked by agents
+3. **Phase 0 Priority**: Skills are checked BEFORE any other agent action, ensuring specialized workflows take precedence
+4. **MCP Bundling**: Skills can bring their own MCP servers via YAML frontmatter or `mcp.json`, enabling self-contained capability injection
+5. **Separate Toggles**: Both can be independently enabled/disabled via configuration
+6. **Recursive Discovery**: Commands load recursively from subdirectories for better organization
+
+---
+
+## Sources
+
+- [GitHub - oh-my-opencode](https://github.com/code-yeongyu/oh-my-opencode)
+- [oh-my-opencode README](https://github.com/code-yeongyu/oh-my-opencode/blob/dev/README.md)
+- [oh-my-opencode AGENTS.md](https://github.com/code-yeongyu/oh-my-opencode/blob/dev/AGENTS.md)
+- [Configuration Files Documentation](https://deepwiki.com/code-yeongyu/oh-my-opencode/2.3-configuration-files)
+- [Reference Documentation](https://deepwiki.com/code-yeongyu/oh-my-opencode/13-reference)

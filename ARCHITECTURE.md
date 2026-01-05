@@ -662,6 +662,448 @@ This provides complete visibility: **why** delegation happened (PreToolUse) and 
 
 ---
 
+## Parallel Delegation Enforcement Gap
+
+### Overview
+
+Stravinsky's core value proposition is **parallel execution** for multi-step tasks. However, there is a critical gap between the *advisory* hooks that **remind** about parallel delegation and the actual **enforcement** of parallel patterns. This section documents the current state, why the problem exists, and proposes solutions for future implementation.
+
+### The Problem
+
+**Observed Behavior**: Despite parallel delegation reminders from hooks, Claude (Sonnet 4.5) frequently executes tasks sequentially:
+
+```
+User: "Implement feature X with Y and Z"
+  ↓
+Claude: TodoWrite([todo1, todo2, todo3])
+  ↓
+Hook outputs: [PARALLEL DELEGATION REQUIRED]
+  ↓
+Claude response ENDS without agent_spawn calls  ← PROBLEM
+  ↓
+Next response: Mark todo1 as in_progress, work on it directly
+  ↓
+Next response: Mark todo2 as in_progress, work on it directly
+  ↓
+Result: Sequential execution, no parallelism
+```
+
+**Impact**:
+- Defeats Stravinsky's core value (multi-model parallel orchestration)
+- Wastes time (sequential vs parallel execution)
+- Underutilizes cheap models (gemini-3-flash unused)
+- Users get Claude Sonnet behavior instead of orchestrated multi-model execution
+
+### Current Advisory System
+
+#### Hook Implementation: `todo_delegation.py`
+
+**Location**: `/Users/davidandrews/PycharmProjects/stravinsky/.claude/hooks/todo_delegation.py`
+
+**Hook Type**: `PostToolUse` (triggers after TodoWrite)
+
+**Current Behavior**:
+```python
+def main():
+    # ... read hook input ...
+
+    if tool_name != "TodoWrite":
+        return 0
+
+    # Count pending todos
+    pending_count = sum(1 for t in todos if t.get("status") == "pending")
+
+    if pending_count < 2:
+        return 0
+
+    # Output reminder message
+    reminder = f"""
+[PARALLEL DELEGATION REQUIRED]
+
+You just created {pending_count} pending TODOs. Before your NEXT response:
+
+1. Identify which TODOs are INDEPENDENT (can run simultaneously)
+2. For EACH independent TODO, spawn a Task agent:
+   Task(subagent_type="Explore", prompt="[TODO details]", run_in_background=true)
+3. Fire ALL Task calls in ONE response - do NOT wait between them
+4. Do NOT mark any TODO as in_progress until agents return
+
+WRONG: Create TODO list -> Mark TODO 1 in_progress -> Work -> Complete -> Repeat
+CORRECT: Create TODO list -> Spawn Task for each -> Collect results -> Mark complete
+"""
+    print(reminder)
+    return 0  # ← EXIT CODE 0: Advisory only, does NOT block
+```
+
+**Key Limitation**: `return 0` means the hook is **advisory only**. Claude sees the reminder but can ignore it.
+
+#### Configuration Conflict: Task vs agent_spawn
+
+**Two contradictory instructions exist**:
+
+**File 1**: `.claude/commands/stravinsky.md` (slash command, line 132-134)
+```markdown
+## Hard Blocks (NEVER violate)
+
+- ❌ **NEVER use Claude Code's Task tool** - It runs Claude, not Gemini/GPT
+- ❌ WRONG: `Task(subagent_type="Explore", ...)` - Uses Claude Sonnet, wastes money
+- ✅ CORRECT: `agent_spawn(agent_type="explore", ...)` - Uses gemini-3-flash, cheap
+```
+
+**File 2**: `.claude/agents/stravinsky.md` (native subagent, lines 48-71)
+```markdown
+### Delegation Pattern
+
+Use the **Task tool** to delegate to native subagents:
+
+```python
+# Example: Delegate to specialist agents in parallel
+# All in ONE response:
+Task(
+    subagent_type="explore",
+    prompt="Find all authentication implementations...",
+    description="Find auth implementations"
+)
+```
+```
+
+**File 3**: `.claude/hooks/todo_delegation.py` (PostToolUse hook, line 42)
+```python
+reminder = f"""
+2. For EACH independent TODO, spawn a Task agent:
+   Task(subagent_type="Explore", prompt="[TODO details]", run_in_background=true)
+"""
+```
+
+**Analysis**:
+- The slash command (`/stravinsky`) says "NEVER use Task tool, use agent_spawn"
+- The native subagent (`.claude/agents/stravinsky.md`) says "Use Task tool for delegation"
+- The hook (`todo_delegation.py`) says "Spawn a Task agent"
+- This confusion contributes to inconsistent behavior
+
+### Why Advisory Hooks Don't Work
+
+#### 1. Exit Code 0 = No Enforcement
+
+Hook return codes in Claude Code:
+- `0` = Success, advisory message only
+- `1` = Error/warning, but execution continues
+- `2` = BLOCK tool execution (hard enforcement)
+
+Current hook returns `0`, meaning:
+- Reminder is printed to conversation
+- TodoWrite executes successfully
+- Claude is FREE to ignore the reminder
+- No mechanism forces parallel delegation
+
+#### 2. PostToolUse Timing Issue
+
+`PostToolUse` hooks trigger **AFTER** the tool has already executed:
+
+```
+Claude decides to use TodoWrite
+  ↓
+TodoWrite executes (creates todos)
+  ↓
+PostToolUse hook runs (prints reminder)  ← Too late to block
+  ↓
+Claude's response ends (no agent_spawn calls)
+```
+
+**Problem**: By the time the hook runs, TodoWrite has already completed. The hook can only *suggest* what to do next, not *enforce* behavior in the current response.
+
+#### 3. LLM Behavioral Patterns
+
+Large language models (including Claude Sonnet 4.5) exhibit **task continuation bias**:
+- After planning (TodoWrite), the model defaults to immediate execution
+- "Mark first todo as in_progress" is the natural next action
+- Delegation requires breaking this pattern (context switch)
+- Advisory reminders compete with strong sequential instincts
+
+From testing:
+- Reminders work ~30-40% of the time
+- Longer prompts/reminders are more easily ignored
+- Model prioritizes "making progress" over "orchestration"
+
+#### 4. Logging Evidence
+
+**Observation from logs**: Zero agent spawning activity despite reminders
+
+From `logs/application-2026-01-05.log`:
+```
+# Many TodoWrite calls observed
+# Many tool invocations (Read, Grep, Edit)
+# Zero agent_spawn MCP tool calls
+# Zero background task creation
+```
+
+**Conclusion**: Hook reminders are being ignored consistently.
+
+### Proposed Enforcement Solutions
+
+#### Solution 1: Exit Code 1 Hard Block (PreToolUse)
+
+**Strategy**: Block TodoWrite if parallel delegation didn't happen
+
+**Implementation**:
+```python
+# .claude/hooks/parallel_enforcement.py (PreToolUse hook)
+
+def main():
+    hook_input = json.load(sys.stdin)
+    tool_name = hook_input.get("tool_name", "")
+
+    # Check session state for "todos created but no agents spawned"
+    if tool_name == "TodoWrite":
+        # Load session state
+        state = load_session_state()
+
+        # Check if previous TodoWrite had pending todos
+        if state.get("pending_todos_count", 0) >= 2:
+            # Check if agents were spawned since then
+            if state.get("agents_spawned_since_todowrite", 0) == 0:
+                # BLOCK: Parallel delegation was not done
+                print(json.dumps({
+                    "decision": "block",
+                    "reason": "Previous TodoWrite created 2+ pending todos but ZERO agents were spawned. You MUST spawn Task agents for independent todos before creating more."
+                }))
+                return 2  # BLOCK
+
+        # Allow this TodoWrite but track it
+        return 0
+```
+
+**Benefits**:
+- Hard enforcement (exit code 2 blocks execution)
+- Provides clear error message explaining violation
+- Forces Claude to spawn agents before creating more todos
+
+**Drawbacks**:
+- Requires session state tracking (complex)
+- May block legitimate use cases (user wants sequential execution)
+- Can't detect agents spawned in same response (timing issue)
+
+#### Solution 2: Runtime Validation (MCP Hook)
+
+**Strategy**: Validate delegation immediately after TodoWrite via MCP hook
+
+**Implementation**:
+```python
+# mcp_bridge/hooks/post_tool/parallel_validation.py
+
+async def validate_parallel_delegation(
+    tool_name: str,
+    tool_input: dict,
+    result: Any,
+    context: HookContext
+) -> HookResult:
+    """Validate parallel delegation after TodoWrite"""
+
+    if tool_name != "TodoWrite":
+        return HookResult.CONTINUE
+
+    todos = tool_input.get("todos", [])
+    pending_count = sum(1 for t in todos if t.get("status") == "pending")
+
+    if pending_count < 2:
+        return HookResult.CONTINUE
+
+    # Track this TodoWrite in session
+    context.session_state["last_todowrite"] = {
+        "timestamp": time.time(),
+        "pending_count": pending_count,
+        "agent_spawn_required": True
+    }
+
+    # Set a flag that next response MUST include agent_spawn
+    context.session_state["require_agent_spawn"] = True
+
+    return HookResult.CONTINUE
+
+# mcp_bridge/hooks/pre_tool/agent_spawn_validator.py
+
+async def validate_agent_spawn_happened(
+    tool_name: str,
+    tool_input: dict,
+    context: HookContext
+) -> HookResult:
+    """Block tools if agent_spawn was required but didn't happen"""
+
+    # If agent_spawn is required
+    if context.session_state.get("require_agent_spawn", False):
+        # Check if we're calling agent_spawn now
+        if tool_name == "agent_spawn":
+            # Good! Clear the requirement
+            context.session_state["require_agent_spawn"] = False
+            return HookResult.CONTINUE
+
+        # Otherwise, block any other tool
+        return HookResult.BLOCK(
+            reason="TodoWrite created 2+ pending todos. You MUST call agent_spawn for each independent todo before using other tools."
+        )
+
+    return HookResult.CONTINUE
+```
+
+**Benefits**:
+- Runtime validation within MCP server (no subprocess overhead)
+- Can track state across tool calls in same response
+- Provides immediate feedback
+
+**Drawbacks**:
+- Only works for MCP tools (can't block native tools like Read/Grep)
+- Requires session state management
+- Complex hook orchestration
+
+#### Solution 3: Tool Response Interception (Response Modification)
+
+**Strategy**: Modify TodoWrite response to FORCE agent_spawn calls
+
+**Implementation**:
+```python
+# mcp_bridge/hooks/post_tool/inject_agent_spawn.py
+
+async def inject_agent_spawn_calls(
+    tool_name: str,
+    tool_input: dict,
+    result: Any,
+    context: HookContext
+) -> HookResult:
+    """Automatically inject agent_spawn calls into response"""
+
+    if tool_name != "TodoWrite":
+        return HookResult.CONTINUE
+
+    todos = tool_input.get("todos", [])
+    pending_todos = [t for t in todos if t.get("status") == "pending"]
+
+    if len(pending_todos) < 2:
+        return HookResult.CONTINUE
+
+    # Generate agent_spawn calls for each pending todo
+    spawn_calls = []
+    for todo in pending_todos:
+        spawn_call = {
+            "tool": "agent_spawn",
+            "input": {
+                "agent_type": "explore",  # Default to explore
+                "prompt": generate_delegation_prompt(todo),
+                "description": todo.get("content", "")[:50]
+            }
+        }
+        spawn_calls.append(spawn_call)
+
+    # Modify result to include spawn calls
+    modified_result = {
+        "original": result,
+        "injected_calls": spawn_calls,
+        "message": f"Auto-spawned {len(spawn_calls)} agents for parallel execution"
+    }
+
+    return HookResult.MODIFY(modified_result)
+```
+
+**Benefits**:
+- Automatic parallel delegation (no user intervention)
+- Guarantees parallel execution pattern
+- Transparent to Claude (happens at hook level)
+
+**Drawbacks**:
+- Removes Claude's agency (may spawn wrong agents)
+- Hard to determine correct agent_type per todo
+- May spawn agents for todos that shouldn't be delegated
+- Experimental (MCP hook response modification is complex)
+
+### Recommended Approach
+
+**Phase 1: Configuration Clarity (Immediate)**
+
+1. **Resolve Task vs agent_spawn conflict**:
+   - Decision: Use **Task tool** for native subagent delegation (matches `.claude/agents/stravinsky.md`)
+   - Update `.claude/commands/stravinsky.md` to remove "NEVER use Task" warning
+   - Update `todo_delegation.py` hook to use consistent terminology
+
+2. **Strengthen hook messaging**:
+   - Make reminder more prominent (ASCII art border, ALL CAPS)
+   - Add examples of CORRECT vs WRONG patterns
+   - Reference specific line numbers in agent configs
+
+**Phase 2: Soft Enforcement (Short Term)**
+
+1. **Add progress tracking**:
+   - Hook tracks if agents were spawned after TodoWrite
+   - Next TodoWrite shows warning if no agents were used
+   - Non-blocking but creates visible accountability
+
+2. **Session state persistence**:
+   - Store last TodoWrite timestamp and pending count
+   - Track agent_spawn calls in session
+   - Display statistics at end of session
+
+**Phase 3: Hard Enforcement (Long Term)**
+
+1. **Implement Solution 2 (Runtime Validation)**:
+   - MCP hook blocks non-agent-spawn tools after TodoWrite
+   - Provides clear error messages
+   - Allows override flag for legitimate sequential work
+
+2. **Add configuration option**:
+   - `.stravinsky/config.json` → `"enforce_parallel_delegation": true/false`
+   - Default: `false` (advisory only, backward compatible)
+   - Users can opt-in to strict enforcement
+
+### Testing & Validation
+
+**Success Metrics**:
+- Parallel delegation rate increases from ~30% to >80%
+- Agent spawn count correlates with TodoWrite pending count
+- Logs show agent_spawn calls after TodoWrite
+- User feedback: "Stravinsky feels more automated"
+
+**Test Cases**:
+1. **Basic**: TodoWrite with 3 pending todos → Should spawn 3 agents
+2. **Sequential**: TodoWrite with 1 pending todo → Should NOT require agents
+3. **Mixed**: TodoWrite with 2 dependent + 1 independent → Should spawn 1 agent
+4. **Override**: User explicitly wants sequential work → Should allow bypass
+
+### Open Questions
+
+1. **Should enforcement apply to native subagents only or all contexts?**
+   - Native subagents (`.claude/agents/stravinsky.md`) are orchestrators
+   - Main conversation may want flexibility
+   - Proposal: Enforce for native subagents, advisory for main
+
+2. **How to detect dependent vs independent todos?**
+   - Natural language analysis? (complex, error-prone)
+   - User annotation? (`todo: {..., "independent": true}`)
+   - Conservative default: Assume all pending todos are independent
+
+3. **Should Task tool support run_in_background parameter?**
+   - Current Task tool is synchronous (blocks until complete)
+   - Native subagents can't do "fire and forget" delegation
+   - May need async Task support in Claude Code
+
+4. **What about non-delegation workflows?**
+   - Some tasks genuinely need sequential execution
+   - Example: "Read file X, then based on content, modify file Y"
+   - Need escape hatch: `TodoWrite([..., {"parallel": false}])`
+
+### Conclusion
+
+The parallel delegation enforcement gap exists because:
+1. Hooks are advisory (exit code 0), not enforcement (exit code 2)
+2. PostToolUse timing is too late to block behavior
+3. LLM task continuation bias defaults to sequential execution
+4. Configuration conflicts create inconsistent guidance
+
+**Immediate Action**: Resolve Task vs agent_spawn documentation conflict
+
+**Future Work**: Implement runtime validation with opt-in enforcement flag
+
+**Goal**: Make parallel delegation the **default, enforced pattern** rather than an optional suggestion.
+
+---
+
 ## Appendix
 
 ### Delphi Strategic Recommendations (GPT-5.2)

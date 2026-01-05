@@ -241,6 +241,16 @@ Agents run independently but you can:
 2. **Parallel execution:** Spawn multiple agents simultaneously
 3. **Orchestrate:** Use `stravinsky` agent to coordinate others
 
+### Hook Architecture
+
+Stravinsky agents leverage a sophisticated hook system for delegation and control flow. For detailed information about:
+- PreToolUse and PostToolUse hooks
+- Delegation patterns and cost-based routing
+- Extended thinking budgets
+- Hook execution flow
+
+See `.claude/agents/HOOKS.md` in the project root for comprehensive hook architecture documentation.
+
 ### Example: Full Workflow
 
 ```

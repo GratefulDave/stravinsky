@@ -144,6 +144,159 @@ stravinsky-auth login gemini
 
 ---
 
+## Hook & Extension Issues
+
+### Hook execution failures
+
+**Symptoms:**
+- Expected hooks don't run
+- Silent failures without error messages
+- Token refresh doesn't happen automatically
+
+**Solution:**
+```bash
+# Enable debug logging
+STRAVINSKY_DEBUG=1 stravinsky
+
+# Check logs for hook errors
+grep "Error in.*hook" ~/.cache/stravinsky/logs/*
+```
+
+### Hook initialization order issues
+
+**Symptoms:**
+- Hooks registered but not executing
+- Inconsistent behavior across sessions
+
+**Solution:**
+Hooks must be registered before server startup. Verify hook registration:
+```bash
+STRAVINSKY_DEBUG=1 stravinsky 2>&1 | grep "register\|hook"
+```
+
+---
+
+## Multimodal & Vision Issues
+
+### Multimodal vision API not working
+
+**Symptoms:**
+- `invoke_gemini` with `image_path` returns text analysis instead of visual interpretation
+- No error message appears
+
+**Cause:** Image file doesn't exist or `image_path` parameter not provided
+
+**Solution:**
+```bash
+# Verify image file exists
+ls -lh /path/to/image.png
+
+# Ensure absolute paths (relative paths may fail in MCP context)
+invoke_gemini(
+    prompt="Analyze this screenshot",
+    image_path="/absolute/path/to/image.png",  # REQUIRED
+    agent_context={"agent_type": "multimodal"}
+)
+
+# Supported formats: PNG, JPG, JPEG, GIF, WEBP, PDF (< 20MB)
+```
+
+### Multimodal agent not using vision features
+
+**Cause:** `image_path` must be explicitly passed to `invoke_gemini`
+
+**Solution:**
+Even when using the multimodal agent type, you must include `image_path`:
+```
+invoke_gemini(
+    prompt="What UI elements are shown?",
+    model="gemini-3-flash",
+    image_path="/path/to/screenshot.png"  # Don't forget this!
+)
+```
+
+---
+
+## OAuth & Token Issues
+
+### Background token refresh not running
+
+**Symptoms:**
+- 403 Forbidden after ~1 hour (Gemini)
+- Unauthorized errors after ~24 hours (OpenAI)
+
+**Solution:**
+```bash
+# Check token status
+stravinsky-auth status
+
+# Manual refresh if automatic fails
+stravinsky-auth logout gemini && stravinsky-auth login gemini
+stravinsky-auth logout openai && stravinsky-auth login openai
+```
+
+### Gemini model name confusion
+
+**Issue:** Requesting certain model names gets remapped to different models
+
+**Solution:**
+Use verified model names:
+```
+CORRECT:
+- gemini-3-flash (fast, low-cost)
+- gemini-3-pro-low (balanced)
+- gemini-3-pro-high (high-performance)
+
+AVOID (will be remapped):
+- gemini-2.0-flash
+- gemini
+```
+
+---
+
+## LSP & Code Intelligence Issues
+
+### LSP tools timing out on large files
+
+**Symptoms:**
+- LSP tools hang for 10+ seconds
+- Tool timeout errors from Claude Code
+
+**Solution:**
+For large codebases, use grep/ast-grep instead:
+```bash
+# Fast text search
+grep_search(pattern="def user_login")
+
+# AST-aware search
+ast_grep_search(pattern="class $NAME")
+
+# Avoid these in large codebases:
+# - lsp_find_references (enumerates all usages)
+# - lsp_workspace_symbols (scans all files)
+
+# Use targeted LSP instead:
+# - lsp_hover (single position)
+# - lsp_goto_definition (single jump)
+```
+
+### LSP subprocess logging issues
+
+**Symptoms:**
+- LSP tools fail silently
+- No error message from subprocess
+
+**Solution:**
+```bash
+# Ensure language servers installed
+python -c "import jedi; print('jedi OK')"
+
+# If LSP fails, fall back to ast-grep
+ast_grep_search(pattern="function $NAME($_)")
+```
+
+---
+
 ## Performance Issues
 
 ### Slow startup

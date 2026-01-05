@@ -197,10 +197,14 @@ Use Stravinsky MCP tools. **DEFAULT: spawn parallel agents for multi-step tasks.
 
 ### Agent Types
 
+- `stravinsky` - Task orchestration and complex workflows
+- `planner` - Pre-implementation planning with Claude Opus
 - `explore` - Codebase search, "where is X?" questions
 - `dewey` - Documentation research, implementation examples
 - `frontend` - UI/UX work, component design
 - `delphi` - Strategic advice, architecture review
+- `document_writer` - Technical documentation writing
+- `multimodal` - Visual analysis of screenshots and diagrams
 
 ### Parallel Execution (MANDATORY)
 

@@ -35,10 +35,14 @@ Use Stravinsky for parallel agent execution.
 - `agent_list()` - See all agents
 
 ### Agent Types
+- `stravinsky` - Orchestrate complex tasks
+- `planner` - Pre-implementation planning
 - `explore` - Search codebase
 - `dewey` - Research docs
 - `delphi` - Strategic advice
 - `frontend` - UI work
+- `document_writer` - Write technical docs
+- `multimodal` - Analyze screenshots/diagrams
 ```
 
 ## Step 4: Use It
@@ -81,11 +85,37 @@ Use invoke_gemini with prompt "Review this code for security issues: [paste code
 
 ### Parallel Execution
 
+Spawn multiple agents simultaneously for maximum efficiency:
+
 ```
-Spawn 3 explore agents in parallel:
-1. Find all database models
-2. Find all API routes
-3. Find all test files
+# Spawn 3 explore agents in parallel
+explore_models = agent_spawn("Find all database models", "explore", "Models")
+explore_api = agent_spawn("Find all API routes", "explore", "Routes")
+explore_tests = agent_spawn("Find all test files", "explore", "Tests")
+
+# Monitor progress
+agent_list()
+
+# Collect results
+models = agent_output(explore_models)
+api = agent_output(explore_api)
+tests = agent_output(explore_tests)
+```
+
+### ULTRAWORK / ULTRATHINK
+
+For complex tasks, use special modes:
+- **ULTRAWORK**: Maximum parallel execution - spawn agents for every subtask
+- **ULTRATHINK**: Extended reasoning with high thinking_budget for complex problems
+
+### Slash Commands
+
+Quick access to common workflows:
+```
+/stravinsky - Task orchestration
+/delphi - Strategic advice
+/dewey - Documentation research
+/get-context - Refresh Git/rules/todos
 ```
 
 ---

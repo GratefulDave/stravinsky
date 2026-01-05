@@ -47,7 +47,7 @@ claude mcp add stravinsky -- stravinsky
 
 ### Authentication
 
-````bash
+```bash
 # Login to Google (Gemini)
 stravinsky-auth login gemini
 
@@ -59,6 +59,7 @@ stravinsky-auth status
 
 # Logout
 stravinsky-auth logout gemini
+```
 
 ### Slash Commands
 
@@ -67,8 +68,6 @@ Slash commands are discovered from:
 - User-global: `~/.claude/commands/**/*.md` (recursive)
 
 Commands can be organized in subdirectories (e.g., `.claude/commands/strav/stravinsky.md`).
-
-````
 
 ## Native Subagent Architecture
 

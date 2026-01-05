@@ -30,6 +30,13 @@ invoke_gemini(prompt, model, temperature, max_tokens, thinking_budget)
 - `temperature`: 0.0-2.0 (default: 0.7)
 - `max_tokens`: Max response tokens (default: 8192)
 - `thinking_budget`: Tokens reserved for internal reasoning (default: 0)
+- `agent_context` (optional): Agent metadata for logging
+  - `agent_type`: Type of agent (explore, delphi, frontend, etc.)
+  - `task_id`: Background task ID
+  - `description`: What the agent is doing
+- `image_path` (optional): Path to image file for multimodal analysis
+  - Supported formats: PNG, JPG, JPEG, GIF, WEBP, PDF
+  - Enables vision capabilities for screenshot/diagram analysis
 
 **Model Routing:**
 Stravinsky automatically maps friendly model names to Antigravity API model IDs:
@@ -45,8 +52,38 @@ Use invoke_gemini with prompt "Explain quantum computing" and thinking_budget 10
 **Use Cases:**
 - UI/UX generation and component design
 - Creative content and documentation writing
-- Multimodal analysis (images, diagrams)
+- Multimodal analysis (images, diagrams) - use `image_path` parameter
 - Fast prototyping and code generation
+
+**Agent Context Logging:**
+
+When `agent_context` is provided, invocations are logged with agent metadata:
+```
+[explore] → gemini-3-flash: Find all database models...
+[delphi] → gemini-3-flash: Review this architecture...
+[direct] → gemini-3-flash: Explain quantum computing...
+```
+
+This helps track which agent made which request and monitor model usage by agent type.
+
+**Example with context:**
+```
+invoke_gemini(
+    prompt="Find all API endpoints",
+    agent_context={"agent_type": "explore", "description": "API search"}
+)
+# Logs: [explore] → gemini-3-flash: Find all API endpoints
+```
+
+**Multimodal Vision Example:**
+```
+invoke_gemini(
+    prompt="Analyze this screenshot for accessibility issues",
+    image_path="/path/to/screenshot.png",
+    agent_context={"agent_type": "multimodal"}
+)
+# Enables vision analysis of the screenshot
+```
 
 ### invoke_openai
 
@@ -83,6 +120,10 @@ Replicates the `opencode-openai-codex-auth` plugin:
 - `thinking_budget`: Tokens reserved for reasoning (default: 0)
   - When > 0, sets reasoning effort to "high"
   - Enables extended thinking capabilities
+- `agent_context` (optional): Agent metadata for logging
+  - `agent_type`: Type of agent (explore, delphi, frontend, etc.)
+  - `task_id`: Background task ID
+  - `description`: What the agent is doing
 
 **Port 1455 Requirement:**
 OpenAI OAuth requires port 1455 for the callback handler. If you get a port conflict:
@@ -104,6 +145,26 @@ Use invoke_openai with prompt "Design a REST API with authentication" and model 
 - Architecture reviews and design decisions
 - Code review and security analysis
 - Advanced debugging and problem-solving
+
+**Agent Context Logging:**
+
+When `agent_context` is provided, invocations are logged with agent metadata:
+```
+[delphi] → gpt-5.2-codex: Review authentication architecture...
+[explore] → gpt-5.2-codex: Analyze security vulnerabilities...
+```
+
+**Example with extended thinking:**
+```
+invoke_openai(
+    prompt="Design a scalable microservices architecture",
+    model="gpt-5.2-codex",
+    thinking_budget=2000,
+    agent_context={"agent_type": "delphi", "description": "Architecture design"}
+)
+# Logs: [delphi] → gpt-5.2-codex: Design a scalable...
+# Uses extended reasoning for complex architecture decisions
+```
 
 ---
 

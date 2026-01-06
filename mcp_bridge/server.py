@@ -562,6 +562,11 @@ async def async_main():
     except Exception as e:
         logger.critical("Server process crashed in async_main", exc_info=True)
         sys.exit(1)
+    finally:
+        logger.info("Initiating shutdown sequence...")
+        from .tools.lsp.manager import get_lsp_manager
+        lsp_manager = get_lsp_manager()
+        await lsp_manager.shutdown()
 
 
 def main():

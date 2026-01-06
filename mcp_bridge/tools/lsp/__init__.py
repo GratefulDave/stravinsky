@@ -17,6 +17,7 @@ from .tools import (
     lsp_extract_refactor,
     lsp_servers,
 )
+from .manager import LSPManager, get_lsp_manager
 
 __all__ = [
     "lsp_hover",
@@ -30,4 +31,6 @@ __all__ = [
     "lsp_code_action_resolve",
     "lsp_extract_refactor",
     "lsp_servers",
+    "LSPManager",
+    "get_lsp_manager",
 ]

@@ -53,9 +53,20 @@ uv build
 
 ### Step 3: Publish to PyPI
 
+**CRITICAL: ALWAYS load .env file first!**
+
 ```bash
-# Publish using PyPI API token
-uv publish --token $PYPI_API_TOKEN
+# Load .env file (PYPI_API_TOKEN is stored here)
+source .env
+
+# Verify token is loaded
+if [ -z "$PYPI_API_TOKEN" ]; then
+  echo "❌ PYPI_API_TOKEN not found in .env"
+  exit 1
+fi
+
+# Publish using PyPI API token from .env
+uv publish --token "$PYPI_API_TOKEN"
 ```
 
 ### Step 4: Git Tag and Push

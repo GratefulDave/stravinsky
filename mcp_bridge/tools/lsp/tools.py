@@ -112,15 +112,19 @@ for c in completions[:1]:
 async def lsp_goto_definition(file_path: str, line: int, character: int) -> str:
     """
     Find where a symbol is defined.
-    
+
     Args:
         file_path: Absolute path to the file
         line: Line number (1-indexed)
         character: Character position (0-indexed)
-        
+
     Returns:
         Location(s) where the symbol is defined.
     """
+    # USER-VISIBLE NOTIFICATION
+    import sys
+    print(f"🎯 LSP-GOTO-DEF: {file_path}:{line}:{character}", file=sys.stderr)
+
     path = Path(file_path)
     if not path.exists():
         return f"Error: File not found: {file_path}"
@@ -181,12 +185,16 @@ async def lsp_find_references(
     Returns:
         All locations where the symbol is used.
     """
+    # USER-VISIBLE NOTIFICATION
+    import sys
+    print(f"🔗 LSP-REFS: {file_path}:{line}:{character}", file=sys.stderr)
+
     path = Path(file_path)
     if not path.exists():
         return f"Error: File not found: {file_path}"
-    
+
     lang = _get_language_for_file(file_path)
-    
+
     try:
         if lang == "python":
             result = subprocess.run(
@@ -223,13 +231,17 @@ if len(references) > 30:
 async def lsp_document_symbols(file_path: str) -> str:
     """
     Get hierarchical outline of all symbols in a file.
-    
+
     Args:
         file_path: Absolute path to the file
-        
+
     Returns:
         Structured list of functions, classes, methods in the file.
     """
+    # USER-VISIBLE NOTIFICATION
+    import sys
+    print(f"📋 LSP-SYMBOLS: {file_path}", file=sys.stderr)
+
     path = Path(file_path)
     if not path.exists():
         return f"Error: File not found: {file_path}"
@@ -283,14 +295,18 @@ for n in names:
 async def lsp_workspace_symbols(query: str, directory: str = ".") -> str:
     """
     Search for symbols by name across the entire workspace.
-    
+
     Args:
         query: Symbol name to search for (fuzzy match)
         directory: Workspace directory
-        
+
     Returns:
         Matching symbols with their locations.
     """
+    # USER-VISIBLE NOTIFICATION
+    import sys
+    print(f"🔍 LSP-WS-SYMBOLS: query='{query}' dir={directory}", file=sys.stderr)
+
     try:
         # Use ctags to index and grep for symbols
         result = subprocess.run(
@@ -335,15 +351,19 @@ async def lsp_workspace_symbols(query: str, directory: str = ".") -> str:
 async def lsp_prepare_rename(file_path: str, line: int, character: int) -> str:
     """
     Check if a symbol at position can be renamed.
-    
+
     Args:
         file_path: Absolute path to the file
         line: Line number (1-indexed)
         character: Character position (0-indexed)
-        
+
     Returns:
         The symbol that would be renamed and validation status.
     """
+    # USER-VISIBLE NOTIFICATION
+    import sys
+    print(f"✏️ LSP-PREP-RENAME: {file_path}:{line}:{character}", file=sys.stderr)
+
     path = Path(file_path)
     if not path.exists():
         return f"Error: File not found: {file_path}"
@@ -382,25 +402,30 @@ else:
 
 
 async def lsp_rename(
-    file_path: str, 
-    line: int, 
-    character: int, 
+    file_path: str,
+    line: int,
+    character: int,
     new_name: str,
     dry_run: bool = True
 ) -> str:
     """
     Rename a symbol across the workspace.
-    
+
     Args:
         file_path: Absolute path to the file
         line: Line number (1-indexed)
         character: Character position (0-indexed)
         new_name: New name for the symbol
         dry_run: If True, only show what would be changed
-        
+
     Returns:
         List of changes that would be made (or were made if not dry_run).
     """
+    # USER-VISIBLE NOTIFICATION
+    import sys
+    mode = "dry-run" if dry_run else "APPLY"
+    print(f"✏️ LSP-RENAME: {file_path}:{line}:{character} → '{new_name}' [{mode}]", file=sys.stderr)
+
     path = Path(file_path)
     if not path.exists():
         return f"Error: File not found: {file_path}"
@@ -444,15 +469,19 @@ for path, changed in refactoring.get_changed_files().items():
 async def lsp_code_actions(file_path: str, line: int, character: int) -> str:
     """
     Get available quick fixes and refactorings at a position.
-    
+
     Args:
         file_path: Absolute path to the file
         line: Line number (1-indexed)
         character: Character position (0-indexed)
-        
+
     Returns:
         List of available code actions.
     """
+    # USER-VISIBLE NOTIFICATION
+    import sys
+    print(f"💡 LSP-ACTIONS: {file_path}:{line}:{character}", file=sys.stderr)
+
     path = Path(file_path)
     if not path.exists():
         return f"Error: File not found: {file_path}"
@@ -501,10 +530,14 @@ async def lsp_code_actions(file_path: str, line: int, character: int) -> str:
 async def lsp_servers() -> str:
     """
     List available LSP servers and their installation status.
-    
+
     Returns:
         Table of available language servers.
     """
+    # USER-VISIBLE NOTIFICATION
+    import sys
+    print("🖥️ LSP-SERVERS: listing installed servers", file=sys.stderr)
+
     servers = [
         ("python", "jedi", "pip install jedi"),
         ("python", "ruff", "pip install ruff"),

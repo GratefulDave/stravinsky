@@ -90,6 +90,10 @@ async def check_ai_comment_patterns(file_path: str) -> str:
     Returns:
         List of detected AI-style patterns with line numbers, or "No AI patterns detected"
     """
+    # USER-VISIBLE NOTIFICATION
+    import sys
+    print(f"🤖 AI-CHECK: {file_path}", file=sys.stderr)
+
     path = Path(file_path)
     if not path.exists():
         return f"Error: File not found: {file_path}"
@@ -245,14 +249,18 @@ async def grep_search(pattern: str, directory: str = ".", file_pattern: str = ""
 async def glob_files(pattern: str, directory: str = ".") -> str:
     """
     Find files matching a glob pattern.
-    
+
     Args:
         pattern: Glob pattern (e.g., "**/*.py", "src/**/*.ts")
         directory: Base directory for search
-        
+
     Returns:
         List of matching file paths.
     """
+    # USER-VISIBLE NOTIFICATION
+    import sys
+    print(f"📁 GLOB: pattern='{pattern}' dir={directory}", file=sys.stderr)
+
     try:
         cmd = ["fd", "--type", "f", "--glob", pattern, directory]
         
@@ -306,6 +314,12 @@ async def ast_grep_replace(
     Returns:
         Preview of changes or confirmation of applied changes.
     """
+    # USER-VISIBLE NOTIFICATION
+    import sys
+    mode = "dry-run" if dry_run else "APPLY"
+    lang_info = f" lang={language}" if language else ""
+    print(f"🔄 AST-REPLACE: '{pattern[:30]}' → '{replacement[:30]}'{lang_info} [{mode}]", file=sys.stderr)
+
     try:
         # Build command
         cmd = ["sg", "run", "-p", pattern, "-r", replacement, directory]

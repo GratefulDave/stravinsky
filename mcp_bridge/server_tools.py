@@ -574,6 +574,45 @@ def get_tool_definitions() -> List[Tool]:
             },
         ),
         Tool(
+            name="lsp_code_action_resolve",
+            description="Apply a specific code action/fix to a file (e.g., fix F401 unused import).",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "file_path": {"type": "string", "description": "Absolute path to the file"},
+                    "action_code": {
+                        "type": "string",
+                        "description": "Code action ID to apply (e.g., 'F401', 'E501' for Python)",
+                    },
+                    "line": {
+                        "type": "integer",
+                        "description": "Optional line number filter (1-indexed)",
+                    },
+                },
+                "required": ["file_path", "action_code"],
+            },
+        ),
+        Tool(
+            name="lsp_extract_refactor",
+            description="Extract code to a function or variable (Python via jedi).",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "file_path": {"type": "string", "description": "Absolute path to the file"},
+                    "start_line": {"type": "integer", "description": "Start line (1-indexed)"},
+                    "start_char": {"type": "integer", "description": "Start character (0-indexed)"},
+                    "end_line": {"type": "integer", "description": "End line (1-indexed)"},
+                    "end_char": {"type": "integer", "description": "End character (0-indexed)"},
+                    "new_name": {"type": "string", "description": "Name for extracted function/variable"},
+                    "kind": {
+                        "type": "string",
+                        "description": "'function' or 'variable' (default: function)",
+                    },
+                },
+                "required": ["file_path", "start_line", "start_char", "end_line", "end_char", "new_name"],
+            },
+        ),
+        Tool(
             name="lsp_servers",
             description="List available LSP servers and their installation status.",
             inputSchema={

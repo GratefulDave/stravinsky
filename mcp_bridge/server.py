@@ -423,6 +423,28 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 character=arguments["character"],
             )
 
+        elif name == "lsp_code_action_resolve":
+            from .tools.lsp import lsp_code_action_resolve
+
+            result_content = await lsp_code_action_resolve(
+                file_path=arguments["file_path"],
+                action_code=arguments["action_code"],
+                line=arguments.get("line"),
+            )
+
+        elif name == "lsp_extract_refactor":
+            from .tools.lsp import lsp_extract_refactor
+
+            result_content = await lsp_extract_refactor(
+                file_path=arguments["file_path"],
+                start_line=arguments["start_line"],
+                start_char=arguments["start_char"],
+                end_line=arguments["end_line"],
+                end_char=arguments["end_char"],
+                new_name=arguments["new_name"],
+                kind=arguments.get("kind", "function"),
+            )
+
         elif name == "lsp_servers":
             from .tools.lsp import lsp_servers
 

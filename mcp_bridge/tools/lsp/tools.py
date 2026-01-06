@@ -527,6 +527,124 @@ async def lsp_code_actions(file_path: str, line: int, character: int) -> str:
         return f"Error: {str(e)}"
 
 
+async def lsp_code_action_resolve(
+    file_path: str,
+    action_code: str,
+    line: int = None
+) -> str:
+    """
+    Apply a specific code action/fix to a file.
+
+    Args:
+        file_path: Absolute path to the file to modify
+        action_code: Specific action code to apply (e.g., "F401", "E501" for Python)
+        line: Optional line number filter (1-indexed)
+
+    Returns:
+        Success/failure message
+    """
+    # USER-VISIBLE NOTIFICATION
+    import sys
+    print(f"🔧 LSP-RESOLVE: {action_code} at {file_path}", file=sys.stderr)
+
+    path = Path(file_path)
+    if not path.exists():
+        return f"Error: File not found: {file_path}"
+
+    lang = _get_language_for_file(file_path)
+
+    if lang == "python":
+        try:
+            result = subprocess.run(
+                ["ruff", "check", str(path), "--fix", "--select", action_code],
+                capture_output=True,
+                text=True,
+                timeout=15
+            )
+
+            if result.returncode == 0:
+                return f"✅ Applied fix [{action_code}] to {path.name}"
+            else:
+                stderr = result.stderr.strip()
+                if stderr:
+                    return f"⚠️ {stderr}"
+                return f"No changes needed for action [{action_code}]"
+
+        except FileNotFoundError:
+            return "Install ruff: pip install ruff"
+        except subprocess.TimeoutExpired:
+            return "Timeout applying fix"
+        except Exception as e:
+            return f"Error: {str(e)}"
+
+    return f"Code action resolve not implemented for language: {lang}"
+
+
+async def lsp_extract_refactor(
+    file_path: str,
+    start_line: int,
+    start_char: int,
+    end_line: int,
+    end_char: int,
+    new_name: str,
+    kind: str = "function"
+) -> str:
+    """
+    Extract code to a function or variable.
+
+    Args:
+        file_path: Absolute path to the file
+        start_line: Start line (1-indexed)
+        start_char: Start character (0-indexed)
+        end_line: End line (1-indexed)
+        end_char: End character (0-indexed)
+        new_name: Name for the extracted function/variable
+        kind: "function" or "variable"
+
+    Returns:
+        Preview of the refactoring or success message
+    """
+    # USER-VISIBLE NOTIFICATION
+    import sys
+    print(f"🔧 LSP-EXTRACT: {kind} '{new_name}' from {file_path}:{start_line}-{end_line}", file=sys.stderr)
+
+    path = Path(file_path)
+    if not path.exists():
+        return f"Error: File not found: {file_path}"
+
+    lang = _get_language_for_file(file_path)
+
+    if lang == "python":
+        try:
+            import jedi
+            source = path.read_text()
+            script = jedi.Script(source, path=path)
+
+            if kind == "function":
+                refactoring = script.extract_function(
+                    line=start_line,
+                    until_line=end_line,
+                    new_name=new_name
+                )
+            else:  # variable
+                refactoring = script.extract_variable(
+                    line=start_line,
+                    until_line=end_line,
+                    new_name=new_name
+                )
+
+            # Get the diff
+            changes = refactoring.get_diff()
+            return f"✅ Extract {kind} preview:\n```diff\n{changes}\n```\n\nTo apply: use Edit tool with the changes above"
+
+        except AttributeError:
+            return "Jedi version doesn't support extract refactoring. Upgrade: pip install -U jedi"
+        except Exception as e:
+            return f"Extract failed: {str(e)}"
+
+    return f"Extract refactoring not implemented for language: {lang}"
+
+
 async def lsp_servers() -> str:
     """
     List available LSP servers and their installation status.
@@ -545,9 +663,9 @@ async def lsp_servers() -> str:
         ("go", "gopls", "go install golang.org/x/tools/gopls@latest"),
         ("rust", "rust-analyzer", "rustup component add rust-analyzer"),
     ]
-    
+
     lines = ["| Language | Server | Status | Install |", "|----------|--------|--------|---------|"]
-    
+
     for lang, server, install in servers:
         # Check if installed
         try:
@@ -557,7 +675,7 @@ async def lsp_servers() -> str:
             status = "❌ Not installed"
         except Exception:
             status = "⚠️ Unknown"
-        
+
         lines.append(f"| {lang} | {server} | {status} | `{install}` |")
-    
+
     return "\n".join(lines)

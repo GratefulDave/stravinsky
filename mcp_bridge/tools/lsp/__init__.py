@@ -13,6 +13,8 @@ from .tools import (
     lsp_prepare_rename,
     lsp_rename,
     lsp_code_actions,
+    lsp_code_action_resolve,
+    lsp_extract_refactor,
     lsp_servers,
 )
 
@@ -25,5 +27,7 @@ __all__ = [
     "lsp_prepare_rename",
     "lsp_rename",
     "lsp_code_actions",
+    "lsp_code_action_resolve",
+    "lsp_extract_refactor",
     "lsp_servers",
 ]

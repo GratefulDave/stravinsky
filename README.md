@@ -162,14 +162,18 @@ stravinsky/
 │   │   ├── review.md             # /review code review
 │   │   ├── verify.md             # /verify post-implementation
 │   │   └── version.md            # /version diagnostic info
-│   ├── hooks/                    # Native Claude Code hooks (7 hooks)
+│   ├── hooks/                    # Native Claude Code hooks (11 hooks)
 │   │   ├── stravinsky_mode.py    # PreToolUse delegation enforcer
 │   │   ├── context.py            # UserPromptSubmit context injection
 │   │   ├── todo_continuation.py  # UserPromptSubmit todo continuation
 │   │   ├── truncator.py          # PostToolUse output truncation
 │   │   ├── tool_messaging.py     # PostToolUse user messaging
 │   │   ├── edit_recovery.py      # PostToolUse edit backup
-│   │   └── todo_delegation.py    # PostToolUse parallel reminder
+│   │   ├── todo_delegation.py    # PostToolUse parallel reminder
+│   │   ├── parallel_execution.py # PostToolUse parallel enforcement
+│   │   ├── notification_hook.py  # PreToolUse agent spawn notifications
+│   │   ├── subagent_stop.py      # PostToolUse agent completion handling
+│   │   └── pre_compact.py        # PreCompact context preservation
 │   ├── skills/                   # Skill library (empty, skills in commands/)
 │   ├── settings.json             # Hook configuration
 │   └── HOOKS_INTEGRATION.md      # Hook integration guide

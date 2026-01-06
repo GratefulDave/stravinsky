@@ -368,6 +368,45 @@ class LSPManager:
 **Phase 3**: Add TypeScript support via typescript-language-server
 **Phase 4**: Deprecate CLI-shim functions
 
+### 2.5 Phase 2: Implementation Complete
+
+The persistent LSP architecture has been implemented, moving the system from a "cold-start" CLI-shim model to a high-performance, long-running server pool.
+
+#### 2.5.1 Files Created/Modified
+- **`mcp_bridge/tools/lsp/manager.py`**: The core implementation containing the `LSPManager` singleton, `LSPServer` metadata class, and lifecycle management logic.
+- **`requirements.txt` / `pyproject.toml`**: Added `pygls` (LSP client framework) and `lsprotocol` (Type definitions) as core dependencies.
+
+#### 2.5.2 Architecture Decisions Made
+- **Client Framework (`pygls`)**: Instead of implementing a custom JSON-RPC parser over stdio, we utilized `pygls.client.JsonRPCClient`. This ensures protocol compliance and handles the complexities of asynchronous message ID mapping.
+- **Singleton Pattern**: Implemented `LSPManager` as a singleton with a global accessor (`get_lsp_manager()`) to ensure that only one instance of any specific language server exists per MCP session.
+- **Lazy Initialization**: Servers are not started when the MCP server boots. They only spawn when a tool actually requests a specific language, saving resources if certain languages are never used.
+- **Double-Checked Locking**: Used `asyncio.Lock` with a double-check pattern in `get_server` to prevent race conditions where multiple concurrent tool calls might attempt to spawn the same server process simultaneously.
+- **Two-Stage Shutdown**: Implemented a graceful shutdown sequence that first sends the LSP `shutdown` request and `exit` notification, then falls back to `SIGTERM` and `SIGKILL` if the process hangs.
+- **GC Protection**: Subprocess handles and client instances are stored in a persistent `_servers` dictionary to prevent Python's Garbage Collector from closing pipes prematurely.
+
+#### 2.5.3 Deviations from Original Plan
+- **Crash Recovery**: Added an "Exponential Backoff" strategy (2^n + jitter) for server restarts. This wasn't in the original 2.2 diagram but was deemed necessary for production stability.
+- **Process Validation**: Added a post-start check to verify the subprocess didn't immediately exit (e.g., due to missing binaries) before attempting the LSP handshake.
+
+#### 2.5.4 Features Implemented
+- **Persistent Server Pool**: Servers stay alive across multiple tool calls.
+- **Full Handshake**: Implements the `initialize` and `initialized` LSP flow.
+- **Health Monitoring**: Tracks server state and restart attempts.
+- **JSON-RPC Communication**: Fully asynchronous request/response and notification support.
+- **Multi-Language Support**: Pre-configured for `jedi-language-server` (Python) and `typescript-language-server` (TS/JS).
+
+#### 2.5.5 Known Limitations
+- **Workspace Root**: Currently initializes with `root_uri=None`. While functional for single-file analysis, full project indexing requires passing the actual workspace path during the `get_server` call in Phase 3.
+- **Hardcoded Commands**: Server binary paths are currently hardcoded in `_register_servers`.
+- **Single Instance per Language**: Cannot currently run two different versions of the same language server simultaneously.
+
+#### 2.5.6 Next Steps for Migration
+To transition existing tools to the new architecture:
+1.  **Refactor `LSPTool`**: Update the base tool class to call `get_lsp_manager().get_server(lang)`.
+2.  **State Management**: Tools must now handle `didOpen` notifications to ensure the server has the file content in its virtual filesystem before requesting definitions or completions.
+3.  **Standardize Responses**: Convert LSP `Location` or `CompletionItem` objects into the standard MCP tool output format.
+4.  **Cleanup**: Remove `subprocess.run` calls from individual tool implementations.
+
 ---
 
 ## Part 3: Hierarchical Orchestration

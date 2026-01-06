@@ -14,13 +14,20 @@ Architecture:
 import asyncio
 import json
 import logging
+import os
 import shlex
 import signal
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
 
-from pygls.client import BaseLanguageClient
+from pygls.client import JsonRPCClient
+from lsprotocol.types import (
+    InitializeParams,
+    InitializedParams,
+    ClientCapabilities,
+    WorkspaceFolder,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -30,8 +37,9 @@ class LSPServer:
     """Metadata for a persistent LSP server."""
     name: str
     command: list[str]
-    client: Optional[BaseLanguageClient] = None
+    client: Optional[JsonRPCClient] = None
     initialized: bool = False
+    pid: Optional[int] = None  # Track subprocess PID for explicit cleanup
 
 
 class LSPManager:
@@ -74,7 +82,7 @@ class LSPManager:
             command=["typescript-language-server", "--stdio"]
         )
 
-    async def get_server(self, language: str) -> Optional[BaseLanguageClient]:
+    async def get_server(self, language: str) -> Optional[JsonRPCClient]:
         """
         Get or start a persistent LSP server for the given language.
 
@@ -82,7 +90,7 @@ class LSPManager:
             language: Language identifier (e.g., "python", "typescript")
 
         Returns:
-            BaseLanguageClient instance or None if server unavailable
+            JsonRPCClient instance or None if server unavailable
         """
         if language not in self._servers:
             logger.warning(f"No LSP server configured for language: {language}")
@@ -121,34 +129,46 @@ class LSPManager:
         """
         try:
             # Create pygls client
-            client = BaseLanguageClient(f"{server.name}-client", "1.0.0")
+            client = JsonRPCClient()
 
-            # Sanitize command to prevent shell injection
-            safe_command = [shlex.quote(arg) for arg in server.command]
+            logger.info(f"Starting {server.name} LSP server: {' '.join(server.command)}")
 
-            logger.info(f"Starting {server.name} LSP server: {' '.join(safe_command)}")
+            # Start server process (start_io expects cmd as first arg, then *args)
+            await client.start_io(server.command[0], *server.command[1:])
 
-            # Start server process
-            client.start_io(*server.command)
+            # Brief delay for process startup
+            await asyncio.sleep(0.2)
 
-            # Validate transport is active (prevent "immediate exit" pitfall)
-            await asyncio.sleep(0.1)  # Brief delay for process startup
-            if not client.protocol or client.protocol.transport.is_closing():
-                raise ConnectionError(f"{server.name} LSP server exited immediately after launch")
+            # Capture PID for explicit cleanup
+            if hasattr(client, '_server') and hasattr(client._server, 'pid'):
+                server.pid = client._server.pid
+                logger.debug(f"{server.name} LSP server PID: {server.pid}")
+            else:
+                logger.warning(f"{server.name} LSP server PID not accessible")
+
+            # Validate process is running
+            if hasattr(client, '_server') and client._server.returncode is not None:
+                raise ConnectionError(f"{server.name} LSP server exited immediately (code {client._server.returncode})")
 
             # Perform LSP initialization handshake
-            init_params = {
-                "processId": None,
-                "rootUri": None,
-                "capabilities": {}
-            }
+            init_params = InitializeParams(
+                process_id=None,
+                root_uri=None,
+                capabilities=ClientCapabilities()
+            )
 
             try:
-                await asyncio.wait_for(
-                    client.initialize_async(init_params),
+                # Send initialize request via protocol
+                response = await asyncio.wait_for(
+                    client.protocol.send_request_async("initialize", init_params),
                     timeout=10.0
                 )
-                await client.initialized_async()
+
+                # Send initialized notification
+                client.protocol.notify("initialized", InitializedParams())
+
+                logger.info(f"{server.name} LSP server initialized: {response}")
+
             except asyncio.TimeoutError:
                 raise ConnectionError(f"{server.name} LSP server initialization timed out")
 
@@ -166,11 +186,12 @@ class LSPManager:
             # Cleanup on failure
             if server.client:
                 try:
-                    server.client.exit()
+                    await server.client.stop()
                 except:
                     pass
             server.client = None
             server.initialized = False
+            server.pid = None
             raise
 
     async def _restart_with_backoff(self, server: LSPServer):
@@ -196,6 +217,7 @@ class LSPManager:
         # Reset state before restart
         server.initialized = False
         server.client = None
+        server.pid = None
 
         try:
             await self._start_server(server)
@@ -221,19 +243,68 @@ class LSPManager:
                 try:
                     logger.info(f"Shutting down {name} LSP server")
 
-                    # LSP protocol shutdown
-                    await asyncio.wait_for(
-                        server.client.shutdown_async(),
-                        timeout=5.0
-                    )
-                    server.client.exit()
+                    # LSP protocol shutdown request
+                    try:
+                        await asyncio.wait_for(
+                            server.client.protocol.send_request_async("shutdown", None),
+                            timeout=5.0
+                        )
+                    except asyncio.TimeoutError:
+                        logger.warning(f"{name} LSP server shutdown request timed out")
+
+                    # Send exit notification
+                    server.client.protocol.notify("exit", None)
+
+                    # Stop the client
+                    await server.client.stop()
+
+                    # Explicitly terminate subprocess using tracked PID
+                    if server.pid:
+                        try:
+                            # Check if process still exists
+                            os.kill(server.pid, 0)  # Signal 0 just checks existence
+                            logger.debug(f"{name} LSP server (PID {server.pid}) still running, terminating")
+
+                            # Send SIGTERM first
+                            os.kill(server.pid, signal.SIGTERM)
+
+                            # Wait for graceful termination
+                            await asyncio.sleep(2.0)
+
+                            # Check if still alive
+                            try:
+                                os.kill(server.pid, 0)
+                                # Still alive, force kill
+                                logger.warning(f"{name} LSP server (PID {server.pid}) didn't terminate, force killing")
+                                os.kill(server.pid, signal.SIGKILL)
+                                await asyncio.sleep(0.5)
+                            except ProcessLookupError:
+                                # Process terminated successfully
+                                logger.debug(f"{name} LSP server (PID {server.pid}) terminated gracefully")
+
+                        except ProcessLookupError:
+                            # Process already dead
+                            logger.debug(f"{name} LSP server (PID {server.pid}) already terminated")
+                        except Exception as e:
+                            logger.warning(f"Error killing {name} LSP server (PID {server.pid}): {e}")
+
+                    # Fallback: also try client._server if PID tracking failed
+                    elif hasattr(server.client, '_server') and server.client._server:
+                        proc = server.client._server
+                        if proc.returncode is None:
+                            try:
+                                proc.terminate()
+                                await asyncio.wait_for(proc.wait(), timeout=2.0)
+                            except asyncio.TimeoutError:
+                                logger.warning(f"{name} LSP server process didn't terminate, force killing")
+                                proc.kill()
+                                await proc.wait()
 
                     # Mark as uninitialized
                     server.initialized = False
                     server.client = None
+                    server.pid = None
 
-                except asyncio.TimeoutError:
-                    logger.warning(f"{name} LSP server shutdown timed out")
                 except Exception as e:
                     logger.error(f"Error shutting down {name} LSP server: {e}")
 

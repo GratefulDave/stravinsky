@@ -353,10 +353,18 @@ async def invoke_gemini(
     # Extract agent context for logging (may be passed via params or original call)
     agent_context = params.get("agent_context", {})
     agent_type = agent_context.get("agent_type", "direct")
+    task_id = agent_context.get("task_id", "")
+    description = agent_context.get("description", "")
     prompt_summary = _summarize_prompt(prompt)
 
     # Log with agent context and prompt summary
     logger.info(f"[{agent_type}] → {model}: {prompt_summary}")
+
+    # USER-VISIBLE NOTIFICATION (stderr) - Shows when Gemini is invoked
+    import sys
+    task_info = f" task={task_id}" if task_id else ""
+    desc_info = f" | {description}" if description else ""
+    print(f"🔮 GEMINI: {model} | agent={agent_type}{task_info}{desc_info}", file=sys.stderr)
 
     access_token = await _ensure_valid_token(token_store, "gemini")
 
@@ -875,10 +883,18 @@ async def invoke_openai(
     # Extract agent context for logging (may be passed via params or original call)
     agent_context = params.get("agent_context", {})
     agent_type = agent_context.get("agent_type", "direct")
+    task_id = agent_context.get("task_id", "")
+    description = agent_context.get("description", "")
     prompt_summary = _summarize_prompt(prompt)
 
     # Log with agent context and prompt summary
     logger.info(f"[{agent_type}] → {model}: {prompt_summary}")
+
+    # USER-VISIBLE NOTIFICATION (stderr) - Shows when OpenAI is invoked
+    import sys
+    task_info = f" task={task_id}" if task_id else ""
+    desc_info = f" | {description}" if description else ""
+    print(f"🧠 OPENAI: {model} | agent={agent_type}{task_info}{desc_info}", file=sys.stderr)
 
     access_token = await _ensure_valid_token(token_store, "openai")
     logger.info(f"[invoke_openai] Got access token")

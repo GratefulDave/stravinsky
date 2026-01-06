@@ -48,15 +48,19 @@ def _position_to_offset(content: str, line: int, character: int) -> int:
 async def lsp_hover(file_path: str, line: int, character: int) -> str:
     """
     Get type info, documentation, and signature at a position.
-    
+
     Args:
         file_path: Absolute path to the file
         line: Line number (1-indexed)
         character: Character position (0-indexed)
-        
+
     Returns:
         Type information and documentation at the position.
     """
+    # USER-VISIBLE NOTIFICATION
+    import sys
+    print(f"📍 LSP-HOVER: {file_path}:{line}:{character}", file=sys.stderr)
+
     path = Path(file_path)
     if not path.exists():
         return f"Error: File not found: {file_path}"

@@ -15,17 +15,21 @@ from pathlib import Path
 async def lsp_diagnostics(file_path: str, severity: str = "all") -> str:
     """
     Get diagnostics (errors, warnings) for a file using language server.
-    
+
     For TypeScript/JavaScript, uses `tsc` or `biome`.
     For Python, uses `pyright` or `ruff`.
-    
+
     Args:
         file_path: Path to the file to analyze
         severity: Filter by severity (error, warning, information, hint, all)
-        
+
     Returns:
         Formatted diagnostics output.
     """
+    # USER-VISIBLE NOTIFICATION
+    import sys
+    print(f"🩺 LSP-DIAG: file={file_path} severity={severity}", file=sys.stderr)
+
     path = Path(file_path)
     if not path.exists():
         return f"Error: File not found: {file_path}"
@@ -131,18 +135,23 @@ async def check_ai_comment_patterns(file_path: str) -> str:
 async def ast_grep_search(pattern: str, directory: str = ".", language: str = "") -> str:
     """
     Search codebase using ast-grep for structural patterns.
-    
+
     ast-grep uses AST-aware pattern matching, finding code by structure
     rather than just text. More precise than regex for code search.
-    
+
     Args:
         pattern: ast-grep pattern to search for
         directory: Directory to search in
         language: Filter by language (typescript, python, rust, etc.)
-        
+
     Returns:
         Matched code locations and snippets.
     """
+    # USER-VISIBLE NOTIFICATION
+    import sys
+    lang_info = f" lang={language}" if language else ""
+    print(f"🔍 AST-GREP: pattern='{pattern[:50]}...'{lang_info}", file=sys.stderr)
+
     try:
         cmd = ["sg", "run", "-p", pattern, directory]
         if language:
@@ -187,15 +196,20 @@ async def ast_grep_search(pattern: str, directory: str = ".", language: str = ""
 async def grep_search(pattern: str, directory: str = ".", file_pattern: str = "") -> str:
     """
     Fast text search using ripgrep.
-    
+
     Args:
         pattern: Search pattern (supports regex)
         directory: Directory to search in
         file_pattern: Glob pattern to filter files (e.g., "*.py", "*.ts")
-        
+
     Returns:
         Matched lines with file paths and line numbers.
     """
+    # USER-VISIBLE NOTIFICATION
+    import sys
+    glob_info = f" glob={file_pattern}" if file_pattern else ""
+    print(f"🔎 GREP: pattern='{pattern[:50]}'{glob_info} dir={directory}", file=sys.stderr)
+
     try:
         cmd = ["rg", "--line-number", "--max-count=50", pattern, directory]
         if file_pattern:

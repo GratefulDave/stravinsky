@@ -1,0 +1,105 @@
+{
+  "hooks": {
+    "Notification": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/hooks/notification_hook.py"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/hooks/subagent_stop.py"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/hooks/pre_compact.py"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Read,Search,Grep,Bash,Edit,MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/hooks/stravinsky_mode.py"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/hooks/parallel_execution.py"
+          },
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/hooks/context.py"
+          },
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/hooks/todo_continuation.py"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/hooks/truncator.py"
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__stravinsky__*,mcp__grep-app__*,Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/hooks/tool_messaging.py"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit,MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/hooks/edit_recovery.py"
+          }
+        ]
+      },
+      {
+        "matcher": "TodoWrite",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/hooks/todo_delegation.py"
+          }
+        ]
+      }
+    ]
+  }
+}

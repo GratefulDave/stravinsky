@@ -30,6 +30,11 @@ stravinsky/
 *~
 .DS_Store
 .gemini/
-.claude/
+# .claude/ # Commented out - we track .claude/agents and .claude/rules
 # .mcp.json
 # uv.lock
+
+# Stravinsky temp files  
+.stravinsky/agents/*.out
+.stravinsky/agents/*.system
+logs/*.log

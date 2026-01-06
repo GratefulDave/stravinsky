@@ -41,6 +41,8 @@ ALLOWED_TOOLS = {
     "TodoWrite",
     "Task",  # Native subagent delegation
     "Agent",  # MCP agent tools
+    "mcp__stravinsky__invoke_gemini",  # Direct Gemini invocation
+    "mcp__stravinsky__invoke_openai",  # Direct OpenAI invocation
 }
 
 # Agent routing recommendations

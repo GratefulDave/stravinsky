@@ -68,7 +68,7 @@ Common commands:
 - Requires ChatGPT Plus/Pro subscription
 - Supports automatic token refresh
 
-## Tools (31)
+## Tools (33)
 
 | Category         | Tools                                                                              |
 | ---------------- | ---------------------------------------------------------------------------------- |
@@ -90,7 +90,7 @@ Spawn background agents with **full tool access** via Claude Code CLI:
 - `agent_cancel(task_id)` - Cancel running agent
 - `agent_list()` - List all agent tasks
 
-### LSP Tools (10)
+### LSP Tools (12)
 
 Full Language Server Protocol support for Python (via jedi):
 
@@ -102,6 +102,8 @@ Full Language Server Protocol support for Python (via jedi):
 - `lsp_prepare_rename` - Validate rename
 - `lsp_rename` - Rename symbol across workspace
 - `lsp_code_actions` - Quick fixes and refactorings
+- `lsp_code_action_resolve` - Apply specific code action/fix (e.g., fix F401 unused import)
+- `lsp_extract_refactor` - Extract code to function or variable (Python via jedi)
 - `lsp_servers` - List available LSP servers
 - `lsp_diagnostics` - Errors and warnings
 

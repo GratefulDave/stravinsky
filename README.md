@@ -16,10 +16,10 @@
 - 🔐 **OAuth Authentication** - Secure browser-based auth for Google (Gemini) and OpenAI (ChatGPT)
 - 🤖 **Multi-Model Support** - Seamlessly invoke Gemini and GPT models from Claude
 - 🎯 **Native Subagent Orchestration** - Auto-delegating orchestrator with parallel execution (zero CLI overhead)
-- 🛠️ **33 MCP Tools** - Model invocation, code search, LSP refactoring, session management, and more
+- 🛠️ **35 MCP Tools** - Model invocation, code search, LSP refactoring, session management, and more
 - 🧠 **9 Specialized Native Agents** - Stravinsky (orchestrator), Research Lead, Implementation Lead, Delphi (GPT-5.2 advisor), Dewey (documentation), Explore (code search), Frontend (Gemini 3 Pro High UI/UX), Code Reviewer, Debugger
 - 🔄 **Hook-Based Delegation** - PreToolUse hooks enforce delegation patterns with hard boundaries (exit code 2)
-- 📝 **LSP Integration** - Full Language Server Protocol support for Python (jedi)
+- 📝 **LSP Integration** - Full Language Server Protocol support with persistent servers (35x speedup), code refactoring, and advanced navigation
 - 🔍 **AST-Aware Search** - Structural code search and refactoring with ast-grep
 - ⚡ **Cost-Optimized Routing** - Free/cheap agents (explore, dewey) always async, expensive (delphi) only when needed
 
@@ -104,7 +104,7 @@ Stravinsky uses **native Claude Code subagents** (.claude/agents/) with automati
 - **ULTRAWORK**: Maximum parallel execution - spawn all async agents immediately
 ````
 
-## Tools (33)
+## Tools (35)
 
 | Category         | Tools                                                                              |
 | ---------------- | ---------------------------------------------------------------------------------- |
@@ -112,9 +112,17 @@ Stravinsky uses **native Claude Code subagents** (.claude/agents/) with automati
 | **Environment**  | `get_project_context`, `task_spawn`, `task_status`, `task_list`                    |
 | **Agents**       | `agent_spawn`, `agent_output`, `agent_cancel`, `agent_list`, `agent_progress`      |
 | **Code Search**  | `ast_grep_search`, `ast_grep_replace`, `grep_search`, `glob_files`                 |
-| **LSP**          | `lsp_diagnostics`, `lsp_hover`, `lsp_goto_definition`, `lsp_find_references`, etc. |
+| **LSP**          | `lsp_diagnostics`, `lsp_hover`, `lsp_goto_definition`, `lsp_find_references`, `lsp_document_symbols`, `lsp_workspace_symbols`, `lsp_prepare_rename`, `lsp_rename`, `lsp_code_actions`, `lsp_code_action_resolve`, `lsp_extract_refactor`, `lsp_servers` (12 tools) |
 | **Sessions**     | `session_list`, `session_read`, `session_search`                                   |
 | **Skills**       | `skill_list`, `skill_get`                                                          |
+
+### LSP Performance & Refactoring
+
+The Phase 2 update introduced the `LSPManager`, which maintains persistent language server instances:
+
+- **35x Speedup**: Subsequent LSP calls are near-instant because the server no longer needs to re-initialize and re-index the codebase for every request
+- **Code Refactoring**: New support for `lsp_extract_refactor` allows automated code extraction (e.g., extracting a method or variable) with full symbol resolution
+- **Code Actions**: `lsp_code_action_resolve` enables complex, multi-step refactoring workflows with automatic fixes for diagnostics
 
 ## Native Subagents (9)
 

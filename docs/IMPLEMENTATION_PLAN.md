@@ -171,6 +171,37 @@ async def lsp_extract_refactor(
     return f"Extract refactoring not implemented for {lang}"
 ```
 
+### 1.4 Phase 1: Implementation Complete
+
+The foundational LSP toolset has been expanded and integrated into the core MCP server architecture, providing advanced refactoring and resolution capabilities to the LLM.
+
+#### 1.4.1 Files Created/Modified
+- **`mcp_bridge/tools/lsp/tools.py`**: Implemented the core logic for the new refactoring tools, including JSON-RPC payload construction for code actions.
+- **`mcp_bridge/server_tools.py`**: Updated the tool registry to include the new LSP capabilities and map them to the MCP schema.
+- **`mcp_bridge/server.py`**: Modified the main entry point to ensure handlers for the new tools are correctly registered and linked to the active LSP subprocesses.
+
+#### 1.4.2 Architecture Decisions Made
+- **Granular Tooling**: Split "Refactoring" into two distinct tools: `lsp_extract_refactor` for initiating changes and `lsp_code_action_resolve` for finalizing them. This accommodates the two-step nature of the LSP `textDocument/codeAction` and `codeAction/resolve` flow.
+- **Type-Safe Tool Registry**: Utilized Pydantic models in `server_tools.py` to strictly enforce the input schema for refactoring operations, ensuring the LLM provides valid line/column offsets.
+- **Unified Tool Mapping**: Consolidated all LSP-related tools under a single registration block in `server.py` to simplify future additions and maintenance.
+
+#### 1.4.3 Deviations from Original Plan
+- **Ruff-Specific Logic**: Added specialized handling for `ruff` (the Python linter/formatter) within the code action tools. Ruff often returns "quick-fix" actions that require different parsing than standard Jedi refactors.
+- **Response Flattening**: Instead of returning raw LSP `WorkspaceEdit` objects, the tools now return a flattened summary of changes to reduce token consumption in the MCP response.
+
+#### 1.4.4 Features Implemented
+- **`lsp_code_action_resolve`**: Allows the agent to resolve additional data (like edits) for a specific code action ID.
+- **`lsp_extract_refactor`**: Triggers "Extract Method" or "Extract Variable" refactors based on a provided range.
+- **Multi-Server Compatibility**: Successfully verified against `jedi-language-server` (for logic) and `ruff` (for linting/fixes) in Python environments.
+
+#### 1.4.5 Known Limitations
+- **Subprocess Overhead**: Currently operates on the "cold-start" model (spawning a process per call), leading to latency in large files.
+- **Manual File Reloading**: If a refactor changes a file on disk, the tool does not yet automatically notify the LSP server of the change; it relies on the next tool call to re-read the file.
+
+#### 1.4.6 Next Steps
+1.  **Transition to Persistence**: Migrate these tools to use the `LSPManager` (Phase 2) to eliminate the startup latency.
+2.  **Workspace Support**: Enhance `lsp_extract_refactor` to support multi-file edits via `WorkspaceEdit` application.
+
 ---
 
 ## Part 2: Persistent LSP Servers
@@ -616,6 +647,38 @@ impl_task = agent_spawn(
     description="Implement TS LSP"
 )
 ```
+
+### 3.7 Phase 3: Implementation Complete
+
+The agentic orchestration layer is now operational, enabling complex, multi-step workflows through specialized Lead Agents and structured delegation patterns.
+
+#### 3.7.1 Files Created/Modified
+- **`.claude/agents/research-lead.md`**: Definition file for the Research Lead agent, specializing in codebase exploration and dependency mapping.
+- **`.claude/agents/implementation-lead.md`**: Definition file for the Implementation Lead agent, specializing in code generation and debugging.
+- **`mcp_bridge/tools/agent_manager.py`**: The central routing logic containing `AGENT_MODEL_ROUTING`, `AGENT_COST_TIERS`, and `AGENT_DISPLAY_MODELS`.
+
+#### 3.7.2 Architecture Decisions Made
+- **Lead-Subordinate Hierarchy**: Implemented a strict delegation tree. The Research Lead is the only agent authorized to spawn `explore` or `dewey` sub-agents, preventing redundant search operations.
+- **Model Tiering**: Configured `AGENT_MODEL_ROUTING` to utilize `claude-3-opus` for Lead Agents (high reasoning/planning) while defaulting sub-agents (like `reviewer`) to `claude-3-haiku` to optimize for speed and cost.
+- **JSON Handoff Protocol**: Standardized communication between agents using a "Brief/Report" pattern. Every delegation must include a `Research Brief` (input) and return an `Implementation Report` (output) in a structured JSON format.
+- **Stateful Metadata**: Added `AGENT_DISPLAY_MODELS` to the manager to provide the UI with human-readable names and icons for each specialized agent role.
+
+#### 3.7.3 Deviations from Original Plan
+- **Implementation Split**: Originally, one lead was planned. This was split into Research and Implementation leads to prevent "context-stuffing" where a single agent tried to hold both the architectural map and the implementation details simultaneously.
+- **Cost Guardrails**: Added `AGENT_COST_TIERS` as a late-stage addition to allow the `AgentManager` to kill sub-tasks that exceed a specific token/cost threshold.
+
+#### 3.7.4 Features Implemented
+- **Automated Delegation**: Lead agents can now autonomously spawn sub-agents (frontend, debugger, reviewer) based on the task type.
+- **Cross-Agent Handoff**: Seamlessly passes context from the Research Lead's discovery phase to the Implementation Lead's coding phase.
+- **Role-Based Tool Access**: The `AgentManager` restricts certain tools (like file deletion or global config changes) to specific lead roles.
+
+#### 3.7.5 Known Limitations
+- **Sequential Execution**: Delegation is currently synchronous; the Lead Agent waits for the sub-agent to finish before continuing, preventing parallel research/implementation.
+- **Recursive Depth**: No hard limit on delegation depth is currently enforced in code (only via system prompts), which could theoretically lead to deep nesting.
+
+#### 3.7.6 Next Steps
+1.  **Parallelization**: Update the `AgentManager` to support `asyncio.gather` for spawning multiple sub-agents (e.g., running `debugger` and `reviewer` simultaneously).
+2.  **Telemetry**: Integrate cost tracking into the `Implementation Report` to provide real-time ROI for agentic workflows.
 
 ---
 

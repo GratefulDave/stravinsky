@@ -8,7 +8,7 @@ Detailed guide to specialized agent configurations.
 
 Stravinsky provides 7 specialized agent types, each with a unique system prompt optimized for specific tasks.
 
-**All agents run via Claude CLI** using Claude's default model. Agents have full tool access and can invoke Stravinsky MCP tools (`invoke_gemini`, `invoke_openai`) if they need to use other models.
+**Thin Wrapper Architecture:** Agents now use a cost-optimized routing system where cheaper models (Haiku) delegate work to specialized external models (Gemini, GPT) via MCP tools, while expensive native Claude work runs directly on Sonnet.
 
 | Agent | Specialty | Purpose |
 |-------|-----------|---------|
@@ -23,11 +23,76 @@ Stravinsky provides 7 specialized agent types, each with a unique system prompt 
 
 ---
 
+## Thin Wrapper Architecture
+
+### What is a Thin Wrapper?
+
+A thin wrapper agent uses a cheap model (Haiku) to:
+1. Parse the incoming request
+2. Immediately delegate ALL work to `invoke_gemini` or `invoke_openai`
+3. Return the external model's results
+
+**No direct tool usage** - the wrapper simply routes work to the appropriate model.
+
+### Why Thin Wrappers?
+
+- **Cost savings:** ~10x cheaper than running Sonnet for exploration/research
+- **Specialized models:** Gemini excels at code search, GPT excels at strategic reasoning
+- **Parallel efficiency:** Cheap wrappers can spawn many simultaneous external calls
+
+### Model Routing Table
+
+| Agent | Wrapper Model | Actual Work Model | Cost Tier |
+|-------|---------------|-------------------|-----------|
+| `explore` | Haiku | gemini-3-flash | Cheap |
+| `dewey` | Haiku | gemini-3-flash | Cheap |
+| `frontend` | Haiku | gemini-3-pro-high | Medium |
+| `delphi` | Sonnet | gpt-5.2-medium | Expensive |
+| `code-reviewer` | Sonnet | Claude native | Medium |
+| `debugger` | Sonnet | Claude native | Medium |
+| `stravinsky` | Sonnet | Claude native | Medium |
+| `planner` | Opus | Claude native | Expensive |
+
+### How It Works
+
+```
+User Request
+     │
+     ▼
+┌─────────────┐
+│ Haiku Agent │ ◄── Cheap wrapper, parses request
+└─────────────┘
+     │
+     ▼
+┌──────────────────┐
+│ invoke_gemini()  │ ◄── Delegates ALL work to Gemini
+│ invoke_openai()  │     or GPT via MCP tools
+└──────────────────┘
+     │
+     ▼
+┌─────────────┐
+│   Results   │ ◄── Returned directly to caller
+└─────────────┘
+```
+
+### Native Claude Work
+
+Some agents run natively on Claude without delegation:
+
+- **stravinsky:** Orchestration requires Claude's tool coordination
+- **code-reviewer:** Deep code analysis benefits from Claude's reasoning
+- **debugger:** Debugging requires Claude's step-by-step analysis
+- **planner:** Complex planning uses Opus for superior reasoning
+
+---
+
 ## Agent Details
 
 ### stravinsky (Orchestrator)
 
 **Purpose:** Task orchestration, planning, goal-oriented execution
+
+**Model:** Sonnet (native Claude work)
 
 **Best for:**
 - Breaking complex tasks into subtasks
@@ -46,6 +111,8 @@ agent_spawn(
 ### planner (Pre-Implementation Planner)
 
 **Purpose:** Create structured implementation plans before coding begins
+
+**Model:** Opus (native Claude work, expensive)
 
 **Best for:**
 - Planning complex implementations before writing code
@@ -68,6 +135,8 @@ agent_spawn(
 
 **Purpose:** Strategic technical advice, architecture review, hard debugging
 
+**Model:** Sonnet wrapper -> gpt-5.2-medium
+
 **Best for:**
 - Architecture decisions
 - Complex debugging when stuck
@@ -83,9 +152,13 @@ agent_spawn(
 )
 ```
 
+**Note:** Uses GPT-5.2 for strategic reasoning capabilities.
+
 ### dewey (Documentation Researcher)
 
 **Purpose:** Documentation research, implementation examples, multi-repository analysis
+
+**Model:** Haiku wrapper -> gemini-3-flash (thin wrapper)
 
 **Best for:**
 - Finding implementation examples
@@ -102,9 +175,13 @@ agent_spawn(
 )
 ```
 
+**Cost:** Cheap - uses Haiku to delegate to Gemini Flash.
+
 ### explore (Codebase Explorer)
 
 **Purpose:** Codebase-wide search and structural analysis
+
+**Model:** Haiku wrapper -> gemini-3-flash (thin wrapper)
 
 **Best for:**
 - "Where is X?" questions
@@ -121,9 +198,13 @@ agent_spawn(
 )
 ```
 
+**Cost:** Cheap - uses Haiku to delegate to Gemini Flash.
+
 ### frontend (UI/UX Engineer)
 
 **Purpose:** UI/UX work, component design, prototyping
+
+**Model:** Haiku wrapper -> gemini-3-pro-high (thin wrapper)
 
 **Best for:**
 - Component design
@@ -139,6 +220,8 @@ agent_spawn(
   "Dashboard design"
 )
 ```
+
+**Cost:** Medium - uses Gemini Pro for higher quality UI work.
 
 ### document_writer (Technical Writer)
 
@@ -186,46 +269,60 @@ agent_spawn(
 
 ```
 Is it about finding/searching code?
-  → explore
+  -> explore (cheap, Gemini Flash)
 
 Is it about documentation or examples?
-  → dewey
+  -> dewey (cheap, Gemini Flash)
 
 Is it about UI/frontend work?
-  → frontend
+  -> frontend (medium, Gemini Pro)
 
 Is it about architecture or strategy?
-  → delphi
+  -> delphi (expensive, GPT-5.2)
 
 Is it about writing documentation?
-  → document_writer
+  -> document_writer
 
 Is it about analyzing images/screenshots?
-  → multimodal
+  -> multimodal
 
 Is it a complex multi-step task?
-  → stravinsky
+  -> stravinsky (medium, native Sonnet)
 
 Need a plan before implementing?
-  → planner
+  -> planner (expensive, native Opus)
 ```
+
+### Cost Optimization Strategy
+
+**For exploration/research tasks:**
+- Use `explore` and `dewey` liberally - they're cheap Haiku wrappers
+- Spawn multiple in parallel for broad searches
+
+**For complex reasoning:**
+- Use `delphi` sparingly - it uses expensive GPT-5.2
+- Reserve for architecture decisions and hard debugging
+
+**For native Claude work:**
+- `stravinsky` and `code-reviewer` run on Sonnet
+- `planner` runs on Opus (most expensive)
 
 ### Parallel Agent Strategies
 
-**Exploration Phase:**
+**Exploration Phase (Cheap):**
 ```
 agent_spawn("Find models", "explore", "Models")
 agent_spawn("Find controllers", "explore", "Controllers")
 agent_spawn("Find tests", "explore", "Tests")
 ```
 
-**Research Phase:**
+**Research Phase (Cheap + Expensive):**
 ```
-agent_spawn("Research best practices", "dewey", "Research")
-agent_spawn("Review current architecture", "delphi", "Review")
+agent_spawn("Research best practices", "dewey", "Research")      # Cheap
+agent_spawn("Review current architecture", "delphi", "Review")   # Expensive
 ```
 
-**Implementation Phase:**
+**Implementation Phase (Medium):**
 ```
 agent_spawn("Implement backend", "stravinsky", "Backend")
 agent_spawn("Implement frontend", "frontend", "Frontend")
@@ -254,7 +351,7 @@ See `.claude/agents/HOOKS.md` in the project root for comprehensive hook archite
 ### Example: Full Workflow
 
 ```
-# Phase 1: Parallel exploration
+# Phase 1: Parallel exploration (all cheap Haiku->Gemini)
 explore_models = agent_spawn("Find all database models", "explore", "Models")
 explore_api = agent_spawn("Find all API endpoints", "explore", "API")
 research = agent_spawn("Research REST best practices", "dewey", "Research")
@@ -264,7 +361,7 @@ models = agent_output(explore_models)
 api = agent_output(explore_api)
 practices = agent_output(research)
 
-# Phase 3: Strategic review
+# Phase 3: Strategic review (expensive GPT-5.2)
 review = agent_spawn(
   f"Review this architecture:\nModels: {models}\nAPI: {api}\nBest practices: {practices}",
   "delphi",
@@ -276,7 +373,9 @@ review = agent_spawn(
 
 ## Performance Tips
 
-1. **Use `explore` for quick searches** - it's optimized for speed
+1. **Use `explore` and `dewey` liberally** - they're cheap Haiku->Gemini wrappers
 2. **Batch related tasks** - spawn multiple explore agents together
 3. **Use `agent_progress`** - monitor long-running agents
 4. **Cancel stuck agents** - don't wait indefinitely
+5. **Reserve `delphi` for hard problems** - it uses expensive GPT-5.2
+6. **Use native Claude agents for coordination** - `stravinsky` for orchestration

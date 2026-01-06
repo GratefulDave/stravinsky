@@ -36,6 +36,8 @@ AGENT_MODEL_ROUTING = {
     "multimodal": None,
     "frontend": None,
     "delphi": None,
+    "research-lead": None,  # Hierarchical orchestrator using gemini-3-flash
+    "implementation-lead": None,  # Hierarchical orchestrator using haiku
     # Planner uses Opus for superior reasoning about dependencies and parallelization
     "planner": "opus",
     # Default for unknown agent types (coding tasks) - use Sonnet 4.5
@@ -48,6 +50,8 @@ AGENT_COST_TIERS = {
     "dewey": "CHEAP",  # Uses gemini-3-flash
     "document_writer": "CHEAP",  # Uses gemini-3-flash
     "multimodal": "CHEAP",  # Uses gemini-3-flash
+    "research-lead": "CHEAP",  # Uses gemini-3-flash
+    "implementation-lead": "CHEAP",  # Uses haiku
     "frontend": "MEDIUM",  # Uses gemini-3-pro-high
     "delphi": "EXPENSIVE",  # Uses gpt-5.2 (OpenAI GPT)
     "planner": "EXPENSIVE",  # Uses Claude Opus 4.5
@@ -60,6 +64,8 @@ AGENT_DISPLAY_MODELS = {
     "dewey": "gemini-3-flash",
     "document_writer": "gemini-3-flash",
     "multimodal": "gemini-3-flash",
+    "research-lead": "gemini-3-flash",
+    "implementation-lead": "haiku",
     "frontend": "gemini-3-pro-high",
     "delphi": "gpt-5.2",
     "planner": "opus-4.5",

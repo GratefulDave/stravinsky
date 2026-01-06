@@ -16,8 +16,8 @@
 - 🔐 **OAuth Authentication** - Secure browser-based auth for Google (Gemini) and OpenAI (ChatGPT)
 - 🤖 **Multi-Model Support** - Seamlessly invoke Gemini and GPT models from Claude
 - 🎯 **Native Subagent Orchestration** - Auto-delegating orchestrator with parallel execution (zero CLI overhead)
-- 🛠️ **31 MCP Tools** - Model invocation, code search, LSP integrations, session management, and more
-- 🧠 **7 Specialized Native Agents** - Stravinsky (orchestrator), Delphi (GPT-5.2 advisor), Dewey (documentation), Explore (code search), Frontend (Gemini 3 Pro High UI/UX), Code Reviewer, Debugger
+- 🛠️ **33 MCP Tools** - Model invocation, code search, LSP refactoring, session management, and more
+- 🧠 **9 Specialized Native Agents** - Stravinsky (orchestrator), Research Lead, Implementation Lead, Delphi (GPT-5.2 advisor), Dewey (documentation), Explore (code search), Frontend (Gemini 3 Pro High UI/UX), Code Reviewer, Debugger
 - 🔄 **Hook-Based Delegation** - PreToolUse hooks enforce delegation patterns with hard boundaries (exit code 2)
 - 📝 **LSP Integration** - Full Language Server Protocol support for Python (jedi)
 - 🔍 **AST-Aware Search** - Structural code search and refactoring with ast-grep
@@ -104,7 +104,7 @@ Stravinsky uses **native Claude Code subagents** (.claude/agents/) with automati
 - **ULTRAWORK**: Maximum parallel execution - spawn all async agents immediately
 ````
 
-## Tools (31)
+## Tools (33)
 
 | Category         | Tools                                                                              |
 | ---------------- | ---------------------------------------------------------------------------------- |
@@ -116,13 +116,15 @@ Stravinsky uses **native Claude Code subagents** (.claude/agents/) with automati
 | **Sessions**     | `session_list`, `session_read`, `session_search`                                   |
 | **Skills**       | `skill_list`, `skill_get`                                                          |
 
-## Native Subagents (7)
+## Native Subagents (9)
 
 Configured in `.claude/agents/*.md`:
 
 | Agent            | Purpose                                                               | Location |
 | ---------------- | --------------------------------------------------------------------- | -------- |
 | `stravinsky`     | Task orchestration with 32k extended thinking (Sonnet 4.5)            | .claude/agents/stravinsky.md |
+| `research-lead`  | Research coordinator - spawns explore/dewey, synthesizes findings (Gemini Flash) | .claude/agents/research-lead.md |
+| `implementation-lead` | Implementation coordinator - spawns frontend/debugger/reviewer (Haiku) | .claude/agents/implementation-lead.md |
 | `explore`        | Codebase search and structural analysis (Gemini 3 Flash)              | .claude/agents/explore.md |
 | `dewey`          | Documentation research and web search (Gemini 3 Flash)                | .claude/agents/dewey.md |
 | `code-reviewer`  | Security, quality, and best practice analysis (Claude Sonnet)         | .claude/agents/code-reviewer.md |

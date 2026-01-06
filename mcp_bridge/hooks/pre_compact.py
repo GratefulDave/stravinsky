@@ -1,207 +1,60 @@
+#!/usr/bin/env python3
 """
-PreCompact Hook - Context Preservation Before Compaction.
+PreCompact hook: Context preservation before compaction.
 
-Triggers before session compaction to preserve critical context
-that should survive summarization. Uses Gemini for intelligent
-context extraction and preservation.
+Fires before Claude Code compacts conversation context to:
+1. Preserve critical context patterns
+2. Maintain stravinsky mode state
+3. Warn about information loss
+4. Save state for recovery
 
-Based on oh-my-opencode's pre-compact hook pattern.
+Cannot block compaction (exit 2 only shows error).
 """
 
-import logging
-from typing import Any, Dict, List, Optional
+import json
+import sys
+from pathlib import Path
+from datetime import datetime
+from typing import List, Dict, Any
 
-logger = logging.getLogger(__name__)
 
-# Flag to prevent recursive calls during Gemini invocation
-_in_preservation = False
+STRAVINSKY_MODE_FILE = Path.home() / ".stravinsky_mode"
+STATE_DIR = Path.home() / ".claude" / "state"
+COMPACTION_LOG = STATE_DIR / "compaction.jsonl"
 
-# Critical context patterns to preserve
+# Patterns to preserve
 PRESERVE_PATTERNS = [
-    # Architecture decisions
     "ARCHITECTURE:",
     "DESIGN DECISION:",
-    "## Architecture",
-
-    # Important constraints
     "CONSTRAINT:",
     "REQUIREMENT:",
     "MUST NOT:",
     "NEVER:",
-
-    # Session state
+    "CRITICAL ERROR:",
     "CURRENT TASK:",
     "BLOCKED BY:",
-    "WAITING FOR:",
-
-    # Critical errors
-    "CRITICAL ERROR:",
-    "SECURITY ISSUE:",
-    "BREAKING CHANGE:",
+    "[STRAVINSKY MODE]",
+    "PARALLEL_DELEGATION:",
 ]
 
-# Memory anchors to inject into compaction
-MEMORY_ANCHORS: List[str] = []
+
+def ensure_state_dir():
+    """Ensure state directory exists."""
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def register_memory_anchor(anchor: str, priority: str = "normal"):
-    """
-    Register a memory anchor to preserve during compaction.
-
-    Args:
-        anchor: The text to preserve
-        priority: "critical" or "normal"
-    """
-    if priority == "critical":
-        MEMORY_ANCHORS.insert(0, f"[CRITICAL] {anchor}")
-    else:
-        MEMORY_ANCHORS.append(anchor)
-
-    # Limit to 10 anchors to prevent bloat
-    while len(MEMORY_ANCHORS) > 10:
-        MEMORY_ANCHORS.pop()
-
-
-def clear_memory_anchors():
-    """Clear all registered memory anchors."""
-    MEMORY_ANCHORS.clear()
-
-
-async def pre_compact_hook(params: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    """
-    Pre-model-invoke hook that runs before context compaction.
-
-    Uses Gemini to intelligently extract and preserve critical context
-    that should survive summarization.
-    """
-    global _in_preservation
-
-    # Prevent recursive calls
-    if _in_preservation:
-        return None
-
-    # Clear rules injection cache on compaction to allow re-injection
-    session_id = params.get("session_id")
-    if session_id:
-        try:
-            from .rules_injector import clear_session_cache
-            clear_session_cache(session_id)
-            logger.debug(f"[PreCompactHook] Cleared rules cache for session {session_id}")
-        except Exception as e:
-            logger.warning(f"[PreCompactHook] Failed to clear rules cache: {e}")
-
-    prompt = params.get("prompt", "")
-
-    # Only activate for compaction-related prompts
-    if not _is_compaction_prompt(prompt):
-        return None
-
-    # Collect pattern-matched context
-    preserved_context = _extract_preserved_context(prompt)
-    preserved_context.extend(MEMORY_ANCHORS)
-
-    # Use Gemini for intelligent context extraction if prompt is long
-    if len(prompt) > 50000:
-        try:
-            _in_preservation = True
-            gemini_context = await _extract_context_with_gemini(prompt)
-            if gemini_context:
-                preserved_context.extend(gemini_context)
-        except Exception as e:
-            logger.warning(f"[PreCompactHook] Gemini extraction failed: {e}")
-        finally:
-            _in_preservation = False
-
-    if not preserved_context:
-        return None
-
-    # Build preservation section
-    preservation_section = _build_preservation_section(preserved_context)
-
-    logger.info(f"[PreCompactHook] Preserving {len(preserved_context)} context items")
-
-    # Inject into prompt
-    modified_prompt = prompt + "\n\n" + preservation_section
-
-    return {**params, "prompt": modified_prompt}
-
-
-async def _extract_context_with_gemini(prompt: str) -> List[str]:
-    """
-    Use Gemini to intelligently extract critical context to preserve.
-
-    Args:
-        prompt: The full conversation/context to analyze
-
-    Returns:
-        List of critical context items to preserve
-    """
+def get_stravinsky_mode_state() -> Dict[str, Any]:
+    """Read stravinsky mode state."""
+    if not STRAVINSKY_MODE_FILE.exists():
+        return {"active": False}
     try:
-        from ..tools.model_invoke import invoke_gemini_impl
-
-        # Truncate prompt if too long for Gemini
-        max_chars = 100000
-        truncated = prompt[:max_chars] if len(prompt) > max_chars else prompt
-
-        extraction_prompt = f"""Analyze this conversation and extract ONLY the most critical information that MUST be preserved during summarization.
-
-Focus on:
-1. Architecture decisions and their rationale
-2. Critical constraints or requirements
-3. Important error patterns or debugging insights
-4. Key file paths and their purposes
-5. Unfinished tasks or blocking issues
-
-Return a bullet list of critical items (max 10). Be extremely concise.
-
-CONVERSATION:
-{truncated}
-
-CRITICAL ITEMS TO PRESERVE:"""
-
-        result = await invoke_gemini_impl(
-            prompt=extraction_prompt,
-            model="gemini-3-flash",
-            max_tokens=2000,
-            temperature=0.1,
-        )
-
-        if not result:
-            return []
-
-        # Parse bullet points from response
-        lines = result.strip().split("\n")
-        items = []
-        for line in lines:
-            line = line.strip()
-            if line.startswith(("-", "*", "•")) or (len(line) > 1 and line[0].isdigit() and line[1] in ".):"):
-                # Clean up the bullet
-                item = line.lstrip("-*•0123456789.): ").strip()
-                if item and len(item) > 10:
-                    items.append(item)
-
-        return items[:10]  # Max 10 items
-
-    except Exception as e:
-        logger.warning(f"[PreCompactHook] Gemini context extraction error: {e}")
-        return []
+        content = STRAVINSKY_MODE_FILE.read_text().strip()
+        return json.loads(content) if content else {"active": True}
+    except (json.JSONDecodeError, IOError):
+        return {"active": True}
 
 
-def _is_compaction_prompt(prompt: str) -> bool:
-    """Detect if this is a compaction/summarization prompt."""
-    compaction_signals = [
-        "summarize the conversation",
-        "compact the context",
-        "reduce context size",
-        "context window",
-        "summarization",
-    ]
-
-    prompt_lower = prompt.lower()
-    return any(signal in prompt_lower for signal in compaction_signals)
-
-
-def _extract_preserved_context(prompt: str) -> List[str]:
+def extract_preserved_context(prompt: str) -> List[str]:
     """Extract context matching preservation patterns."""
     preserved = []
     lines = prompt.split("\n")
@@ -209,26 +62,62 @@ def _extract_preserved_context(prompt: str) -> List[str]:
     for i, line in enumerate(lines):
         for pattern in PRESERVE_PATTERNS:
             if pattern in line:
-                # Capture the line and next 2 lines for context
-                context_lines = lines[i:i+3]
-                preserved.append("\n".join(context_lines))
+                # Capture line + 2 more for context
+                context = "\n".join(lines[i:min(i+3, len(lines))])
+                preserved.append(context)
                 break
 
-    return preserved
+    return preserved[:15]  # Max 15 items
 
 
-def _build_preservation_section(context_items: List[str]) -> str:
-    """Build the preservation section to inject."""
-    section = """
-## CRITICAL CONTEXT TO PRESERVE
+def log_compaction(preserved: List[str], stravinsky_active: bool):
+    """Log compaction event for audit."""
+    ensure_state_dir()
 
-The following information MUST be preserved in any summarization:
+    entry = {
+        "timestamp": datetime.utcnow().isoformat(),
+        "preserved_count": len(preserved),
+        "stravinsky_mode": stravinsky_active,
+        "preview": [p[:50] for p in preserved[:3]],
+    }
 
-"""
-    for i, item in enumerate(context_items, 1):
-        section += f"{i}. {item}\n\n"
+    try:
+        with COMPACTION_LOG.open("a") as f:
+            f.write(json.dumps(entry) + "\n")
+    except IOError:
+        pass
 
-    section += """
-When summarizing, ensure these items are included verbatim or with minimal paraphrasing.
-"""
-    return section
+
+def main():
+    """Main hook entry point."""
+    try:
+        hook_input = json.load(sys.stdin)
+    except (json.JSONDecodeError, EOFError):
+        return 0
+
+    prompt = hook_input.get("prompt", "")
+    trigger = hook_input.get("trigger", "auto")
+
+    # Get stravinsky mode state
+    strav_state = get_stravinsky_mode_state()
+    stravinsky_active = strav_state.get("active", False)
+
+    # Extract preserved context
+    preserved = extract_preserved_context(prompt)
+
+    # Log compaction event
+    log_compaction(preserved, stravinsky_active)
+
+    # Output preservation warning
+    if preserved or stravinsky_active:
+        print(f"\n[PreCompact] Context compaction triggered ({trigger})", file=sys.stderr)
+        print(f"  Preserved items: {len(preserved)}", file=sys.stderr)
+        if stravinsky_active:
+            print("  [STRAVINSKY MODE ACTIVE] - State will persist", file=sys.stderr)
+        print("  Audit log: ~/.claude/state/compaction.jsonl", file=sys.stderr)
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,175 @@
+{
+  "description": "Stravinsky MCP Hooks Configuration - Copy this to .claude/settings.json",
+  "installation_note": "These hooks are bundled with the stravinsky PyPI package. Hook paths should point to the installed package location or .claude/hooks/ if copied locally.",
+  
+  "hooks": {
+    "Notification": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/hooks/notification_hook.py",
+            "description": "Agent spawn notification messages"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/hooks/subagent_stop.py",
+            "description": "Agent completion handling and validation"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/hooks/pre_compact.py",
+            "description": "Context preservation before compaction"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Read,Search,Grep,Bash,Edit,MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/hooks/stravinsky_mode.py",
+            "description": "Hard blocking of direct tools in stravinsky mode"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/hooks/parallel_execution.py",
+            "description": "Pre-emptive parallel execution enforcement"
+          },
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/hooks/context.py",
+            "description": "Auto-inject project context (CLAUDE.md, README.md)"
+          },
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/hooks/todo_continuation.py",
+            "description": "Remind about incomplete todos"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/hooks/truncator.py",
+            "description": "Truncate long tool responses"
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__stravinsky__*,mcp__grep-app__*,Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/hooks/tool_messaging.py",
+            "description": "User-friendly MCP tool messaging"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit,MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/hooks/edit_recovery.py",
+            "description": "Recovery guidance for failed Edit operations"
+          }
+        ]
+      },
+      {
+        "matcher": "TodoWrite",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/hooks/todo_delegation.py",
+            "description": "Parallel execution enforcer after TodoWrite"
+          }
+        ]
+      }
+    ]
+  },
+  
+  "usage_instructions": {
+    "installation": [
+      "1. Copy this file to .claude/settings.json in your project root",
+      "2. Ensure hook scripts are available at .claude/hooks/ (copy from package or use symlink)",
+      "3. Restart Claude Code or run /reload"
+    ],
+    "hook_paths": {
+      "local_copy": "Copy hooks to .claude/hooks/ and use relative paths (as shown above)",
+      "package_install": "Use absolute paths to installed package: python -c 'import mcp_bridge; print(mcp_bridge.__path__[0])'/hooks/",
+      "development": "For development, symlink: ln -s /path/to/stravinsky/mcp_bridge/hooks .claude/hooks"
+    },
+    "customization": [
+      "Disable individual hooks by removing them from the hooks array",
+      "Adjust matchers to change which tools trigger hooks",
+      "Add custom hooks by creating new Python scripts"
+    ]
+  },
+  
+  "hook_overview": {
+    "execution_control": {
+      "parallel_execution.py": "Detects implementation tasks and injects parallel execution instructions before response generation. Activates stravinsky mode on /stravinsky invocation.",
+      "stravinsky_mode.py": "Blocks native file tools (Read, Grep, Bash, Edit) when stravinsky mode is active, forcing Task delegation.",
+      "todo_delegation.py": "Hard blocks response completion after TodoWrite if 2+ pending items exist without spawning Task agents."
+    },
+    "context_management": {
+      "context.py": "Auto-injects CLAUDE.md, README.md, or AGENTS.md content into prompts for project-specific context.",
+      "todo_continuation.py": "Reminds about incomplete in_progress or pending todos before starting new work.",
+      "pre_compact.py": "Preserves critical context patterns (ARCHITECTURE, DESIGN DECISION, etc.) before compaction."
+    },
+    "tool_enhancement": {
+      "tool_messaging.py": "Outputs user-friendly messages about which agent/tool was used (e.g., 'delphi:gpt-5.2-medium(\"Analyzing architecture\")').",
+      "edit_recovery.py": "Detects Edit tool failures and suggests recovery actions (re-read file, verify exact match).",
+      "truncator.py": "Truncates tool responses longer than 30k characters to prevent token overflow."
+    },
+    "agent_lifecycle": {
+      "notification_hook.py": "Outputs spawn messages for agent delegation (e.g., 'spawned explore:gemini-3-flash(\"Find auth code\")').",
+      "subagent_stop.py": "Handles subagent completion, validates output, and can block if critical agents fail."
+    }
+  },
+  
+  "exit_code_reference": {
+    "0": "Success - Allow continuation",
+    "1": "Warning - Show message but continue",
+    "2": "Block - Hard failure (prevents tool execution in PreToolUse, or signals error in PostToolUse)"
+  },
+  
+  "state_files": {
+    "~/.stravinsky_mode": "Marker file indicating stravinsky orchestrator mode is active (enables hard blocking)",
+    "~/.claude/state/compaction.jsonl": "Audit log of context compaction events with preserved items",
+    ".claude/todo_state.json": "Cached todo state for continuation enforcement"
+  },
+  
+  "version": "0.2.63",
+  "package": "stravinsky",
+  "documentation": "https://github.com/GratefulDave/stravinsky"
+}

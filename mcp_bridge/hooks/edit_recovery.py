@@ -1,41 +1,46 @@
-"""
-Edit error recovery hook.
-Detects common mistakes in file editing and injects high-priority corrective directives.
-"""
-
+import os
+import sys
+import json
 import re
-from typing import Any, Dict, Optional
 
-EDIT_ERROR_PATTERNS = [
-    r"oldString and newString must be different",
-    r"oldString not found",
-    r"oldString found multiple times",
-    r"Target content not found",
-    r"Multiple occurrences of target content found",
-]
-
-EDIT_RECOVERY_PROMPT = """
-> **[EDIT ERROR - IMMEDIATE ACTION REQUIRED]**
-> You made an Edit mistake. STOP and do this NOW:
-> 1. **READ** the file immediately to see its ACTUAL current state.
-> 2. **VERIFY** what the content really looks like (your assumption was wrong).
-> 3. **APOLOGIZE** briefly to the user for the error.
-> 4. **CONTINUE** with corrected action based on the real file content.
-> **DO NOT** attempt another edit until you've read and verified the file state.
-"""
-
-async def edit_error_recovery_hook(tool_name: str, arguments: Dict[str, Any], output: str) -> Optional[str]:
-    """
-    Analyzes tool output for edit errors and appends corrective directives.
-    """
-    # Check if this is an edit-related tool (handling both built-in and common MCP tools)
-    edit_tools = ["replace_file_content", "multi_replace_file_content", "write_to_file", "edit_file", "Edit"]
+def main():
+    # Claude Code PostToolUse inputs via Environment Variables
+    tool_name = os.environ.get("CLAUDE_TOOL_NAME")
     
-    # We also check the output content for common patterns even if the tool name doesn't match perfectly
-    is_edit_error = any(re.search(pattern, output, re.IGNORECASE) for pattern in EDIT_ERROR_PATTERNS)
-    
-    if is_edit_error or any(tool in tool_name for tool in edit_tools):
-        if any(re.search(pattern, output, re.IGNORECASE) for pattern in EDIT_ERROR_PATTERNS):
-            return output + EDIT_RECOVERY_PROMPT
-            
-    return None
+    # We only care about Edit/MultiEdit
+    if tool_name not in ["Edit", "MultiEdit"]:
+        return
+
+    # Read from stdin (Claude Code passes the tool response via stdin for some hook types, 
+    # but for PostToolUse it's often better to check the environment variable if available.
+    # Actually, the summary says input is a JSON payload.
+    try:
+        data = json.load(sys.stdin)
+        tool_response = data.get("tool_response", "")
+    except Exception:
+        # Fallback to direct string if not JSON
+        return
+
+    # Error patterns
+    error_patterns = [
+        r"oldString not found",
+        r"oldString matched multiple times",
+        r"line numbers out of range"
+    ]
+
+    recovery_needed = any(re.search(p, tool_response, re.IGNORECASE) for p in error_patterns)
+
+    if recovery_needed:
+        correction = (
+            "\n\n[SYSTEM RECOVERY] It appears the Edit tool failed to find the target string. "
+            "Please call 'Read' on the file again to verify the current content, "
+            "then ensure your 'oldString' is an EXACT match including all whitespace."
+        )
+        # For PostToolUse, stdout is captured and appended/replaces output
+        print(tool_response + correction)
+    else:
+        # No change
+        print(tool_response)
+
+if __name__ == "__main__":
+    main()

@@ -1,78 +1,120 @@
 """
-Hooks initialization.
-Registers all Tier 1-5 hooks into the HookManager.
+Stravinsky Hooks - Claude Code Integration
 
-Hook Tiers:
-- Tier 1: Post-tool-call (immediate response modification)
-- Tier 2: Pre-model-invoke (context management)
-- Tier 3: Pre-model-invoke (performance optimization)
-- Tier 4: Pre-model-invoke (behavior enforcement)
-- Tier 5: Session lifecycle (idle detection, compaction)
+This package contains all hook files for deep integration with Claude Code.
+Hooks are Python scripts that intercept Claude Code events to enforce
+parallel execution, stravinsky mode, and other workflow patterns.
+
+## Available Hooks
+
+### Core Execution Hooks
+- `parallel_execution.py` - UserPromptSubmit: Pre-emptive parallel execution enforcement
+- `stravinsky_mode.py` - PreToolUse: Hard blocking of direct tools (Read, Grep, Bash)
+- `todo_delegation.py` - PostToolUse: Parallel execution enforcer after TodoWrite
+
+### Context & State Hooks
+- `context.py` - UserPromptSubmit: Auto-inject project context (CLAUDE.md, README.md)
+- `todo_continuation.py` - UserPromptSubmit: Remind about incomplete todos
+- `pre_compact.py` - PreCompact: Context preservation before compaction
+
+### Tool Enhancement Hooks
+- `tool_messaging.py` - PostToolUse: User-friendly tool/agent messaging
+- `edit_recovery.py` - PostToolUse: Recovery guidance for failed Edit operations
+- `truncator.py` - PostToolUse: Truncate long tool responses to prevent token overflow
+
+### Agent Lifecycle Hooks
+- `notification_hook.py` - Notification: Agent spawn messages
+- `subagent_stop.py` - SubagentStop: Agent completion handling
+
+## Installation for Claude Code
+
+Copy the HOOKS_SETTINGS.json configuration to your project's .claude/settings.json:
+
+```bash
+# From PyPI package location
+cp $(python -c "import mcp_bridge; print(mcp_bridge.__path__[0])")/hooks/HOOKS_SETTINGS.json .claude/settings.json
+```
+
+Or manually configure in .claude/settings.json (see HOOKS_SETTINGS.json for template).
+
+## Hook Types
+
+Claude Code supports these hook types:
+- **UserPromptSubmit**: Fires before response generation
+- **PreToolUse**: Fires before tool execution (can block with exit 2)
+- **PostToolUse**: Fires after tool execution
+- **Notification**: Fires on notification events
+- **SubagentStop**: Fires when subagent completes
+- **PreCompact**: Fires before context compaction
+
+## Exit Codes
+
+- `0` - Success (allow continuation)
+- `1` - Warning (show but continue)
+- `2` - Block (hard failure in stravinsky mode)
+
+## Environment Variables
+
+Hooks receive these environment variables from Claude Code:
+- `CLAUDE_CWD` - Current working directory
+- `CLAUDE_TOOL_NAME` - Tool being invoked (PreToolUse/PostToolUse)
+- `CLAUDE_SESSION_ID` - Active session ID
+
+## State Management
+
+Stravinsky mode uses a marker file for state:
+- `~/.stravinsky_mode` - Active when file exists
+- Created by `/stravinsky` skill invocation
+- Enables hard blocking of direct tools
+
+## Usage
+
+These hooks are automatically installed with the Stravinsky MCP package.
+To enable them in a Claude Code project:
+
+1. Copy HOOKS_SETTINGS.json to .claude/settings.json
+2. Adjust hook paths if needed (default assumes installed via PyPI)
+3. Restart Claude Code or reload configuration
+
+## Development
+
+To test hooks locally:
+
+```bash
+# Test parallel_execution hook
+echo '{"prompt": "implement feature X"}' | python parallel_execution.py
+
+# Test stravinsky_mode hook (requires marker file)
+touch ~/.stravinsky_mode
+echo '{"toolName": "Read", "params": {}}' | python stravinsky_mode.py
+echo $?  # Should be 2 (blocked)
+rm ~/.stravinsky_mode
+```
+
+## Package Contents
 """
 
-from .manager import get_hook_manager
-from .truncator import output_truncator_hook
-from .edit_recovery import edit_error_recovery_hook
-from .directory_context import directory_context_hook
-from .compaction import context_compaction_hook
-from .budget_optimizer import budget_optimizer_hook
-from .todo_enforcer import todo_continuation_hook
-from .keyword_detector import keyword_detector_hook
-from .comment_checker import comment_checker_hook
-from .context_monitor import context_monitor_hook
-from .agent_reminder import agent_reminder_hook
-from .preemptive_compaction import preemptive_compaction_hook
-from .auto_slash_command import auto_slash_command_hook
-from .session_recovery import session_recovery_hook
-from .empty_message_sanitizer import empty_message_sanitizer_hook
+__all__ = [
+    # Core execution
+    "parallel_execution",
+    "stravinsky_mode",
+    "todo_delegation",
+    
+    # Context & state
+    "context",
+    "todo_continuation",
+    "pre_compact",
+    
+    # Tool enhancement
+    "tool_messaging",
+    "edit_recovery",
+    "truncator",
+    
+    # Agent lifecycle
+    "notification_hook",
+    "subagent_stop",
+]
 
-# New hooks based on oh-my-opencode patterns
-from .session_idle import session_idle_hook
-from .pre_compact import pre_compact_hook
-from .parallel_enforcer import parallel_enforcer_post_tool_hook
-
-# Additional hooks from ultrawork implementation
-from .task_validator import task_validator_hook
-from .session_notifier import session_notifier_hook
-from .git_noninteractive import git_noninteractive_hook
-from .rules_injector import rules_injector_hook
-
-
-def initialize_hooks():
-    """Register all available hooks."""
-    manager = get_hook_manager()
-
-    # Pre-tool-call hooks (modify arguments before execution)
-    manager.register_pre_tool_call(git_noninteractive_hook)  # NEW: Prevent git interactive hangs
-
-    # Tier 1: Post-tool-call (immediate response modification)
-    manager.register_post_tool_call(output_truncator_hook)
-    manager.register_post_tool_call(edit_error_recovery_hook)
-    manager.register_post_tool_call(comment_checker_hook)
-    manager.register_post_tool_call(agent_reminder_hook)
-    manager.register_post_tool_call(session_recovery_hook)
-    manager.register_post_tool_call(parallel_enforcer_post_tool_hook)  # NEW: Enforce parallel spawning
-    manager.register_post_tool_call(task_validator_hook)  # NEW: Validate Task/agent_spawn responses
-
-    # Tier 2: Pre-model-invoke (context management)
-    manager.register_pre_model_invoke(directory_context_hook)
-    manager.register_pre_model_invoke(rules_injector_hook)  # NEW: Auto-inject .claude/rules/*.md
-    manager.register_pre_model_invoke(context_compaction_hook)
-    manager.register_pre_model_invoke(context_monitor_hook)
-    manager.register_pre_model_invoke(preemptive_compaction_hook)
-    manager.register_pre_model_invoke(empty_message_sanitizer_hook)
-
-    # Tier 3: Pre-model-invoke (performance optimization)
-    manager.register_pre_model_invoke(budget_optimizer_hook)
-
-    # Tier 4: Pre-model-invoke (behavior enforcement)
-    manager.register_pre_model_invoke(keyword_detector_hook)
-    manager.register_pre_model_invoke(todo_continuation_hook)
-    manager.register_pre_model_invoke(auto_slash_command_hook)
-
-    # Tier 5: Session lifecycle hooks (NEW)
-    manager.register_session_idle(session_idle_hook)  # Stop hook - idle detection
-    manager.register_session_idle(session_notifier_hook)  # NEW: Desktop notifications for idle sessions
-    manager.register_pre_compact(pre_compact_hook)    # PreCompact - context preservation
-
-    return manager
+__version__ = "0.2.63"
+__author__ = "David Andrews"
+__description__ = "Claude Code hooks for Stravinsky MCP parallel execution"

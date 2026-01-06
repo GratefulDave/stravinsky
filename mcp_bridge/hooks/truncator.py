@@ -1,19 +1,23 @@
-"""
-Tool output truncator hook.
-Limits the size of tool outputs to prevent context bloat.
-"""
+import os
+import sys
+import json
 
-from typing import Any, Dict, Optional
+MAX_CHARS = 30000
 
-async def output_truncator_hook(tool_name: str, arguments: Dict[str, Any], output: str) -> Optional[str]:
-    """
-    Truncates tool output if it exceeds a certain length.
-    """
-    MAX_LENGTH = 30000 # 30k characters limit
-    
-    if len(output) > MAX_LENGTH:
-        truncated = output[:MAX_LENGTH]
-        summary = f"\n\n... (Result truncated from {len(output)} chars to {MAX_LENGTH} chars) ..."
-        return truncated + summary
-        
-    return None
+def main():
+    try:
+        data = json.load(sys.stdin)
+        tool_response = data.get("tool_response", "")
+    except Exception:
+        return
+
+    if len(tool_response) > MAX_CHARS:
+        header = f"[TRUNCATED - {len(tool_response)} chars reduced to {MAX_CHARS}]\n"
+        footer = "\n...[TRUNCATED]"
+        truncated = tool_response[:MAX_CHARS]
+        print(header + truncated + footer)
+    else:
+        print(tool_response)
+
+if __name__ == "__main__":
+    main()

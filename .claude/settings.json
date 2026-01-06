@@ -50,6 +50,10 @@
         "hooks": [
           {
             "type": "command",
+            "command": "python3 ~/.claude/hooks/context_monitor.py"
+          },
+          {
+            "type": "command",
             "command": "python3 ~/.claude/hooks/parallel_execution.py"
           },
           {
@@ -101,9 +105,5 @@
         ]
       }
     ]
-  },
-  "statusLine": {
-    "type": "command",
-    "command": "bash ~/.claude/statusline.sh"
   }
 }

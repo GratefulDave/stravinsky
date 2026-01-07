@@ -190,6 +190,19 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
 
             result_content = await get_system_health()
 
+        elif name == "semantic_health":
+            from .tools.semantic_search import semantic_health
+
+            result_content = await semantic_health(
+                project_path=arguments.get("project_path", "."),
+                provider=arguments.get("provider", "ollama"),
+            )
+
+        elif name == "lsp_health":
+            from .tools.lsp.tools import lsp_health
+
+            result_content = await lsp_health()
+
         # --- SEARCH DISPATCH ---
         elif name == "grep_search":
             from .tools.code_search import grep_search
@@ -458,6 +471,85 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 severity=arguments.get("severity", "all"),
             )
 
+        elif name == "semantic_search":
+            from .tools.semantic_search import semantic_search
+
+            result_content = await semantic_search(
+                query=arguments["query"],
+                project_path=arguments.get("project_path", "."),
+                n_results=arguments.get("n_results", 10),
+                language=arguments.get("language"),
+                node_type=arguments.get("node_type"),
+                provider=arguments.get("provider", "ollama"),
+            )
+
+        elif name == "hybrid_search":
+            from .tools.semantic_search import hybrid_search
+
+            result_content = await hybrid_search(
+                query=arguments["query"],
+                pattern=arguments.get("pattern"),
+                project_path=arguments.get("project_path", "."),
+                n_results=arguments.get("n_results", 10),
+                language=arguments.get("language"),
+                provider=arguments.get("provider", "ollama"),
+            )
+
+        elif name == "semantic_index":
+            from .tools.semantic_search import index_codebase
+
+            result_content = await index_codebase(
+                project_path=arguments.get("project_path", "."),
+                force=arguments.get("force", False),
+                provider=arguments.get("provider", "ollama"),
+            )
+
+        elif name == "semantic_stats":
+            from .tools.semantic_search import semantic_stats
+
+            result_content = await semantic_stats(
+                project_path=arguments.get("project_path", "."),
+                provider=arguments.get("provider", "ollama"),
+            )
+
+        elif name == "multi_query_search":
+            from .tools.semantic_search import multi_query_search
+
+            result_content = await multi_query_search(
+                query=arguments["query"],
+                project_path=arguments.get("project_path", "."),
+                n_results=arguments.get("n_results", 10),
+                num_expansions=arguments.get("num_expansions", 3),
+                language=arguments.get("language"),
+                node_type=arguments.get("node_type"),
+                provider=arguments.get("provider", "ollama"),
+            )
+
+        elif name == "decomposed_search":
+            from .tools.semantic_search import decomposed_search
+
+            result_content = await decomposed_search(
+                query=arguments["query"],
+                project_path=arguments.get("project_path", "."),
+                n_results=arguments.get("n_results", 10),
+                language=arguments.get("language"),
+                node_type=arguments.get("node_type"),
+                provider=arguments.get("provider", "ollama"),
+            )
+
+        elif name == "enhanced_search":
+            from .tools.semantic_search import enhanced_search
+
+            result_content = await enhanced_search(
+                query=arguments["query"],
+                project_path=arguments.get("project_path", "."),
+                n_results=arguments.get("n_results", 10),
+                mode=arguments.get("mode", "auto"),
+                language=arguments.get("language"),
+                node_type=arguments.get("node_type"),
+                provider=arguments.get("provider", "ollama"),
+            )
+
         else:
             result_content = f"Unknown tool: {name}"
 
@@ -565,6 +657,7 @@ async def async_main():
     finally:
         logger.info("Initiating shutdown sequence...")
         from .tools.lsp.manager import get_lsp_manager
+
         lsp_manager = get_lsp_manager()
         await lsp_manager.shutdown()
 

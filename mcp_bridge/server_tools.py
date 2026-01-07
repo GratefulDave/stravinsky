@@ -603,13 +603,23 @@ def get_tool_definitions() -> List[Tool]:
                     "start_char": {"type": "integer", "description": "Start character (0-indexed)"},
                     "end_line": {"type": "integer", "description": "End line (1-indexed)"},
                     "end_char": {"type": "integer", "description": "End character (0-indexed)"},
-                    "new_name": {"type": "string", "description": "Name for extracted function/variable"},
+                    "new_name": {
+                        "type": "string",
+                        "description": "Name for extracted function/variable",
+                    },
                     "kind": {
                         "type": "string",
                         "description": "'function' or 'variable' (default: function)",
                     },
                 },
-                "required": ["file_path", "start_line", "start_char", "end_line", "end_char", "new_name"],
+                "required": [
+                    "file_path",
+                    "start_line",
+                    "start_char",
+                    "end_line",
+                    "end_char",
+                    "new_name",
+                ],
             },
         ),
         Tool(
@@ -650,6 +660,280 @@ def get_tool_definitions() -> List[Tool]:
                     },
                 },
                 "required": ["pattern", "replacement"],
+            },
+        ),
+        # --- SEMANTIC SEARCH ---
+        Tool(
+            name="semantic_search",
+            description=(
+                "Search codebase using natural language queries. Uses vector embeddings to find "
+                "semantically related code even without exact pattern matches. "
+                "Supports filtering by language and node type. "
+                "Example: 'find authentication logic' or 'error handling patterns'."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Natural language search query (e.g., 'find authentication logic')",
+                    },
+                    "project_path": {
+                        "type": "string",
+                        "description": "Path to the project root",
+                        "default": ".",
+                    },
+                    "n_results": {
+                        "type": "integer",
+                        "description": "Maximum number of results to return",
+                        "default": 10,
+                    },
+                    "language": {
+                        "type": "string",
+                        "description": "Filter by language (e.g., 'py', 'ts', 'js')",
+                    },
+                    "node_type": {
+                        "type": "string",
+                        "description": "Filter by node type (e.g., 'function', 'class', 'method')",
+                    },
+                    "provider": {
+                        "type": "string",
+                        "description": "Embedding provider: ollama (local/free), gemini (cloud/OAuth), openai (cloud/OAuth)",
+                        "enum": ["ollama", "gemini", "openai"],
+                        "default": "ollama",
+                    },
+                },
+                "required": ["query"],
+            },
+        ),
+        Tool(
+            name="hybrid_search",
+            description=(
+                "Hybrid search combining semantic similarity with structural AST matching. "
+                "Use when you need both natural language understanding AND structural patterns. "
+                "Example: query='find authentication logic' + pattern='def $FUNC($$$):'"
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Natural language search query",
+                    },
+                    "pattern": {
+                        "type": "string",
+                        "description": "ast-grep pattern for structural matching (optional)",
+                    },
+                    "project_path": {
+                        "type": "string",
+                        "description": "Path to the project root",
+                        "default": ".",
+                    },
+                    "n_results": {
+                        "type": "integer",
+                        "description": "Maximum number of results to return",
+                        "default": 10,
+                    },
+                    "language": {
+                        "type": "string",
+                        "description": "Filter by language (e.g., 'py', 'ts', 'js')",
+                    },
+                    "provider": {
+                        "type": "string",
+                        "description": "Embedding provider: ollama (local/free), gemini (cloud/OAuth), openai (cloud/OAuth)",
+                        "enum": ["ollama", "gemini", "openai"],
+                        "default": "ollama",
+                    },
+                },
+                "required": ["query"],
+            },
+        ),
+        Tool(
+            name="semantic_index",
+            description=(
+                "Index a codebase for semantic search. Creates vector embeddings for all code files. "
+                "Run this before using semantic_search on a new project."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "project_path": {
+                        "type": "string",
+                        "description": "Path to the project root",
+                        "default": ".",
+                    },
+                    "force": {
+                        "type": "boolean",
+                        "description": "If true, reindex everything. Otherwise, only new/changed files.",
+                        "default": False,
+                    },
+                    "provider": {
+                        "type": "string",
+                        "description": "Embedding provider: ollama (local/free), gemini (cloud/OAuth), openai (cloud/OAuth)",
+                        "enum": ["ollama", "gemini", "openai"],
+                        "default": "ollama",
+                    },
+                },
+            },
+        ),
+        Tool(
+            name="semantic_stats",
+            description="Get statistics about the semantic search index for a project.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "project_path": {
+                        "type": "string",
+                        "description": "Path to the project root",
+                        "default": ".",
+                    },
+                    "provider": {
+                        "type": "string",
+                        "description": "Embedding provider: ollama (local/free), gemini (cloud/OAuth), openai (cloud/OAuth)",
+                        "enum": ["ollama", "gemini", "openai"],
+                        "default": "ollama",
+                    },
+                },
+            },
+        ),
+        Tool(
+            name="multi_query_search",
+            description=(
+                "Search with LLM-expanded query variations for better recall. "
+                "Rephrases query into multiple semantic variations (e.g., 'database connection' -> "
+                "['SQLAlchemy engine setup', 'postgres connection', 'db session factory']) "
+                "and aggregates results using reciprocal rank fusion."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Natural language search query",
+                    },
+                    "project_path": {
+                        "type": "string",
+                        "description": "Path to the project root",
+                        "default": ".",
+                    },
+                    "n_results": {
+                        "type": "integer",
+                        "description": "Maximum number of results to return",
+                        "default": 10,
+                    },
+                    "num_expansions": {
+                        "type": "integer",
+                        "description": "Number of query variations to generate",
+                        "default": 3,
+                    },
+                    "language": {
+                        "type": "string",
+                        "description": "Filter by language (e.g., 'py', 'ts')",
+                    },
+                    "node_type": {
+                        "type": "string",
+                        "description": "Filter by node type (e.g., 'function', 'class')",
+                    },
+                    "provider": {
+                        "type": "string",
+                        "description": "Embedding provider: ollama (local/free), gemini (cloud/OAuth), openai (cloud/OAuth)",
+                        "enum": ["ollama", "gemini", "openai"],
+                        "default": "ollama",
+                    },
+                },
+                "required": ["query"],
+            },
+        ),
+        Tool(
+            name="decomposed_search",
+            description=(
+                "Search by decomposing complex queries into focused sub-questions. "
+                "Breaks multi-part queries like 'Initialize the DB and create a user model' "
+                "into separate searches ('database initialization', 'user model definition') "
+                "and returns organized results for each part."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Complex search query (may contain multiple concepts)",
+                    },
+                    "project_path": {
+                        "type": "string",
+                        "description": "Path to the project root",
+                        "default": ".",
+                    },
+                    "n_results": {
+                        "type": "integer",
+                        "description": "Maximum results per sub-query",
+                        "default": 10,
+                    },
+                    "language": {
+                        "type": "string",
+                        "description": "Filter by language",
+                    },
+                    "node_type": {
+                        "type": "string",
+                        "description": "Filter by node type",
+                    },
+                    "provider": {
+                        "type": "string",
+                        "description": "Embedding provider: ollama (local/free), gemini (cloud/OAuth), openai (cloud/OAuth)",
+                        "enum": ["ollama", "gemini", "openai"],
+                        "default": "ollama",
+                    },
+                },
+                "required": ["query"],
+            },
+        ),
+        Tool(
+            name="enhanced_search",
+            description=(
+                "Unified enhanced search combining query expansion and decomposition. "
+                "Automatically selects strategy based on query complexity: "
+                "simple queries use multi-query expansion, complex queries use decomposition. "
+                "Use mode='auto' (default), 'expand', 'decompose', or 'both'."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Search query (simple or complex)",
+                    },
+                    "project_path": {
+                        "type": "string",
+                        "description": "Path to the project root",
+                        "default": ".",
+                    },
+                    "n_results": {
+                        "type": "integer",
+                        "description": "Maximum number of results",
+                        "default": 10,
+                    },
+                    "mode": {
+                        "type": "string",
+                        "description": "Search mode: 'auto' (default), 'expand', 'decompose', or 'both'",
+                        "enum": ["auto", "expand", "decompose", "both"],
+                        "default": "auto",
+                    },
+                    "language": {
+                        "type": "string",
+                        "description": "Filter by language",
+                    },
+                    "node_type": {
+                        "type": "string",
+                        "description": "Filter by node type",
+                    },
+                    "provider": {
+                        "type": "string",
+                        "description": "Embedding provider: ollama (local/free), gemini (cloud/OAuth), openai (cloud/OAuth)",
+                        "enum": ["ollama", "gemini", "openai"],
+                        "default": "ollama",
+                    },
+                },
+                "required": ["query"],
             },
         ),
     ]

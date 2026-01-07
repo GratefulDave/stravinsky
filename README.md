@@ -32,7 +32,8 @@
 
 ```bash
 # One-shot with uvx - no installation needed!
-claude mcp add stravinsky -- uvx stravinsky
+# Use @latest to always get the newest version
+claude mcp add stravinsky -- uvx stravinsky@latest
 
 # Or install globally first:
 uv tool install stravinsky
@@ -327,16 +328,22 @@ The Codex CLI uses the same port. Stop it with: `killall codex`
 **Solution - Force Reinstall:**
 
 ```bash
-# Option 1: Force reinstall with uvx (fastest)
-uvx --reinstall stravinsky
+# Option 1: Run latest version with uvx (if using uvx in .mcp.json)
+uvx stravinsky@latest
 
 # Option 2: Upgrade with uv tool (if installed globally)
 uv tool install --upgrade --force stravinsky
+# or reinstall all tools:
+uv tool upgrade --all --reinstall
 
 # Option 3: Clear uvx cache entirely (nuclear option)
-rm -rf ~/.local/share/uv/cache
+uv cache prune
 
-# After reinstalling, restart Claude Code
+# Option 4: Remove and re-add MCP server
+claude mcp remove stravinsky
+claude mcp add stravinsky -- uvx stravinsky@latest
+
+# After any option, restart Claude Code
 claude restart
 ```
 

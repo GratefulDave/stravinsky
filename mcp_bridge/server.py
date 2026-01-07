@@ -95,56 +95,9 @@ async def list_tools() -> list[Tool]:
     return get_tool_definitions()
 
 
-def _format_tool_log(name: str, arguments: dict[str, Any]) -> str:
-    """Format a concise log message for tool calls."""
-    # LSP tools - show file:line
-    if name.startswith("lsp_"):
-        file_path = arguments.get("file_path", "")
-        if file_path:
-            # Shorten path to last 2 components
-            parts = file_path.split("/")
-            short_path = "/".join(parts[-2:]) if len(parts) > 2 else file_path
-            line = arguments.get("line", "")
-            if line:
-                return f"→ {name}: {short_path}:{line}"
-            return f"→ {name}: {short_path}"
-        query = arguments.get("query", "")
-        if query:
-            return f"→ {name}: query='{query[:40]}'"
-        return f"→ {name}"
-
-    # Model invocation - show agent context if present
-    if name in ("invoke_gemini", "invoke_openai"):
-        agent_ctx = arguments.get("agent_context", {})
-        agent_type = agent_ctx.get("agent_type", "direct") if agent_ctx else "direct"
-        model = arguments.get("model", "default")
-        prompt = arguments.get("prompt", "")
-        # Summarize prompt
-        summary = " ".join(prompt.split())[:80] + "..." if len(prompt) > 80 else prompt
-        return f"[{agent_type}] → {model}: {summary}"
-
-    # Search tools - show pattern
-    if name in ("grep_search", "ast_grep_search", "ast_grep_replace"):
-        pattern = arguments.get("pattern", "")[:50]
-        return f"→ {name}: pattern='{pattern}'"
-
-    # Agent tools - show agent type/task_id
-    if name == "agent_spawn":
-        agent_type = arguments.get("agent_type", "explore")
-        desc = arguments.get("description", "")[:40]
-        return f"→ {name}: [{agent_type}] {desc}"
-    if name in ("agent_output", "agent_cancel", "agent_progress"):
-        task_id = arguments.get("task_id", "")
-        return f"→ {name}: {task_id}"
-
-    # Default - just tool name
-    return f"→ {name}"
-
-
 @server.call_tool()
 async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
     """Handle tool calls with deep lazy loading of implementations."""
-    logger.info(_format_tool_log(name, arguments))
     hook_manager = get_hook_manager_lazy()
     token_store = get_token_store()
 

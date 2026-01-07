@@ -145,21 +145,26 @@ ollama pull mxbai-embed-large
 
 **Recommended model:** `nomic-embed-text` is lightweight (274MB), fast, and works great for code search. It's the best choice for most users, especially on space-constrained systems like MacBooks.
 
-**Usage:**
+**Workflow:**
 
-```python
-# Via MCP tools in Claude Code
-semantic_index(project_path=".", provider="ollama")  # First-time indexing
+```bash
+# STEP 1: Initial indexing (REQUIRED - run once per project)
+semantic_index(project_path=".", provider="ollama")
+
+# STEP 2: Enable auto-updates (OPTIONAL - recommended for active projects)
+start_file_watcher(".", provider="ollama", debounce_seconds=2.0)
+
+# STEP 3: Search your codebase with natural language
 semantic_search(query="OAuth authentication logic", n_results=5)
 semantic_stats()  # View index statistics
 
-# NEW: Automatic background reindexing on file changes
-from mcp_bridge.tools.semantic_search import start_file_watcher, stop_file_watcher
-
-watcher = start_file_watcher(".", provider="ollama", debounce_seconds=2.0)
-# Now any .py file changes automatically trigger reindexing
-stop_file_watcher(".")  # Stop watching when done
+# STEP 4: Stop watching when done (optional - watcher cleans up on exit)
+stop_file_watcher(".")
 ```
+
+**⚠️ Important:** You MUST run `semantic_index()` first before using semantic search or starting the FileWatcher. If you skip this step:
+- `semantic_search()` will return no results
+- `start_file_watcher()` will show a warning but still work (indexes on first file change)
 
 **Example queries:**
 - "find authentication logic"
@@ -312,6 +317,40 @@ The Codex CLI uses the same port. Stop it with: `killall codex`
 
 - Ensure you have a ChatGPT Plus/Pro subscription
 - Tokens expire occasionally; run `stravinsky-auth login openai` to refresh
+
+### Claude Code Not Loading Latest Version After Update
+
+**Problem:** After deploying a new version to PyPI, Claude Code still uses the old cached version even after restart.
+
+**Root Cause:** `uvx` caches packages and doesn't automatically check for updates. This is a known uvx behavior that affects all packages, not just Stravinsky.
+
+**Solution - Force Reinstall:**
+
+```bash
+# Option 1: Force reinstall with uvx (fastest)
+uvx --reinstall stravinsky
+
+# Option 2: Upgrade with uv tool (if installed globally)
+uv tool install --upgrade --force stravinsky
+
+# Option 3: Clear uvx cache entirely (nuclear option)
+rm -rf ~/.local/share/uv/cache
+
+# After reinstalling, restart Claude Code
+claude restart
+```
+
+**Verify Version:**
+
+```bash
+# Check installed version
+stravinsky --version
+# or
+python -c "import mcp_bridge; print(mcp_bridge.__version__)"
+
+# Check PyPI latest version
+curl -s https://pypi.org/pypi/stravinsky/json | python -c "import sys, json; print(json.load(sys.stdin)['info']['version'])"
+```
 
 ## License
 

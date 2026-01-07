@@ -26,6 +26,13 @@ dependencies = [
     "jedi>=0.19.2",
     "ruff>=0.14.10",
     "tenacity>=8.5.0",
+    "pygls>=1.3.0",
+    "lsprotocol>=2023.0.0",
+    "jedi-language-server>=0.41.0",
+    "ollama>=0.6.1",
+    "numpy>=2.4.0",
+    "chromadb>=1.4.0",
+    "filelock>=3.12.0",
 ]
 
 [project.urls]

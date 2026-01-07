@@ -72,6 +72,35 @@ AGENT_DISPLAY_MODELS = {
     "_default": "sonnet-4.5",
 }
 
+# Cost tier emoji indicators for visual differentiation
+# Colors indicate cost: 🟢 cheap/free, 🔵 medium, 🟣 expensive (GPT), 🟠 Claude
+COST_TIER_EMOJI = {
+    "CHEAP": "🟢",  # Free/cheap models (gemini-3-flash, haiku)
+    "MEDIUM": "🔵",  # Medium cost (gemini-3-pro-high)
+    "EXPENSIVE": "🟣",  # Expensive models (gpt-5.2, opus)
+}
+
+# Model family indicators
+MODEL_FAMILY_EMOJI = {
+    "gemini-3-flash": "🟢",
+    "gemini-3-pro-high": "🔵",
+    "haiku": "🟢",
+    "sonnet-4.5": "🟠",
+    "opus-4.5": "🟣",
+    "gpt-5.2": "🟣",
+}
+
+
+def get_agent_emoji(agent_type: str) -> str:
+    """Get the colored emoji indicator for an agent based on its cost tier."""
+    cost_tier = AGENT_COST_TIERS.get(agent_type, AGENT_COST_TIERS["_default"])
+    return COST_TIER_EMOJI.get(cost_tier, "⚪")
+
+
+def get_model_emoji(model_name: str) -> str:
+    """Get the colored emoji indicator for a model."""
+    return MODEL_FAMILY_EMOJI.get(model_name, "⚪")
+
 
 @dataclass
 class AgentTask:
@@ -490,12 +519,16 @@ class AgentManager:
         description = task.get("description", "")
         agent_type = task.get("agent_type", "unknown")
 
+        # Get cost-tier emoji for visual differentiation
+        cost_emoji = get_agent_emoji(agent_type)
+        display_model = AGENT_DISPLAY_MODELS.get(agent_type, AGENT_DISPLAY_MODELS["_default"])
+
         if status == "completed":
             result = task.get("result", "(no output)")
-            return f"""✅ Agent Task Completed
+            return f"""{cost_emoji} ✅ Agent Task Completed
 
 **Task ID**: {task_id}
-**Agent**: {agent_type}
+**Agent**: {agent_type}:{display_model}
 **Description**: {description}
 
 **Result**:
@@ -503,29 +536,29 @@ class AgentManager:
 
         elif status == "failed":
             error = task.get("error", "(no error details)")
-            return f"""❌ Agent Task Failed
+            return f"""{cost_emoji} ❌ Agent Task Failed
 
 **Task ID**: {task_id}
-**Agent**: {agent_type}
+**Agent**: {agent_type}:{display_model}
 **Description**: {description}
 
 **Error**:
 {error}"""
 
         elif status == "cancelled":
-            return f"""⚠️ Agent Task Cancelled
+            return f"""{cost_emoji} ⚠️ Agent Task Cancelled
 
 **Task ID**: {task_id}
-**Agent**: {agent_type}
+**Agent**: {agent_type}:{display_model}
 **Description**: {description}"""
 
         else:  # pending or running
             pid = task.get("pid", "N/A")
             started = task.get("started_at", "N/A")
-            return f"""⏳ Agent Task Running
+            return f"""{cost_emoji} ⏳ Agent Task Running
 
 **Task ID**: {task_id}
-**Agent**: {agent_type}
+**Agent**: {agent_type}:{display_model}
 **Description**: {description}
 **PID**: {pid}
 **Started**: {started}
@@ -601,10 +634,14 @@ Use `agent_output` with block=true to wait for completion."""
             "cancelled": "⚠️",
         }.get(status, "❓")
 
-        result = f"""{status_emoji} **Agent Progress**
+        # Get cost-tier emoji for visual differentiation
+        cost_emoji = get_agent_emoji(agent_type)
+        display_model = AGENT_DISPLAY_MODELS.get(agent_type, AGENT_DISPLAY_MODELS["_default"])
+
+        result = f"""{cost_emoji} {status_emoji} **Agent Progress**
 
 **Task ID**: {task_id}
-**Agent**: {agent_type}
+**Agent**: {agent_type}:{display_model}
 **Description**: {description}
 **Status**: {status}
 """
@@ -863,17 +900,19 @@ Use invoke_gemini with model="gemini-3-flash" for ALL synthesis work.
         timeout=timeout,
     )
 
-    # Get display model for concise output
+    # Get display model and cost tier emoji for concise output
     display_model = AGENT_DISPLAY_MODELS.get(agent_type, AGENT_DISPLAY_MODELS["_default"])
+    cost_emoji = get_agent_emoji(agent_type)
     short_desc = (description or prompt[:50]).strip()
 
     # If blocking mode (recommended for delphi), wait for completion
     if blocking:
         result = manager.get_output(task_id, block=True, timeout=timeout)
-        return f"{agent_type}:{display_model}('{short_desc}') [BLOCKING]\n\n{result}"
+        return f"{cost_emoji} {agent_type}:{display_model}('{short_desc}') [BLOCKING]\n\n{result}"
 
-    # Concise format: AgentType:model('description')
-    return f"""{agent_type}:{display_model}('{short_desc}')
+    # Enhanced format: cost_emoji agent:model('description') status_emoji
+    # 🟢 explore:gemini-3-flash('Find auth...') ⏳
+    return f"""{cost_emoji} {agent_type}:{display_model}('{short_desc}') ⏳
 task_id={task_id}"""
 
 
@@ -977,9 +1016,12 @@ async def agent_list() -> str:
 
         agent_type = t.get("agent_type", "unknown")
         display_model = AGENT_DISPLAY_MODELS.get(agent_type, AGENT_DISPLAY_MODELS["_default"])
+        cost_emoji = get_agent_emoji(agent_type)
         desc = t.get("description", t.get("prompt", "")[:40])
-        # Concise format: status agent:model('desc') id=xxx
-        lines.append(f"{status_emoji} {agent_type}:{display_model}('{desc}') id={t['id']}")
+        # Concise format: cost_emoji status agent:model('desc') id=xxx
+        lines.append(
+            f"{cost_emoji} {status_emoji} {agent_type}:{display_model}('{desc}') id={t['id']}"
+        )
 
     return "\n".join(lines)
 

@@ -34,7 +34,10 @@ stravinsky/
 # .mcp.json
 # uv.lock
 
-# Stravinsky temp files  
+# Stravinsky temp files
 .stravinsky/agents/*.out
 .stravinsky/agents/*.system
 logs/*.log
+
+# External dependencies (cloned repos)
+pygls/

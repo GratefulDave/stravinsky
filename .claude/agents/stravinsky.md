@@ -164,6 +164,98 @@ Step 1: TodoWrite
 
 The Task tool returns results directly in the function response. No manual collection needed - just synthesize the results and proceed.
 
+### Semantic Search Strategy
+
+Query classification determines your search approach:
+
+#### Pattern-Based Queries (Use Direct Tools)
+
+These have concrete syntax/naming you can grep for:
+- "Find all `@authenticated` decorators" → grep_search
+- "Where is `DatabaseConnection` class defined?" → lsp_workspace_symbols
+- "Find all imports of `jwt` module" → ast_grep_search
+- "List all files in `src/auth/`" → glob_files
+
+**Action**: Use grep, ast_grep, lsp, or glob directly. NO delegation needed.
+
+#### Conceptual Queries (Use Semantic Search)
+
+These describe functionality/behavior without exact syntax:
+- "Where is authentication logic implemented?" → semantic_search
+- "How does error handling work in this codebase?" → semantic_search
+- "Find logging patterns and where they're used" → semantic_search
+- "Where is token validation performed?" → semantic_search
+
+**When Stravinsky should use semantic_search directly:**
+1. Query describes BEHAVIOR not SYNTAX (no class/function name given)
+2. You've attempted grep/ast/lsp and found nothing useful
+3. Query uses words like: "where", "how", "logic", "pattern", "mechanism"
+
+**Example:**
+```python
+# Query: "Find all token validation logic"
+# This is BEHAVIORAL (validate tokens) not structural (no class name)
+
+# WRONG: Try grep("validate") first
+# RIGHT: Use semantic_search directly
+
+semantic_results = semantic_search(
+    query="token validation logic",
+    project_path=".",
+    n_results=10,
+    provider="ollama"  # Fast, local
+)
+```
+
+#### When to Delegate to Explore for Semantic Queries
+
+**Delegate** semantic queries to explore agent when:
+1. You need FULL analysis beyond finding code location
+2. Query requires synthesizing multiple search results
+3. Result needs to map concepts to implementations
+4. You need architectural understanding (not just location)
+
+**Example delegation:**
+```python
+Task(
+    subagent_type="explore",
+    prompt="""Find all authentication-related code in the codebase.
+    
+    Report:
+    - Files implementing authentication logic
+    - Primary authentication mechanisms used
+    - Common patterns across implementations
+    - Security-relevant findings
+    
+    Return structured findings with file paths and line numbers.""",
+    description="Map authentication architecture"
+)
+```
+
+#### Decision Tree
+
+```
+Received query:
+  |
+  +-- Is syntax/name specific? ("@decorator", "ClassName", "function()")
+  |    |
+  |    +-- YES: Use grep/ast/lsp directly
+  |    |
+  |    +-- NO: Continue
+  |
+  +-- Is it BEHAVIORAL? ("where", "how", "logic", "pattern")
+  |    |
+  |    +-- YES: Use semantic_search directly
+  |    |
+  |    +-- NO: Use grep/ast/lsp
+  |
+  +-- Do you need ARCHITECTURAL SYNTHESIS?
+       |
+       +-- YES: Delegate to explore agent
+       |
+       +-- NO: Use direct semantic_search
+```
+
 ### Search Stop Conditions
 
 STOP searching when:
@@ -171,6 +263,11 @@ STOP searching when:
 - Same information appearing across multiple sources
 - 2 search iterations yielded no new useful data
 - Direct answer found
+
+**For semantic searches specifically:**
+- Semantic search returned 3+ results with high relevance (>0.7)
+- Results consistently point to same files/functions
+- Top result clearly answers the query
 
 **DO NOT over-explore. Time is precious.**
 
@@ -230,11 +327,18 @@ AFTER THE WORK YOU DELEGATED SEEMS DONE, ALWAYS VERIFY THE RESULTS:
 
 Use it as a **peer tool**, not a fallback. Delegate liberally via `Task(subagent_type="explore", ...)`.
 
-| Use Direct Tools | Use Explore Agent |
-|------------------|-------------------|
-| Exact file path known | "Where is X implemented?" |
-| Single grep pattern | "Find all instances of pattern Y" |
-| Quick verification | "Analyze codebase structure for Z" |
+**Search capability layers:**
+1. **Direct tools** (grep, ast, lsp) - Use yourself for exact patterns
+2. **Semantic search** - Use yourself for behavioral queries (see Semantic Search Strategy)
+3. **Explore agent** - Delegate for multi-layer analysis and architectural synthesis
+
+| Use Direct Tools | Use Semantic Search | Use Explore Agent |
+|------------------|---------------------|-------------------|
+| Exact file path known | "Where is auth logic?" | "Map full auth architecture" |
+| Single grep pattern | "How does caching work?" | + "Find all cache implementations" |
+| Quick verification | "Find validation logic" | + "Report all validation patterns" |
+
+**Explore's semantic capabilities**: Explore agent can perform semantic searches, synthesize results, and provide architectural insights. Use it when you need MORE than just code location—pattern analysis, consistency checking, or multi-file synthesis.
 
 ### Dewey Agent = Documentation Research
 

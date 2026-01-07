@@ -11,6 +11,19 @@
    - Minor (X.Y+1.0): New features, agent improvements, MCP tool additions
    - Major (X+1.0.0): Breaking changes to API or architecture
 
+## CRITICAL RULES
+
+1. **NEVER pin Python upper version bounds in `requires-python`**
+   - ✅ CORRECT: `requires-python = ">=3.11"`
+   - ❌ WRONG: `requires-python = ">=3.11,<3.14"`
+   - Reason: New Python releases break installations for users on newer Python versions
+   - If a dependency doesn't support new Python, make that dependency OPTIONAL
+
+2. **ALWAYS install globally with @latest for auto-updates**
+   - ✅ CORRECT: `claude mcp add --global stravinsky -- uvx stravinsky@latest`
+   - ❌ WRONG: `claude mcp add stravinsky -- uvx stravinsky` (no @latest)
+   - ❌ WRONG: Local `.mcp.json` entries (use global only)
+
 ## Pre-Deployment Checklist
 
 Before deploying to PyPI, ensure:
@@ -20,6 +33,7 @@ Before deploying to PyPI, ensure:
 3. ✅ No uncommitted temp files (`.stravinsky/agents/*.out`, `logs/`)
 4. ✅ New files properly tracked in git (check `.claude/agents/`, `docs/`)
 5. ✅ `uv.lock` is up-to-date
+6. ✅ **`requires-python` has NO upper bound** (only `>=X.Y`)
 
 ## Deployment Process
 

@@ -1,9 +1,9 @@
 [project]
 name = "stravinsky"
-version = "0.3.0"
+version = "0.3.1"
 description = "MCP Bridge for Claude Code with Multi-Model Support. Install globally: claude mcp add --scope user stravinsky -- uvx stravinsky. Add to CLAUDE.md: See https://pypi.org/project/stravinsky/"
 readme = "README.md"
-requires-python = ">=3.11,<3.14"
+requires-python = ">=3.11"
 license = {text = "MIT"}
 authors = [
     {name = "Stravinsky Team"}
@@ -32,7 +32,6 @@ dependencies = [
     "lsprotocol>=2023.0.0",
     "jedi-language-server>=0.41.0",
     "ollama>=0.6.1",
-    "chromadb>=0.5.0,<0.6.0",
 ]
 
 [project.urls]
@@ -40,6 +39,9 @@ Repository = "https://github.com/GratefulDave/stravinsky"
 Issues = "https://github.com/GratefulDave/stravinsky/issues"
 
 [project.optional-dependencies]
+semantic = [
+    "chromadb>=0.5.0",
+]
 dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",

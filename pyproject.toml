@@ -1,6 +1,6 @@
 [project]
 name = "stravinsky"
-version = "0.2.70"
+version = "0.2.71"
 description = "MCP Bridge for Claude Code with Multi-Model Support. Install globally: claude mcp add --scope user stravinsky -- uvx stravinsky. Add to CLAUDE.md: See https://pypi.org/project/stravinsky/"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -30,8 +30,8 @@ dependencies = [
     "lsprotocol>=2023.0.0",
     "jedi-language-server>=0.41.0",
     "ollama>=0.6.1",
-    "numpy>=2.4.0",
-    "chromadb>=1.4.0",
+    "numpy>=1.24.0,<3.0.0",
+    "chromadb>=0.4.0,<0.6.0",
     "filelock>=3.12.0",
 ]
 

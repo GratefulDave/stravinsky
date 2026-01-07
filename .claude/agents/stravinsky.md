@@ -278,14 +278,31 @@ When delegating via `agent_spawn`, your prompt MUST include ALL 7 sections:
 ```
 1. TASK: Atomic, specific goal (one sentence)
 2. EXPECTED OUTCOME: Concrete deliverables with success criteria
-3. REQUIRED TOOLS: Explicit tool whitelist (Read, Grep, Glob, etc.)
+3. REQUIRED TOOLS: Conditional based on query type (see below)
 4. MUST DO: Exhaustive requirements list
 5. MUST NOT DO: Forbidden actions (prevent rogue behavior)
 6. CONTEXT: File paths, existing patterns, constraints
 7. SUCCESS CRITERIA: How to verify completion
 ```
 
-**Example Delegation Prompt:**
+### Tool Selection for Delegation
+
+**Pattern-Based Queries** (specific names/syntax):
+```
+REQUIRED TOOLS: grep_search, ast_grep_search, lsp_workspace_symbols, glob_files, Read
+```
+
+**Conceptual/Behavioral Queries** (how/where/logic):
+```
+REQUIRED TOOLS: semantic_search, Read, grep_search (fallback)
+```
+
+**Hybrid Queries** (specific + conceptual):
+```
+REQUIRED TOOLS: semantic_search, grep_search, ast_grep_search, Read
+```
+
+**Example Delegation Prompt (Pattern-Based):**
 
 ```
 ## TASK
@@ -295,7 +312,7 @@ Find all API endpoint definitions in the auth module.
 List of endpoints with: path, method, handler function, file location.
 
 ## REQUIRED TOOLS
-Read, Grep, Glob
+grep_search, ast_grep_search, glob_files, Read
 
 ## MUST DO
 - Search in src/auth/ directory
@@ -311,6 +328,43 @@ Project uses FastAPI. Auth endpoints handle login, logout, token refresh.
 
 ## SUCCESS CRITERIA
 All endpoints documented with complete paths and handlers.
+```
+
+**Example Delegation Prompt (Conceptual/Behavioral):**
+
+```
+## TASK
+Find how ReportTemplateService is instantiated and called in the main.py pipeline.
+
+## EXPECTED OUTCOME
+- File paths where ReportTemplateService is created
+- Method calls (extract_and_convert_section, generate_report_text)
+- Configuration/dependency injection setup
+- Workflow/orchestrator that invokes it
+
+## REQUIRED TOOLS
+semantic_search, Read, grep_search
+
+## MUST DO
+- Use semantic_search first for "how is X instantiated" and "service calls" queries
+- Trace from main.py → report orchestrator → template service
+- Check dependency injection container setup
+- Document complete call chain
+
+## MUST NOT DO
+- Skip semantic search in favor of grep (inefficient for conceptual queries)
+- Miss configuration/DI setup
+
+## CONTEXT
+- File: src/report/services/report_template_service.py
+- Domain: src/report/
+- Entry: src/main.py
+- Pipeline uses DI containers and orchestrators
+
+## SUCCESS CRITERIA
+- Complete call chain from main.py to ReportTemplateService identified
+- All instantiation points documented
+- Configuration parameters documented
 ```
 
 AFTER THE WORK YOU DELEGATED SEEMS DONE, ALWAYS VERIFY THE RESULTS:

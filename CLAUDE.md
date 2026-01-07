@@ -22,23 +22,28 @@ stravinsky-auth logout gemini
 
 ### Installation
 
-**Option 1: From PyPI (Recommended)**
+**CRITICAL: ALWAYS install GLOBALLY with @latest for auto-updates**
 
 ```bash
-# One-shot installation with uvx
-claude mcp add stravinsky -- uvx stravinsky
+# CORRECT: Global installation with auto-updates
+claude mcp add --global stravinsky -- uvx stravinsky@latest
 
-# Or install globally first
-uv tool install stravinsky
-claude mcp add stravinsky -- stravinsky
+# WRONG: Never use local installation
+# ❌ claude mcp add stravinsky -- uvx stravinsky  (NO @latest = stale cache)
+# ❌ uv tool install --editable .  (local dev only)
 ```
 
-**Option 2: From Source (Development)**
+**Why @latest is REQUIRED:**
+- Forces uvx to check PyPI on every Claude restart
+- Without it, uvx caches the package and NEVER updates
+- You'll be stuck on old versions forever
+
+**Development (local source only):**
 
 ```bash
-# Install from local source
-uv tool install --editable .
-claude mcp add stravinsky -- stravinsky
+# ONLY for active development on stravinsky itself
+uv tool install --editable /path/to/stravinsky
+claude mcp add --global stravinsky -- stravinsky
 ```
 
 ### Slash Commands (Skills)

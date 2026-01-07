@@ -28,23 +28,36 @@
 
 ### Installation
 
-**From PyPI (Recommended):**
+**CRITICAL: Always use --global with @latest for auto-updates**
 
 ```bash
-# One-shot with uvx - no installation needed!
-# Use @latest to always get the newest version
-claude mcp add stravinsky -- uvx stravinsky@latest
+# CORRECT: Global installation with automatic updates
+claude mcp add --global stravinsky -- uvx stravinsky@latest
 
-# Or install globally first:
-uv tool install stravinsky
-claude mcp add stravinsky -- stravinsky
+# Why this matters:
+# - --global: Works across all projects (not just current directory)
+# - @latest: Auto-checks PyPI on every Claude restart (no stale cache)
 ```
 
-**From Source (for development):**
+**WRONG - Do NOT use these:**
 
 ```bash
+# ❌ Local scope (only works in one project)
+claude mcp add stravinsky -- uvx stravinsky@latest
+
+# ❌ No @latest (cache never updates, stays on old version)
+claude mcp add --global stravinsky -- uvx stravinsky
+
+# ❌ uv tool install (requires manual upgrades)
+uv tool install stravinsky
+```
+
+**Development (local editable install):**
+
+```bash
+# ONLY for active development on stravinsky source code
 uv tool install --editable /path/to/stravinsky
-claude mcp add stravinsky -- stravinsky
+claude mcp add --global stravinsky -- stravinsky
 ```
 
 ### Authentication

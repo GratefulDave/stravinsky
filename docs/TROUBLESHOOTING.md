@@ -23,7 +23,7 @@ uvx stravinsky --help
 ```bash
 # Remove and re-add
 claude mcp remove stravinsky
-claude mcp add stravinsky -- uvx stravinsky
+claude mcp add --scope user stravinsky -- uvx stravinsky@latest
 
 # Verify
 claude mcp list
@@ -37,7 +37,7 @@ claude mcp list
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Restart terminal, then
-claude mcp add stravinsky -- uvx stravinsky
+claude mcp add --scope user stravinsky -- uvx stravinsky@latest
 ```
 
 ---
@@ -307,7 +307,7 @@ ast_grep_search(pattern="function $NAME($_)")
 ```bash
 uv tool install stravinsky
 claude mcp remove stravinsky
-claude mcp add stravinsky -- stravinsky
+claude mcp add --scope user stravinsky -- stravinsky
 ```
 
 ### Agents running slowly
@@ -330,7 +330,7 @@ claude mcp add stravinsky -- stravinsky
 3. Re-add MCP server:
 ```bash
 claude mcp remove stravinsky
-claude mcp add stravinsky -- uvx stravinsky
+claude mcp add --scope user stravinsky -- uvx stravinsky@latest
 ```
 
 ### Tools not appearing

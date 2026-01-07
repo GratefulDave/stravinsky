@@ -7,7 +7,7 @@ Complete guide to installing and configuring Stravinsky in your projects.
 ### One-Line Installation
 
 ```bash
-claude mcp add stravinsky -- uvx stravinsky
+claude mcp add --scope user stravinsky -- uvx stravinsky@latest
 ```
 
 This installs Stravinsky as an MCP server for Claude Code using `uvx` (no global installation needed).
@@ -30,7 +30,7 @@ Best for: Quick setup, trying Stravinsky, CI/CD environments.
 
 ```bash
 # Add to Claude Code (runs via uvx each time)
-claude mcp add stravinsky -- uvx stravinsky
+claude mcp add --scope user stravinsky -- uvx stravinsky@latest
 ```
 
 **Pros:** No global packages, always latest version
@@ -45,7 +45,7 @@ Best for: Daily use, faster startup, offline availability.
 uv tool install stravinsky
 
 # Add to Claude Code
-claude mcp add stravinsky -- stravinsky
+claude mcp add --scope user stravinsky -- stravinsky
 ```
 
 **Upgrade:**
@@ -72,7 +72,7 @@ cd stravinsky
 uv tool install --editable .
 
 # Add to Claude Code
-claude mcp add stravinsky -- stravinsky
+claude mcp add --scope user stravinsky -- stravinsky
 ```
 
 ---
@@ -287,7 +287,7 @@ uvx stravinsky --help
 ```bash
 # Remove and re-add
 claude mcp remove stravinsky
-claude mcp add stravinsky -- uvx stravinsky
+claude mcp add --scope user stravinsky -- uvx stravinsky@latest
 ```
 
 ### OpenAI "Port 1455 in use"

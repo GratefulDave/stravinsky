@@ -1,0 +1,189 @@
+CLAUDE COMMANDS CONSOLIDATION ANALYSIS - REPORT INDEX
+======================================================
+
+All reports have been generated and saved to:
+/Users/davidandrews/PycharmProjects/stravinsky/docs/
+
+QUICK ACCESS
+============
+
+1. START HERE:
+   README_COMMANDS_ANALYSIS.md
+   - Navigation guide
+   - Quick reference
+   - Links to all reports
+   - How to use these documents
+
+2. FOR EXECUTIVES (5 min read):
+   COMMANDS_QUICK_SUMMARY.md
+   - Problem overview
+   - Opportunity summary
+   - Top projects affected
+   - Time/effort estimates
+
+3. FOR TECHNICAL PLANNERS (30 min read):
+   COMMANDS_CONSOLIDATION_REPORT.md
+   - Complete analysis
+   - 30 byte-identical duplicates listed
+   - 82 secondary duplicates listed
+   - 3-phase consolidation strategy
+   - Implementation checklist
+   - Risk assessment
+
+4. FOR IMPLEMENTATION TEAMS (15 min read):
+   TEMPLATES_STRUCTURE.md
+   - Directory structure layout
+   - Step-by-step creation instructions
+   - Verification checklist
+   - Rollback procedures
+
+KEY STATISTICS
+==============
+
+Total Projects Analyzed:         21
+Total Command Files:              1,215
+Unique Command Names:             258
+Files with Duplicates:            150+
+
+Most Duplicated File:             swarm-init.md (17 copies)
+Byte-Identical Duplicates:        30 files (11-17 copies each)
+Secondary Duplicates:             82 files (2-10 copies each)
+
+Projects Needing Cleanup:
+  1. FAERSdb              199 files
+  2. lexgenius-pacer      167 files
+  3. dr-evil-project      150 files
+  4. EPA-Dashboard        104 files
+  5. agentic-research     104 files
+
+CONSOLIDATION OPPORTUNITY
+==========================
+
+Phase 1 (Immediate - Low Risk):
+  - Move 30 core templates to ~/.claude/commands/templates/core/
+  - Remove ~350 redundant files from all projects
+  - Save: ~180 KB
+  - Effort: 2-3 hours
+  - Risk: LOW
+
+Phase 2 (Optional - Medium Risk):
+  - Consolidate 82 additional duplicate files
+  - Save: ~30 KB more
+  - Effort: 4-6 hours
+  - Risk: MEDIUM
+
+RECOMMENDED READING SEQUENCE
+=============================
+
+IF YOU HAVE 5 MINUTES:
+  1. This file (REPORT_INDEX.txt)
+  2. COMMANDS_QUICK_SUMMARY.md
+
+IF YOU HAVE 30 MINUTES:
+  1. This file (REPORT_INDEX.txt)
+  2. README_COMMANDS_ANALYSIS.md
+  3. COMMANDS_CONSOLIDATION_REPORT.md (skim Part 1-5)
+
+IF YOU HAVE 1 HOUR:
+  1. This file (REPORT_INDEX.txt)
+  2. README_COMMANDS_ANALYSIS.md
+  3. COMMANDS_CONSOLIDATION_REPORT.md (read thoroughly)
+  4. TEMPLATES_STRUCTURE.md (skim)
+
+IF YOU'RE DOING THE CONSOLIDATION:
+  1. README_COMMANDS_ANALYSIS.md
+  2. TEMPLATES_STRUCTURE.md (follow step-by-step)
+  3. COMMANDS_CONSOLIDATION_REPORT.md (reference for details)
+
+FILE DETAILS
+============
+
+README_COMMANDS_ANALYSIS.md
+  Size: 6.4 KB
+  Lines: ~190
+  Format: Markdown with navigation guide
+  Purpose: Index and quick reference - START HERE
+  Contains: Overview of all reports, key statistics, how to use guide
+
+COMMANDS_QUICK_SUMMARY.md
+  Size: 3.4 KB
+  Lines: ~114
+  Format: Markdown with tables
+  Purpose: 5-minute executive summary
+  Contains: Problem, opportunity, top duplicates, projects, next actions
+
+COMMANDS_CONSOLIDATION_REPORT.md
+  Size: 18 KB
+  Lines: ~310
+  Format: Markdown with detailed sections
+  Purpose: Complete technical analysis
+  Contains: Full findings, duplicate file lists, strategies, risks, checklist
+
+TEMPLATES_STRUCTURE.md
+  Size: 6.1 KB
+  Lines: ~170
+  Format: Markdown with code examples
+  Purpose: Implementation guide
+  Contains: Directory structure, creation steps, verification, rollback
+
+NEXT ACTIONS
+============
+
+1. Read the report that matches your role:
+   - Decision maker: COMMANDS_QUICK_SUMMARY.md
+   - Planner: COMMANDS_CONSOLIDATION_REPORT.md
+   - Implementer: TEMPLATES_STRUCTURE.md
+
+2. Choose a consolidation strategy:
+   - Option A: Soft (keep local copies, add templates)
+   - Option B: Hard (move to templates, remove from projects)
+   - Option C: Hybrid (phased rollout)
+
+3. Start with Phase 1 (LOW RISK):
+   - Create ~/.claude/commands/templates/core/
+   - Copy 30 core templates
+   - Test on 1-2 projects
+   - Roll out to others
+
+4. All actions are reversible:
+   - Files are in git history
+   - Can restore with: git restore .claude/commands/
+   - Test thoroughly before full rollout
+
+QUESTIONS?
+==========
+
+See the relevant report section:
+
+"Why consolidate?"
+  → Part 1 of COMMANDS_CONSOLIDATION_REPORT.md
+
+"What exactly is duplicated?"
+  → Part 1 of COMMANDS_CONSOLIDATION_REPORT.md (detailed tables)
+
+"How do I implement?"
+  → TEMPLATES_STRUCTURE.md (step-by-step guide)
+
+"What are the risks?"
+  → Part 6 of COMMANDS_CONSOLIDATION_REPORT.md
+
+"How much time will it take?"
+  → COMMANDS_QUICK_SUMMARY.md or Part 5 of REPORT
+
+"What if something breaks?"
+  → Rollback procedures in TEMPLATES_STRUCTURE.md
+
+REPORT METADATA
+===============
+
+Generated: January 7, 2026
+Analysis Scope: ~/PycharmProjects/ (all 21 projects)
+Total Files Analyzed: 1,215 command files
+Analysis Tool: Python with MD5 hashing for exact duplicates
+Files Generated: 4 markdown reports
+Total Report Size: 33.9 KB
+Total Report Lines: 594 lines
+
+All files saved to:
+/Users/davidandrews/PycharmProjects/stravinsky/docs/
+

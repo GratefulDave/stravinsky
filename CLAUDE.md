@@ -22,11 +22,11 @@ stravinsky-auth logout gemini
 
 ### Installation
 
-**CRITICAL: ALWAYS install GLOBALLY with @latest for auto-updates**
+**CRITICAL: ALWAYS install with --scope user and @latest for auto-updates**
 
 ```bash
-# CORRECT: Global installation with auto-updates
-claude mcp add --global stravinsky -- uvx stravinsky@latest
+# CORRECT: User-scoped installation with auto-updates
+claude mcp add --scope user stravinsky -- uvx stravinsky@latest
 
 # WRONG: Never use local installation
 # ❌ claude mcp add stravinsky -- uvx stravinsky  (NO @latest = stale cache)
@@ -43,7 +43,7 @@ claude mcp add --global stravinsky -- uvx stravinsky@latest
 ```bash
 # ONLY for active development on stravinsky itself
 uv tool install --editable /path/to/stravinsky
-claude mcp add --global stravinsky -- stravinsky
+claude mcp add --scope user stravinsky -- stravinsky
 ```
 
 ### Slash Commands (Skills)

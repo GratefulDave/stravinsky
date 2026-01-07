@@ -1059,85 +1059,133 @@ class CodebaseVectorStore:
         Returns:
             Statistics about the indexing operation.
         """
+        import time
+
+        # Start timing
+        start_time = time.time()
+
         print(f"🔍 SEMANTIC-INDEX: {self.project_path}", file=sys.stderr)
 
-        if not await self.check_embedding_service():
-            return {"error": "Embedding service not available", "indexed": 0}
-
-        # Get existing document IDs
-        existing_ids = set()
+        # Notify reindex start (non-blocking)
         try:
-            # Only fetch IDs to minimize overhead
-            existing = self.collection.get(include=[])
-            existing_ids = set(existing["ids"]) if existing["ids"] else set()
-        except Exception:
-            pass
+            from mcp_bridge.notifications import get_notification_manager
+            notifier = get_notification_manager()
+            await notifier.notify_reindex_start(str(self.project_path))
+        except Exception as e:
+            logger.warning(f"Failed to send reindex start notification: {e}")
 
-        if force:
-            # Clear existing collection
+        try:
+            if not await self.check_embedding_service():
+                error_msg = "Embedding service not available"
+                # Notify error
+                try:
+                    await notifier.notify_reindex_error(error_msg)
+                except Exception as e:
+                    logger.warning(f"Failed to send reindex error notification: {e}")
+                return {"error": error_msg, "indexed": 0}
+
+            # Get existing document IDs
+            existing_ids = set()
             try:
-                self.client.delete_collection("codebase")
-                self._collection = None
-                existing_ids = set()
+                # Only fetch IDs to minimize overhead
+                existing = self.collection.get(include=[])
+                existing_ids = set(existing["ids"]) if existing["ids"] else set()
             except Exception:
                 pass
 
-        files = self._get_files_to_index()
-        all_chunks = []
-        current_chunk_ids = set()
+            if force:
+                # Clear existing collection
+                try:
+                    self.client.delete_collection("codebase")
+                    self._collection = None
+                    existing_ids = set()
+                except Exception:
+                    pass
 
-        # Mark: Generate all chunks for current codebase
-        for file_path in files:
-            chunks = self._chunk_file(file_path)
-            all_chunks.extend(chunks)
-            for c in chunks:
-                current_chunk_ids.add(c["id"])
+            files = self._get_files_to_index()
+            all_chunks = []
+            current_chunk_ids = set()
 
-        # Sweep: Identify stale chunks to remove
-        to_delete = existing_ids - current_chunk_ids
+            # Mark: Generate all chunks for current codebase
+            for file_path in files:
+                chunks = self._chunk_file(file_path)
+                all_chunks.extend(chunks)
+                for c in chunks:
+                    current_chunk_ids.add(c["id"])
 
-        # Identify new chunks to add
-        to_add_ids = current_chunk_ids - existing_ids
-        chunks_to_add = [c for c in all_chunks if c["id"] in to_add_ids]
+            # Sweep: Identify stale chunks to remove
+            to_delete = existing_ids - current_chunk_ids
 
-        # Prune stale chunks
-        if to_delete:
-            print(f"  Pruning {len(to_delete)} stale chunks...", file=sys.stderr)
-            self.collection.delete(ids=list(to_delete))
+            # Identify new chunks to add
+            to_add_ids = current_chunk_ids - existing_ids
+            chunks_to_add = [c for c in all_chunks if c["id"] in to_add_ids]
 
-        if not chunks_to_add:
-            return {
-                "indexed": 0,
+            # Prune stale chunks
+            if to_delete:
+                print(f"  Pruning {len(to_delete)} stale chunks...", file=sys.stderr)
+                self.collection.delete(ids=list(to_delete))
+
+            if not chunks_to_add:
+                stats = {
+                    "indexed": 0,
+                    "pruned": len(to_delete),
+                    "total_files": len(files),
+                    "message": "No new chunks to index",
+                    "time_taken": round(time.time() - start_time, 1),
+                }
+                # Notify completion
+                try:
+                    await notifier.notify_reindex_complete(stats)
+                except Exception as e:
+                    logger.warning(f"Failed to send reindex complete notification: {e}")
+                return stats
+
+            # Batch embed and store
+            batch_size = 50
+            total_indexed = 0
+
+            for i in range(0, len(chunks_to_add), batch_size):
+                batch = chunks_to_add[i : i + batch_size]
+
+                documents = [c["document"] for c in batch]
+                embeddings = await self.get_embeddings_batch(documents)
+
+                self.collection.add(
+                    ids=[c["id"] for c in batch],
+                    documents=documents,
+                    embeddings=embeddings,  # type: ignore[arg-type]
+                    metadatas=[c["metadata"] for c in batch],
+                )
+                total_indexed += len(batch)
+                print(f"  Indexed {total_indexed}/{len(chunks_to_add)} chunks...", file=sys.stderr)
+
+            stats = {
+                "indexed": total_indexed,
                 "pruned": len(to_delete),
                 "total_files": len(files),
-                "message": "No new chunks to index",
+                "db_path": str(self.db_path),
+                "time_taken": round(time.time() - start_time, 1),
             }
 
-        # Batch embed and store
-        batch_size = 50
-        total_indexed = 0
+            # Notify completion
+            try:
+                await notifier.notify_reindex_complete(stats)
+            except Exception as e:
+                logger.warning(f"Failed to send reindex complete notification: {e}")
 
-        for i in range(0, len(chunks_to_add), batch_size):
-            batch = chunks_to_add[i : i + batch_size]
+            return stats
 
-            documents = [c["document"] for c in batch]
-            embeddings = await self.get_embeddings_batch(documents)
+        except Exception as e:
+            error_msg = str(e)
+            logger.error(f"Reindexing failed: {error_msg}")
 
-            self.collection.add(
-                ids=[c["id"] for c in batch],
-                documents=documents,
-                embeddings=embeddings,  # type: ignore[arg-type]
-                metadatas=[c["metadata"] for c in batch],
-            )
-            total_indexed += len(batch)
-            print(f"  Indexed {total_indexed}/{len(chunks_to_add)} chunks...", file=sys.stderr)
+            # Notify error
+            try:
+                await notifier.notify_reindex_error(error_msg)
+            except Exception as notify_error:
+                logger.warning(f"Failed to send reindex error notification: {notify_error}")
 
-        return {
-            "indexed": total_indexed,
-            "pruned": len(to_delete),
-            "total_files": len(files),
-            "db_path": str(self.db_path),
-        }
+            raise
 
     async def search(
         self,

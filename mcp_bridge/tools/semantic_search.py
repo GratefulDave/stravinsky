@@ -78,9 +78,18 @@ def get_chromadb():
     if _chromadb is None:
         with _import_lock:
             if _chromadb is None:
-                import chromadb
-
-                _chromadb = chromadb
+                try:
+                    import chromadb
+                    _chromadb = chromadb
+                except ImportError as e:
+                    import sys
+                    if sys.version_info >= (3, 14):
+                        raise ImportError(
+                            "ChromaDB is not available on Python 3.14+. "
+                            "Semantic search is not supported on Python 3.14 yet. "
+                            "Use Python 3.11-3.13 for semantic search features."
+                        ) from e
+                    raise
     return _chromadb
 
 

@@ -13,11 +13,11 @@
 
 ## CRITICAL RULES
 
-1. **NEVER pin Python upper version bounds in `requires-python`**
-   - ✅ CORRECT: `requires-python = ">=3.11"`
-   - ❌ WRONG: `requires-python = ">=3.11,<3.14"`
-   - Reason: New Python releases break installations for users on newer Python versions
-   - If a dependency doesn't support new Python, make that dependency OPTIONAL
+1. **Pin Python upper bounds when core dependencies require it**
+   - ✅ CORRECT: `requires-python = ">=3.11,<3.14"` (when chromadb/onnxruntime don't support 3.14+)
+   - ❌ WRONG: `requires-python = ">=3.11"` (allows installation on unsupported Python versions)
+   - Reason: Better to block installation than have broken runtime imports
+   - Current constraint: `<3.14` due to chromadb → onnxruntime lacking Python 3.14 wheels
 
 2. **ALWAYS install globally with @latest for auto-updates**
    - ✅ CORRECT: `claude mcp add --global stravinsky -- uvx stravinsky@latest`
@@ -33,7 +33,7 @@ Before deploying to PyPI, ensure:
 3. ✅ No uncommitted temp files (`.stravinsky/agents/*.out`, `logs/`)
 4. ✅ New files properly tracked in git (check `.claude/agents/`, `docs/`)
 5. ✅ `uv.lock` is up-to-date
-6. ✅ **`requires-python` has NO upper bound** (only `>=X.Y`)
+6. ✅ **Python version constraint matches dependency requirements** (`<3.14` for chromadb)
 
 ## Deployment Process
 

@@ -125,240 +125,14 @@ while True:
 
 ## 3. Design: FileWatcher Class
 
-### 3.1 New File: `mcp_bridge/tools/file_watcher.py`
+### 3.1 Implemented in: `mcp_bridge/tools/semantic_search.py`
+
+(Note: Implementation merged into semantic_search.py to avoid circular imports and simplify management)
 
 ```python
-"""File change watcher for incremental semantic indexing.
+class CodebaseFileWatcher:
+    """Watch a project directory for file changes and trigger reindexing.
 
-Watches for file changes in a project directory and triggers
-incremental re-indexing when code files change.
-"""
-
-import asyncio
-import logging
-from pathlib import Path
-from typing import Callable, Optional
-from datetime import datetime, timedelta
-
-try:
-    from watchdog.observers import Observer
-    from watchdog.events import FileSystemEventHandler, FileModifiedEvent
-except ImportError:
-    # Graceful degradation if watchdog not installed
-    Observer = None
-    FileSystemEventHandler = None
-
-logger = logging.getLogger(__name__)
-
-
-class CodeFileEventHandler(FileSystemEventHandler):
-    """Handles file system events for code changes.
-    
-    Filters events to only code files and debounces rapid changes.
-    """
-    
-    # Code extensions to monitor
-    CODE_EXTENSIONS = {
-        ".py", ".js", ".ts", ".tsx", ".jsx", ".go", ".rs", ".rb",
-        ".java", ".c", ".cpp", ".h", ".hpp", ".cs", ".swift", ".kt",
-        ".scala", ".vue", ".svelte", ".md", ".yaml", ".yml", ".json", ".toml"
-    }
-    
-    # Directories to ignore
-    SKIP_DIRS = {
-        "node_modules", ".git", "__pycache__", ".venv", "venv", "env",
-        "dist", "build", ".next", ".nuxt", "target", ".tox",
-        ".pytest_cache", ".mypy_cache", ".ruff_cache", "coverage",
-        ".stravinsky"
-    }
-    
-    def __init__(self, on_change: Callable[[], None], debounce_seconds: float = 2.0):
-        """Initialize event handler.
-        
-        Args:
-            on_change: Async callback to invoke on file changes
-            debounce_seconds: Debounce window for rapid changes (default: 2 seconds)
-        """
-        super().__init__()
-        self.on_change = on_change
-        self.debounce_seconds = debounce_seconds
-        self.last_change_time: Optional[datetime] = None
-        self._debounce_timer: Optional[asyncio.Task] = None
-    
-    def _should_watch(self, file_path: str) -> bool:
-        """Check if file should be watched."""
-        path = Path(file_path)
-        
-        # Only watch code files
-        if path.suffix.lower() not in self.CODE_EXTENSIONS:
-            return False
-        
-        # Skip hidden files
-        if any(part.startswith(".") for part in path.parts):
-            if path.suffix not in {".md", ".txt"}:  # Allow .github docs
-                return False
-        
-        # Skip ignored directories
-        if any(skip_dir in path.parts for skip_dir in self.SKIP_DIRS):
-            return False
-        
-        return True
-    
-    def on_modified(self, event: FileModifiedEvent):
-        """Handle file modification events."""
-        if event.is_directory:
-            return
-        
-        if not self._should_watch(event.src_path):
-            return
-        
-        # Debounce rapid changes
-        now = datetime.now()
-        if self.last_change_time:
-            elapsed = (now - self.last_change_time).total_seconds()
-            if elapsed < self.debounce_seconds:
-                logger.debug(f"Debouncing file change: {event.src_path}")
-                return
-        
-        self.last_change_time = now
-        logger.debug(f"File changed: {event.src_path}")
-        
-        # Schedule async callback
-        asyncio.create_task(self._schedule_callback())
-    
-    async def _schedule_callback(self):
-        """Schedule callback with debouncing."""
-        if self._debounce_timer:
-            self._debounce_timer.cancel()
-        
-        self._debounce_timer = asyncio.create_task(
-            asyncio.sleep(self.debounce_seconds)
-        )
-        
-        try:
-            await self._debounce_timer
-            await self.on_change()
-        except asyncio.CancelledError:
-            pass  # Debounce timer was cancelled (another change came in)
-
-
-class FileWatcher:
-    """Watches for file changes and triggers incremental indexing.
-    
-    Lifecycle:
-    - Created: On CodebaseVectorStore init
-    - Started: On first index_codebase() call
-    - Stopped: On store removal or shutdown
-    
-    Usage:
-        watcher = FileWatcher(project_path, on_change_callback)
-        await watcher.start()
-        # ... file changes trigger on_change_callback ...
-        await watcher.stop()
-    """
-    
-    def __init__(
-        self,
-        project_path: str,
-        on_change: Callable[[], None],
-        debounce_seconds: float = 2.0,
-        auto_start: bool = False
-    ):
-        """Initialize file watcher.
-        
-        Args:
-            project_path: Directory to watch
-            on_change: Async callback when files change
-            debounce_seconds: Debounce window (default: 2 seconds)
-            auto_start: Start watching immediately (default: False)
-        """
-        if Observer is None:
-            raise ImportError(
-                "watchdog is required for file watching. "
-                "Install: pip install watchdog"
-            )
-        
-        self.project_path = Path(project_path).resolve()
-        self.on_change = on_change
-        self.debounce_seconds = debounce_seconds
-        
-        self._observer: Optional[Observer] = None
-        self._event_handler: Optional[CodeFileEventHandler] = None
-        self._watch: Optional[int] = None
-        self._running = False
-    
-    async def start(self) -> None:
-        """Start watching the project directory.
-        
-        Safe to call multiple times (idempotent).
-        """
-        if self._running:
-            logger.debug(f"Watcher already running for {self.project_path}")
-            return
-        
-        try:
-            # Create event handler and observer
-            self._event_handler = CodeFileEventHandler(
-                on_change=self.on_change,
-                debounce_seconds=self.debounce_seconds
-            )
-            self._observer = Observer()
-            
-            # Watch recursively
-            self._watch = self._observer.schedule(
-                self._event_handler,
-                path=str(self.project_path),
-                recursive=True
-            )
-            
-            # Start observer thread
-            self._observer.start()
-            self._running = True
-            
-            logger.info(
-                f"Started file watcher for {self.project_path} "
-                f"(debounce: {self.debounce_seconds}s)"
-            )
-        
-        except Exception as e:
-            logger.error(f"Failed to start file watcher: {e}")
-            self._running = False
-            raise
-    
-    async def stop(self) -> None:
-        """Stop watching the project directory.
-        
-        Safe to call multiple times (idempotent).
-        """
-        if not self._running:
-            return
-        
-        try:
-            if self._observer:
-                self._observer.stop()
-                self._observer.join(timeout=5)  # Wait up to 5 seconds
-                self._observer = None
-            
-            self._running = False
-            logger.info(f"Stopped file watcher for {self.project_path}")
-        
-        except Exception as e:
-            logger.error(f"Error stopping file watcher: {e}")
-    
-    async def __aenter__(self):
-        """Context manager entry."""
-        await self.start()
-        return self
-    
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """Context manager exit."""
-        await self.stop()
-    
-    @property
-    def is_running(self) -> bool:
-        """Check if watcher is currently running."""
-        return self._running
-```
 
 ---
 
@@ -370,134 +144,30 @@ class FileWatcher:
 class CodebaseVectorStore:
     """Persistent vector store with optional file watching."""
     
-    def __init__(
-        self,
-        project_path: str,
-        provider: EmbeddingProvider = "ollama",
-        watch_files: bool = False,  # NEW: Enable file watching
-        auto_start_watcher: bool = False,  # NEW: Start watcher on first index
-    ):
+    def __init__(self, project_path: str, provider: EmbeddingProvider = "ollama"):
         self.project_path = Path(project_path).resolve()
-        self.project_hash = hashlib.md5(str(self.project_path).encode()).hexdigest()[:12]
-        
-        # Embedding provider setup (existing)
-        self.provider_name = provider
-        self.provider = get_embedding_provider(provider)
-        self.db_path = Path.home() / ".stravinsky" / "vectordb" / f"{self.project_hash}_{provider}"
-        self.db_path.mkdir(parents=True, exist_ok=True)
+        # ... existing initialization ...
         
         # File watching (NEW)
-        self._watch_files = watch_files
-        self._auto_start_watcher = auto_start_watcher
-        self._watcher: Optional[FileWatcher] = None
-        self._indexing_lock = asyncio.Lock()  # Prevent concurrent indexing
+        self._watcher: "CodebaseFileWatcher | None" = None
+        self._watcher_lock = threading.Lock()
         
-        # Existing fields
-        self._lock_path = self.db_path / ".chromadb.lock"
-        self._file_lock = None
-        self._client = None
-        self._collection = None
+    # ...
     
-    # Existing properties and methods...
-    
-    async def _on_file_changed(self) -> None:
-        """Callback when watched files change.
-        
-        Triggers incremental re-indexing.
-        """
-        async with self._indexing_lock:
-            logger.info(f"File change detected in {self.project_path}, re-indexing...")
-            try:
-                stats = await self.index_codebase(force=False)  # Incremental
-                logger.info(f"Incremental index updated: {stats}")
-            except Exception as e:
-                logger.error(f"Incremental indexing failed: {e}")
-    
-    async def start_watching(self) -> None:
-        """Start watching files for changes.
-        
-        Safe to call multiple times. Returns immediately if already watching.
-        """
-        if not self._watch_files:
-            logger.debug("File watching disabled for this store")
-            return
-        
-        if self._watcher is None:
-            try:
-                from .file_watcher import FileWatcher
-                
-                self._watcher = FileWatcher(
-                    project_path=str(self.project_path),
-                    on_change=self._on_file_changed,
-                    debounce_seconds=2.0,
-                    auto_start=False  # We'll start explicitly
+    def start_watching(self, debounce_seconds: float = 2.0) -> "CodebaseFileWatcher":
+        """Start watching the project directory for file changes."""
+        with self._watcher_lock:
+            if self._watcher is None:
+                # Avoid circular import by importing here
+                from .semantic_search import CodebaseFileWatcher
+                self._watcher = CodebaseFileWatcher(
+                    project_path=self.project_path,
+                    store=self,
+                    debounce_seconds=debounce_seconds,
                 )
-                logger.debug(
-                    f"Created file watcher for {self.project_path} "
-                    f"(auto_start_watcher={self._auto_start_watcher})"
-                )
-            except ImportError:
-                logger.warning(
-                    "watchdog not installed - file watching disabled. "
-                    "Install: pip install watchdog"
-                )
-                self._watch_files = False
-                return
-        
-        if not self._watcher.is_running:
-            await self._watcher.start()
-    
-    async def stop_watching(self) -> None:
-        """Stop watching files for changes.
-        
-        Safe to call multiple times. Returns immediately if not watching.
-        """
-        if self._watcher and self._watcher.is_running:
-            await self._watcher.stop()
-    
-    async def index_codebase(self, force: bool = False) -> dict:
-        """Index the codebase and optionally start watching.
-        
-        Args:
-            force: If True, reindex everything. Otherwise, only new/changed files.
-        
-        Returns:
-            Statistics about the indexing operation.
-        """
-        # Existing indexing logic...
-        stats = await self._do_index(force=force)
-        
-        # NEW: Start watching on first successful index (if enabled)
-        if self._auto_start_watcher and self._watch_files and not self._watcher:
-            try:
-                await self.start_watching()
-            except Exception as e:
-                logger.warning(f"Failed to auto-start watcher: {e}")
-        
-        return stats
-    
-    async def _do_index(self, force: bool = False) -> dict:
-        """Existing indexing implementation (renamed from index_codebase)."""
-        # (Move existing index_codebase logic here)
-        print(f"🔍 SEMANTIC-INDEX: {self.project_path}", file=sys.stderr)
-        # ... rest of existing implementation ...
-    
-    async def __aenter__(self):
-        """Context manager entry (async)."""
-        return self
-    
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """Context manager exit - cleanup on exit."""
-        await self.stop_watching()
-    
-    def __del__(self):
-        """Cleanup on deletion (synchronous)."""
-        # Note: Can't await in __del__, so we just log
-        if self._watcher and self._watcher.is_running:
-            logger.warning(
-                f"CodebaseVectorStore for {self.project_path} being deleted "
-                "with active watcher. Use await store.stop_watching() for clean shutdown."
-            )
+                self._watcher.start()
+            # ...
+            return self._watcher
 ```
 
 ---
@@ -509,75 +179,28 @@ class CodebaseVectorStore:
 ```python
 # Global registry of active stores and watchers
 _stores: dict[str, CodebaseVectorStore] = {}
-_active_watchers: set[str] = set()  # Cache keys of stores with active watchers
-
+_watchers: dict[str, "CodebaseFileWatcher"] = {}  # Cache for watchers
 
 def get_store(
     project_path: str,
     provider: EmbeddingProvider = "ollama",
-    watch_files: bool = False,  # NEW: Enable file watching
-    auto_start_watcher: bool = False,  # NEW: Auto-start on first index
 ) -> CodebaseVectorStore:
-    """Get or create a vector store for a project.
-    
-    Args:
-        project_path: Path to the project root
-        provider: Embedding provider (ollama, gemini, openai, etc.)
-        watch_files: Enable file watching for incremental updates
-        auto_start_watcher: Start watcher on first index (requires watch_files=True)
-    
-    Returns:
-        CodebaseVectorStore instance
-    """
+    """Get or create a vector store for a project."""
     path = str(Path(project_path).resolve())
     cache_key = f"{path}:{provider}"
     
     if cache_key not in _stores:
-        _stores[cache_key] = CodebaseVectorStore(
-            path,
-            provider,
-            watch_files=watch_files,
-            auto_start_watcher=auto_start_watcher
-        )
+        _stores[cache_key] = CodebaseVectorStore(path, provider)
     
     return _stores[cache_key]
 
-
-async def cleanup_all_stores() -> None:
-    """Stop all active watchers and cleanup resources.
-    
-    Called on MCP server shutdown.
-    """
-    logger.info("Cleaning up semantic search stores...")
-    
-    cleanup_tasks = []
-    for cache_key, store in _stores.items():
-        cleanup_tasks.append(store.stop_watching())
-    
-    if cleanup_tasks:
-        results = await asyncio.gather(*cleanup_tasks, return_exceptions=True)
-        for cache_key, result in zip(_stores.keys(), results):
-            if isinstance(result, Exception):
-                logger.error(f"Error cleaning up store {cache_key}: {result}")
-    
-    _active_watchers.clear()
-    logger.info("Semantic search cleanup complete")
-
-
-# Module-level atexit handler for emergency cleanup
-import atexit
-
-def _emergency_cleanup():
-    """Emergency cleanup if async shutdown doesn't happen."""
-    for store in _stores.values():
-        try:
-            if store._watcher and store._watcher.is_running:
-                # Can't await in atexit, just log
-                logger.warning("Emergency watcher stop in atexit handler")
-        except Exception:
-            pass
-
-atexit.register(_emergency_cleanup)
+def start_file_watcher(
+    project_path: str,
+    provider: EmbeddingProvider = "ollama",
+    debounce_seconds: float = 2.0,
+) -> "CodebaseFileWatcher":
+    """Start watching a project directory."""
+    # (Implementation using store.start_watching)
 ```
 
 ---
@@ -663,37 +286,27 @@ async def async_main():
 │  │
 │  └─ Call: index_codebase(project_path=".")
 │     │
-│     ├─ get_store(project_path, watch_files=True, auto_start_watcher=True)
+│     ├─ get_store(project_path)
 │     │  │
-│     │  └─ Create CodebaseVectorStore with watcher config
+│     │  └─ Create CodebaseVectorStore
 │     │
 │     └─ await store.index_codebase()
 │        │
-│        ├─ Do initial indexing
-│        └─ NEW: Auto-start watcher (if auto_start_watcher=True)
-│           │
-│           └─ Watcher monitors project_path recursively
-│              │
-│              ├─ Debounce rapid changes (2 seconds)
-│              ├─ Filter to code files only
-│              └─ On change: Trigger _on_file_changed()
-│                 │
-│                 └─ await index_codebase(force=False) [incremental]
+│        └─ Do initial indexing
 │
 ├─ Run MCP server (stdio_server)
 │  │
 │  └─ Handle tool calls:
-│     ├─ semantic_search(query) - uses get_store() to access index
-│     ├─ semantic_index(project_path) - triggers index + auto-start watcher
-│     └─ enhanced_search(...) - leverages indexed data
+│     ├─ semantic_search(query)
+│     ├─ semantic_index(project_path)
+│     ├─ start_file_watcher(project_path)  <-- Must be called explicitly to start watching
+│     └─ ...
 │
 └─ Shutdown (finally block)
    │
-   ├─ NEW: cleanup_all_stores() - Stop all active watchers
+   ├─ cleanup_all_stores()
    │  │
    │  └─ For each store: await store.stop_watching()
-   │     │
-   │     └─ Observer.stop() + join(timeout=5)
    │
    └─ LSP manager shutdown (existing)
 ```

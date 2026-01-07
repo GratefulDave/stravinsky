@@ -265,7 +265,9 @@ async def test_exclude_venv_directory(vector_store, temp_project_dir):
     (src_dir / "main.py").write_text("def main(): pass")
 
     files = vector_store._get_files_to_index()
-    file_paths = {f.relative_to(temp_project_dir) for f in files}
+    # Resolve temp_project_dir to handle macOS /var → /private/var aliasing
+    resolved_project = temp_project_dir.resolve()
+    file_paths = {f.relative_to(resolved_project) for f in files}
 
     assert Path("src/main.py") in file_paths
     assert not any(".venv" in str(p) for p in file_paths)
@@ -283,7 +285,9 @@ async def test_exclude_node_modules(vector_store, temp_project_dir):
     (src_dir / "app.js").write_text("function app() {}")
 
     files = vector_store._get_files_to_index()
-    file_paths = {f.relative_to(temp_project_dir) for f in files}
+    # Resolve temp_project_dir to handle macOS /var → /private/var aliasing
+    resolved_project = temp_project_dir.resolve()
+    file_paths = {f.relative_to(resolved_project) for f in files}
 
     assert Path("src/app.js") in file_paths
     assert not any("node_modules" in str(p) for p in file_paths)

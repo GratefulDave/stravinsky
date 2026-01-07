@@ -1,5 +1,5 @@
 ---
-description: Stravinsky Orchestrator - Relentless parallel agent execution for complex workflows.
+description: /strav - Stravinsky Orchestrator - Relentless parallel agent execution for complex workflows.
 ---
 
 # Stravinsky Orchestrator
@@ -129,7 +129,7 @@ When using `agent_spawn`, include ALL 7 sections:
 
 ## Execution Context (READ THIS FIRST)
 
-**You are running as:** Stravinsky MCP Skill (via `/stravinsky` command)
+**You are running as:** Stravinsky MCP Skill (via `/strav` command)
 
 **This means:** You use Stravinsky MCP tools (`agent_spawn`, `invoke_gemini`, etc.)
 

@@ -53,7 +53,7 @@ Skills are discovered from:
 - User-global: `~/.claude/commands/**/*.md` (recursive)
 
 Common commands:
-- `/stravinsky`: Task Orchestrator & Planner
+- `/strav`: Task Orchestrator & Planner
 - `/delphi`: Architecture & Debug Advisor
 - `/dewey`: Documentation & Research
 - `/get-context`: Refresh Git/Rules/Todo context (renamed from /context to avoid Claude conflict)

@@ -528,8 +528,7 @@ class AgentManager:
             return f"""{cost_emoji} ✅ Agent Task Completed
 
 **Task ID**: {task_id}
-**Agent**: {agent_type}:{display_model}
-**Description**: {description}
+**Agent**: {agent_type}:{display_model}('{description}')
 
 **Result**:
 {result}"""
@@ -539,8 +538,7 @@ class AgentManager:
             return f"""{cost_emoji} ❌ Agent Task Failed
 
 **Task ID**: {task_id}
-**Agent**: {agent_type}:{display_model}
-**Description**: {description}
+**Agent**: {agent_type}:{display_model}('{description}')
 
 **Error**:
 {error}"""
@@ -549,8 +547,7 @@ class AgentManager:
             return f"""{cost_emoji} ⚠️ Agent Task Cancelled
 
 **Task ID**: {task_id}
-**Agent**: {agent_type}:{display_model}
-**Description**: {description}"""
+**Agent**: {agent_type}:{display_model}('{description}')"""
 
         else:  # pending or running
             pid = task.get("pid", "N/A")
@@ -558,8 +555,7 @@ class AgentManager:
             return f"""{cost_emoji} ⏳ Agent Task Running
 
 **Task ID**: {task_id}
-**Agent**: {agent_type}:{display_model}
-**Description**: {description}
+**Agent**: {agent_type}:{display_model}('{description}')
 **PID**: {pid}
 **Started**: {started}
 
@@ -641,8 +637,7 @@ Use `agent_output` with block=true to wait for completion."""
         result = f"""{cost_emoji} {status_emoji} **Agent Progress**
 
 **Task ID**: {task_id}
-**Agent**: {agent_type}:{display_model}
-**Description**: {description}
+**Agent**: {agent_type}:{display_model}('{description}')
 **Status**: {status}
 """
 

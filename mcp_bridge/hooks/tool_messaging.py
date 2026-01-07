@@ -4,9 +4,13 @@ PostToolUse hook for user-friendly tool messaging.
 
 Outputs concise messages about which agent/tool was used and what it did.
 Format examples:
-- ast-grep('Searching for authentication patterns')
-- delphi:openai/gpt-5.2-medium('Analyzing architecture trade-offs')
-- explore:gemini-3-flash('Finding all API endpoints')
+- 🔧 ast-grep:stravinsky('Searching for authentication patterns')
+- 🟡 get_file_contents:github('Fetching src/main.py from user/repo')
+- 🟣 searchCode:grep-app('Searching GitHub for auth patterns')
+- 🔵 web_search_exa:MCP_DOCKER('Web search for Docker best practices')
+- 🟤 find_code:ast-grep('AST search for class definitions')
+- 🎯 delphi:gpt-5.2-medium('Analyzing architecture trade-offs')
+- 🎯 explore:gemini-3-flash('Finding all API endpoints')
 """
 
 import json
@@ -23,7 +27,16 @@ AGENT_MODELS = {
     "delphi": "gpt-5.2-medium",
 }
 
-# Tool display names
+# MCP Server emoji mappings
+SERVER_EMOJIS = {
+    "github": "🟡",
+    "ast-grep": "🟤",
+    "grep-app": "🟣",
+    "MCP_DOCKER": "🔵",
+    "stravinsky": "🔧",
+}
+
+# Tool display names (legacy mapping for simple tools)
 TOOL_NAMES = {
     "mcp__stravinsky__ast_grep_search": "ast-grep",
     "mcp__stravinsky__grep_search": "grep",
@@ -41,10 +54,98 @@ TOOL_NAMES = {
 }
 
 
+def parse_mcp_tool_name(tool_name: str) -> tuple[str, str, str]:
+    """
+    Parse MCP tool name into (server, tool_type, emoji).
+
+    Examples:
+        mcp__github__get_file_contents -> ("github", "get_file_contents", "🟡")
+        mcp__stravinsky__grep_search -> ("stravinsky", "grep", "🔧")
+        mcp__ast-grep__find_code -> ("ast-grep", "find_code", "🟤")
+    """
+    if not tool_name.startswith("mcp__"):
+        return ("unknown", tool_name, "🔧")
+
+    # Remove mcp__ prefix and split by __
+    parts = tool_name[5:].split("__", 1)
+    if len(parts) != 2:
+        return ("unknown", tool_name, "🔧")
+
+    server = parts[0]
+    tool_type = parts[1]
+
+    # Get emoji for server
+    emoji = SERVER_EMOJIS.get(server, "🔧")
+
+    # Get simplified tool name if available
+    simple_name = TOOL_NAMES.get(tool_name, tool_type)
+
+    return (server, simple_name, emoji)
+
+
 def extract_description(tool_name: str, params: dict) -> str:
     """Extract a concise description of what the tool did."""
 
-    # AST-grep
+    # GitHub tools
+    if "github" in tool_name.lower():
+        if "get_file_contents" in tool_name:
+            path = params.get("path", "")
+            repo = params.get("repo", "")
+            owner = params.get("owner", "")
+            return f"Fetching {path} from {owner}/{repo}"
+        elif "create_or_update_file" in tool_name:
+            path = params.get("path", "")
+            return f"Updating {path}"
+        elif "search_repositories" in tool_name:
+            query = params.get("query", "")
+            return f"Searching repos for '{query[:40]}'"
+        elif "search_code" in tool_name:
+            q = params.get("q", "")
+            return f"Searching code for '{q[:40]}'"
+        elif "create_pull_request" in tool_name:
+            title = params.get("title", "")
+            return f"Creating PR: {title[:40]}"
+        elif "get_pull_request" in tool_name or "list_pull_requests" in tool_name:
+            return "Fetching PR details"
+        return "GitHub operation"
+
+    # MCP_DOCKER tools
+    if "MCP_DOCKER" in tool_name:
+        if "web_search_exa" in tool_name:
+            query = params.get("query", "")
+            return f"Web search: '{query[:40]}'"
+        elif "create_entities" in tool_name:
+            entities = params.get("entities", [])
+            count = len(entities)
+            return f"Creating {count} knowledge graph entities"
+        elif "search_nodes" in tool_name:
+            query = params.get("query", "")
+            return f"Searching knowledge graph for '{query[:40]}'"
+        return "Knowledge graph operation"
+
+    # ast-grep tools
+    if "ast-grep" in tool_name or "ast_grep" in tool_name:
+        if "find_code" in tool_name or "search" in tool_name:
+            pattern = params.get("pattern", "")
+            return f"AST search for '{pattern[:40]}'"
+        elif "test_match" in tool_name:
+            return "Testing AST pattern"
+        elif "dump_syntax" in tool_name:
+            return "Dumping syntax tree"
+        return "AST operation"
+
+    # grep-app tools
+    if "grep-app" in tool_name or "grep_app" in tool_name:
+        if "searchCode" in tool_name:
+            query = params.get("query", "")
+            return f"Searching GitHub for '{query[:40]}'"
+        elif "github_file" in tool_name:
+            path = params.get("path", "")
+            repo = params.get("repo", "")
+            return f"Fetching {path} from {repo}"
+        return "grep.app search"
+
+    # AST-grep (stravinsky)
     if "ast_grep" in tool_name:
         pattern = params.get("pattern", "")
         directory = params.get("directory", ".")
@@ -136,9 +237,6 @@ def main():
         if not (tool_name.startswith("mcp__") or tool_name == "Task"):
             sys.exit(0)
 
-        # Get tool display name
-        display_name = TOOL_NAMES.get(tool_name, tool_name)
-
         # Special handling for Task delegations
         if tool_name == "Task":
             subagent_type = params.get("subagent_type", "unknown")
@@ -148,9 +246,14 @@ def main():
             # Show full agent delegation message
             print(f"🎯 {subagent_type}:{model}('{description}')", file=sys.stderr)
         else:
-            # Regular tool usage
+            # Parse MCP tool name to get server, tool_type, and emoji
+            server, tool_type, emoji = parse_mcp_tool_name(tool_name)
+
+            # Get description of what the tool did
             description = extract_description(tool_name, params)
-            print(f"🔧 {display_name}('{description}')", file=sys.stderr)
+
+            # Format output: emoji tool_type:server('description')
+            print(f"{emoji} {tool_type}:{server}('{description}')", file=sys.stderr)
 
         sys.exit(0)
 

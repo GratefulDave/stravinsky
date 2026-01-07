@@ -137,33 +137,27 @@ MCP Server Start
 
 ## Module Organization
 
-### New File: `mcp_bridge/tools/file_watcher.py`
+### Modified: `mcp_bridge/tools/semantic_search.py`
 
 **CodeFileEventHandler**
 - Filters file events (only code files, skip ignored dirs)
 - Handles debouncing (async task-based)
 - Invokes async callback on changes
 
-**FileWatcher**
+**CodebaseFileWatcher**
 - Wraps watchdog.observers.Observer
 - Async lifecycle (start/stop)
 - Context manager support
 - Property: is_running
 
-### Modified: `mcp_bridge/tools/semantic_search.py`
-
 **CodebaseVectorStore**
-- Add: `_watcher`, `_watch_files`, `_auto_start_watcher`, `_indexing_lock`
-- Add: `async start_watching()`, `async stop_watching()`
-- Add: `async _on_file_changed()`
-- Add: Async context manager (`__aenter__`, `__aexit__`)
-- Refactor: `index_codebase()` → wrapper + `_do_index()` implementation
-- Add: Auto-start logic in `index_codebase()`
+- Add: `_watcher`, `_watcher_lock`
+- Add: `start_watching()`, `stop_watching()`, `is_watching()`
+- Add: `start_watching()` calls `CodebaseFileWatcher`
 
 **Module-level**
-- Add: `cleanup_all_stores()` - Batch cleanup
-- Add: `atexit` handler - Emergency cleanup
-- Update: `get_store()` - Add watch_files, auto_start_watcher params
+- Add: `start_file_watcher()`, `stop_file_watcher()`, `get_file_watcher()`, `list_file_watchers()`
+- Update: `get_store()` (no signature change, watcher managed separately)
 
 ### Modified: `mcp_bridge/server.py`
 

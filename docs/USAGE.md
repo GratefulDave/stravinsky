@@ -293,9 +293,44 @@ Check the health of the semantic search system, including embedding providers an
 semantic_health()
 ```
 
-### lsp_health
+---
 
-Check the health of the persistent LSP servers (also available under LSP Tools).
+## File Watcher Tools
+
+Tools for real-time file monitoring and automatic re-indexing.
+
+### start_file_watcher
+
+Start watching a project directory for file changes.
+
+```
+start_file_watcher(project_path, provider, debounce_seconds)
+```
+
+**Parameters:**
+- `project_path`: Path to the project root
+- `provider`: Embedding provider (default: "ollama")
+- `debounce_seconds`: Time to wait before reindexing (default: 2.0)
+
+### stop_file_watcher
+
+Stop watching a project directory.
+
+```
+stop_file_watcher(project_path)
+```
+
+### list_file_watchers
+
+List all active file watchers.
+
+```
+list_file_watchers()
+```
+
+---
+
+## LSP Tools
 
 ```
 lsp_health()

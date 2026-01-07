@@ -27,9 +27,10 @@ from pathlib import Path
 from typing import Literal
 
 import httpx
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from mcp_bridge.auth.token_store import TokenStore
+from mcp_bridge.tools.query_classifier import QueryCategory, classify_query
 
 logger = logging.getLogger(__name__)
 
@@ -45,8 +46,8 @@ def get_watchdog():
     if _watchdog is None:
         with _watchdog_import_lock:
             if _watchdog is None:
-                from watchdog.observers import Observer
                 from watchdog.events import FileSystemEventHandler
+                from watchdog.observers import Observer
 
                 _watchdog = {"Observer": Observer, "FileSystemEventHandler": FileSystemEventHandler}
     return _watchdog
@@ -742,6 +743,9 @@ class CodebaseVectorStore:
         ".ruff_cache",
         "coverage",
         ".stravinsky",
+        "scratches",
+        "consoles",
+        ".idea",
     }
 
     def __init__(self, project_path: str, provider: EmbeddingProvider = "ollama"):
@@ -764,7 +768,7 @@ class CodebaseVectorStore:
         self._collection = None
 
         # File watcher attributes
-        self._watcher: "CodebaseFileWatcher | None" = None
+        self._watcher: CodebaseFileWatcher | None = None
         self._watcher_lock = threading.Lock()
 
     @property
@@ -860,7 +864,7 @@ class CodebaseVectorStore:
         if len(lines) < 5:  # Skip very small files
             return []
 
-        rel_path = str(file_path.relative_to(self.project_path))
+        rel_path = str(file_path.resolve().relative_to(self.project_path.resolve()))
         language = file_path.suffix.lstrip(".")
 
         # Use AST-aware chunking for Python files
@@ -1084,12 +1088,37 @@ class CodebaseVectorStore:
         files = []
         for file_path in self.project_path.rglob("*"):
             if file_path.is_file():
+                # Skip files outside project boundaries (symlink traversal protection)
+                try:
+                    resolved_file = file_path.resolve()
+                    resolved_project = self.project_path.resolve()
+
+                    # Check if file is under project using parent chain with samefile()
+                    # This handles macOS /var → /private/var aliasing and symlinks
+                    found = False
+                    current = resolved_file.parent
+                    while current != current.parent:  # Stop at filesystem root
+                        try:
+                            if current.samefile(resolved_project):
+                                found = True
+                                break
+                        except OSError:
+                            # samefile can fail on some filesystems; try string comparison
+                            if current == resolved_project:
+                                found = True
+                                break
+                        current = current.parent
+
+                    if not found:
+                        continue  # Outside project
+                except (ValueError, OSError):
+                    continue  # Outside project boundaries
+
                 # Skip hidden files and directories
                 if any(
                     part.startswith(".") for part in file_path.parts[len(self.project_path.parts) :]
-                ):
-                    if file_path.suffix not in {".md", ".txt"}:  # Allow .github docs
-                        continue
+                ) and file_path.suffix not in {".md", ".txt"}:  # Allow .github docs
+                    continue
 
                 # Skip excluded directories
                 if any(skip_dir in file_path.parts for skip_dir in self.SKIP_DIRS):
@@ -1924,7 +1953,7 @@ def _aggregate_results(
     # Reciprocal Rank Fusion constant
     k = 60
 
-    for query_idx, results in enumerate(all_results):
+    for _query_idx, results in enumerate(all_results):
         for rank, result in enumerate(results):
             file_key = f"{result.get('file', '')}:{result.get('lines', '')}"
 
@@ -2149,13 +2178,19 @@ async def enhanced_search(
     Returns:
         Formatted search results.
     """
-    # Detect query complexity
-    complex_indicators = [" and ", " then ", " also ", " with ", ", then", ". then", "; "]
-    is_complex = any(ind in query.lower() for ind in complex_indicators)
+    # Use classifier for intelligent mode selection
+    classification = classify_query(query)
+    logger.debug(
+        f"Query classified as {classification.category.value} "
+        f"(confidence: {classification.confidence:.2f}, suggested: {classification.suggested_tool})"
+    )
 
-    # Determine mode
+    # Determine mode based on classification
     if mode == "auto":
-        mode = "decompose" if is_complex else "expand"
+        # HYBRID → decompose (complex multi-part queries)
+        # SEMANTIC → expand (conceptual queries benefit from variations)
+        # PATTERN/STRUCTURAL → expand (simple queries, quick path)
+        mode = "decompose" if classification.category == QueryCategory.HYBRID else "expand"
 
     if mode == "decompose":
         return await decomposed_search(

@@ -35,6 +35,73 @@ You are delegated by the Stravinsky orchestrator for:
 
 The Explore agent supports **four complementary search approaches** with different strengths. Choose the right tool(s) based on your query type:
 
+### Pre-Classification Routing
+
+Before selecting search tools, classify the query to determine the optimal search strategy:
+
+**Step 1: Classify Query**
+
+```python
+from mcp_bridge.tools import classify_query
+
+classification = classify_query("How is authentication handled?")
+# Returns: QueryClassification(
+#     category=SEMANTIC,
+#     confidence=0.85,
+#     suggested_tool="semantic_search",
+#     reasoning="Conceptual/architectural query"
+# )
+```
+
+**Step 2: Route to Optimal Tool**
+
+- **PATTERN** (exact matches) → `grep_search` (fastest for text search)
+- **STRUCTURAL** (AST-aware patterns) → `ast_grep_search` (code structure analysis)
+- **SEMANTIC** (conceptual/architectural) → `semantic_search` (embeddings-based)
+- **HYBRID** (multi-modal queries) → Combine multiple tools (see Hybrid Search section)
+
+**Example: Classification-Driven Search Workflow**
+
+```python
+# Step 1: Classify the query
+result = classify_query("Find all classes inheriting from BaseModel")
+# → QueryClassification(
+#     category=STRUCTURAL,
+#     confidence=0.95,
+#     suggested_tool="ast_grep_search"
+# )
+
+# Step 2: Route to optimal tool based on classification
+if result.category == QueryCategory.STRUCTURAL:
+    matches = ast_grep_search(
+        pattern="class $CLASS($$$BASES) { $$$ }",
+        directory="."
+    )
+    return matches
+elif result.category == QueryCategory.PATTERN:
+    matches = grep_search(
+        pattern=result.suggested_pattern,
+        directory="."
+    )
+    return matches
+elif result.category == QueryCategory.SEMANTIC:
+    matches = semantic_search(
+        query=original_query,
+        n_results=10
+    )
+    return matches
+```
+
+**Classification Benefits**:
+- Avoids manual trial-and-error when choosing tools
+- Optimizes search performance by routing to the most efficient tool
+- Increases result relevance by matching query intent to search methodology
+- Enables better synthesis when combining multiple search approaches
+
+This pre-classification step ensures queries are routed intelligently before execution.
+
+
+
 ### Decision Matrix: Which Search Tool to Use
 
 | Query Type | Primary Tool | Secondary | Hybrid? |

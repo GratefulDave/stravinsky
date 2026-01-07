@@ -467,24 +467,40 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
 
         elif name == "start_file_watcher":
             from .tools.semantic_search import start_file_watcher
+            import json
 
-            result_content = start_file_watcher(
+            watcher = start_file_watcher(
                 project_path=arguments.get("project_path", "."),
                 provider=arguments.get("provider", "ollama"),
                 debounce_seconds=arguments.get("debounce_seconds", 2.0),
             )
 
+            result_content = json.dumps({
+                "status": "started",
+                "project_path": str(watcher.project_path),
+                "debounce_seconds": watcher.debounce_seconds,
+                "provider": watcher.store.provider_name,
+                "is_running": watcher.is_running()
+            }, indent=2)
+
         elif name == "stop_file_watcher":
             from .tools.semantic_search import stop_file_watcher
+            import json
 
-            result_content = stop_file_watcher(
+            stopped = stop_file_watcher(
                 project_path=arguments.get("project_path", "."),
             )
 
+            result_content = json.dumps({
+                "stopped": stopped,
+                "project_path": arguments.get("project_path", ".")
+            }, indent=2)
+
         elif name == "list_file_watchers":
             from .tools.semantic_search import list_file_watchers
+            import json
 
-            result_content = list_file_watchers()
+            result_content = json.dumps(list_file_watchers(), indent=2)
 
         elif name == "multi_query_search":
             from .tools.semantic_search import multi_query_search

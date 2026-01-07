@@ -38,18 +38,16 @@ This will:
 ### Manual Control
 
 ```python
-# Get store with watching disabled (default)
+# Get store (default)
 store = get_store(project_path=".")
 
-# Enable watching explicitly
-store = get_store(project_path=".", watch_files=True, auto_start_watcher=True)
-await store.index_codebase()  # Watcher auto-starts after index
+# Start watching explicitly
+from mcp_bridge.tools.semantic_search import start_file_watcher
+start_file_watcher(project_path=".", provider="ollama")
 
 # Stop watching
-await store.stop_watching()
-
-# Start watching again
-await store.start_watching()
+from mcp_bridge.tools.semantic_search import stop_file_watcher
+stop_file_watcher(project_path=".")
 ```
 
 ### Context Manager (Recommended)

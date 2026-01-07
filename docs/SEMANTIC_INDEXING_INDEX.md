@@ -130,19 +130,11 @@ This directory contains comprehensive documentation on Stravinsky's semantic sea
 - ✅ Search capabilities: 5 advanced variants
 - ✅ Metadata extraction: Language-aware, AST-aware
 - ✅ Incremental updates: Only changed files
-- ❌ Auto-indexing: NOT implemented (requires manual trigger)
+- ✅ Auto-indexing: Fully implemented (FileWatcher)
 
 ## Implementation Checklist for Auto-Indexing
 
-If you decide to implement Option A (recommended):
-
-- [ ] Create `mcp_bridge/background_indexing.py`
-- [ ] Add async task creation to `async_main()` 
-- [ ] Make it configurable with `STRAVINSKY_AUTO_INDEX` env var
-- [ ] Add logging/progress to stderr
-- [ ] Test with incremental updates
-- [ ] Document in CLAUDE.md
-- [ ] Add to .claude/commands/ for easy manual trigger
+✅ **COMPLETED:** FileWatcher implementation is done. See `README_filewatcher.md`.
 
 ## Embedding Provider Setup
 

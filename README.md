@@ -241,7 +241,7 @@ stravinsky/
 │   │   ├── delphi.md             # Strategic advisor (GPT-5.2)
 │   │   └── HOOKS.md              # Hook architecture guide
 │   ├── commands/                 # Slash commands (skills)
-│   │   ├── stravinsky.md         # /stravinsky orchestrator
+│   │   ├── stravinsky.md         # /strav orchestrator
 │   │   ├── delphi.md             # /delphi strategic advisor
 │   │   ├── dewey.md              # /dewey documentation research
 │   │   ├── publish.md            # /publish PyPI release

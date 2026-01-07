@@ -813,6 +813,57 @@ def get_tool_definitions() -> List[Tool]:
             },
         ),
         Tool(
+            name="start_file_watcher",
+            description=(
+                "Start automatic background reindexing when code files change. "
+                "Watches for .py file changes and triggers semantic_index automatically. "
+                "Run semantic_index() first before starting the watcher."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "project_path": {
+                        "type": "string",
+                        "description": "Path to the project root",
+                        "default": ".",
+                    },
+                    "provider": {
+                        "type": "string",
+                        "description": "Embedding provider: ollama/mxbai (local/free), gemini (cloud/OAuth), openai (cloud/OAuth), huggingface (cloud)",
+                        "enum": ["ollama", "mxbai", "gemini", "openai", "huggingface"],
+                        "default": "ollama",
+                    },
+                    "debounce_seconds": {
+                        "type": "number",
+                        "description": "Wait time after file changes before reindexing (default: 2.0)",
+                        "default": 2.0,
+                    },
+                },
+            },
+        ),
+        Tool(
+            name="stop_file_watcher",
+            description="Stop the file watcher for a project.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "project_path": {
+                        "type": "string",
+                        "description": "Path to the project root",
+                        "default": ".",
+                    },
+                },
+            },
+        ),
+        Tool(
+            name="list_file_watchers",
+            description="List all active file watchers across all projects.",
+            inputSchema={
+                "type": "object",
+                "properties": {},
+            },
+        ),
+        Tool(
             name="multi_query_search",
             description=(
                 "Search with LLM-expanded query variations for better recall. "

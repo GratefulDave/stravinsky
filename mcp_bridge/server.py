@@ -512,6 +512,27 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 provider=arguments.get("provider", "ollama"),
             )
 
+        elif name == "start_file_watcher":
+            from .tools.semantic_search import start_file_watcher
+
+            result_content = await start_file_watcher(
+                project_path=arguments.get("project_path", "."),
+                provider=arguments.get("provider", "ollama"),
+                debounce_seconds=arguments.get("debounce_seconds", 2.0),
+            )
+
+        elif name == "stop_file_watcher":
+            from .tools.semantic_search import stop_file_watcher
+
+            result_content = await stop_file_watcher(
+                project_path=arguments.get("project_path", "."),
+            )
+
+        elif name == "list_file_watchers":
+            from .tools.semantic_search import list_file_watchers
+
+            result_content = await list_file_watchers()
+
         elif name == "multi_query_search":
             from .tools.semantic_search import multi_query_search
 

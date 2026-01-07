@@ -6,7 +6,7 @@ description: |
   - "Find all instances of pattern Y"
   - Analyzing codebase structure
   - Locating functions, classes, modules
-tools: Read, Grep, Glob, Bash, mcp__stravinsky__grep_search, mcp__stravinsky__glob_files, mcp__stravinsky__ast_grep_search, mcp__stravinsky__lsp_document_symbols, mcp__stravinsky__lsp_workspace_symbols, mcp__stravinsky__lsp_find_references, mcp__stravinsky__lsp_goto_definition, mcp__stravinsky__invoke_gemini, mcp__grep-app__searchCode
+tools: Read, Grep, Glob, Bash, mcp__stravinsky__grep_search, mcp__stravinsky__glob_files, mcp__stravinsky__ast_grep_search, mcp__stravinsky__lsp_document_symbols, mcp__stravinsky__lsp_workspace_symbols, mcp__stravinsky__lsp_find_references, mcp__stravinsky__lsp_goto_definition, mcp__stravinsky__invoke_gemini, mcp__stravinsky__semantic_search, mcp__grep-app__searchCode
 model: haiku
 ---
 
@@ -70,6 +70,34 @@ You are delegated by the Stravinsky orchestrator for:
 3. Read key files (entry points, configs)
 4. Summarize architecture and patterns
 ```
+
+### For Concept-Based Queries (SEMANTIC SEARCH FALLBACK)
+
+When grep_search and ast_grep_search return no results for concept-based queries like:
+- "Find authentication logic"
+- "Where is error handling done?"
+- "How does the caching work?"
+
+**Use `semantic_search` as a fallback:**
+
+```python
+# If grep/AST searches return no useful results for conceptual queries
+semantic_results = semantic_search(
+    query="authentication logic",
+    project_path=".",
+    n_results=10
+)
+```
+
+**Semantic search requires initial indexing:**
+- First call `semantic_index(project_path=".")` to index the codebase
+- Uses Ollama `nomic-embed-text` embeddings (run `ollama pull nomic-embed-text` first)
+- Results include relevance scores (0-1) and code previews
+
+**When to use semantic_search:**
+- Conceptual/descriptive queries that don't match exact patterns
+- When you need to find code by *what it does* rather than *what it's named*
+- As a last resort after grep/AST/LSP tools fail to find relevant results
 
 ## Multi-Model Usage
 

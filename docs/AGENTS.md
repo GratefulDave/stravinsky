@@ -374,7 +374,8 @@ review = agent_spawn(
 ## Performance Tips
 
 1. **Use `explore` and `dewey` liberally** - they're cheap Haiku->Gemini wrappers
-2. **Batch related tasks** - spawn multiple explore agents together
+2. **Unified LSP Performance** - All agents benefit from the unified, persistent LSP architecture. Tools like `lsp_hover` and `lsp_goto_definition` now use long-running servers, providing near-instant results by avoiding cold-start overhead and leveraging workspace-wide indexing caches.
+3. **Batch related tasks** - spawn multiple explore agents together
 3. **Use `agent_progress`** - monitor long-running agents
 4. **Cancel stuck agents** - don't wait indefinitely
 5. **Reserve `delphi` for hard problems** - it uses expensive GPT-5.2

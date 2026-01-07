@@ -283,6 +283,34 @@ glob_files(pattern, path)
 
 ---
 
+## Health & Diagnostics
+
+### semantic_health
+
+Check the health of the semantic search system, including embedding providers and vector database.
+
+```
+semantic_health()
+```
+
+### lsp_health
+
+Check the health of the persistent LSP servers (also available under LSP Tools).
+
+```
+lsp_health()
+```
+
+### get_system_health
+
+Comprehensive health check for the entire Stravinsky system.
+
+```
+get_system_health()
+```
+
+---
+
 ## LSP Tools
 
 Full Language Server Protocol support for Python.
@@ -334,6 +362,20 @@ Search symbols across workspace.
 ```
 lsp_workspace_symbols(query)
 ```
+
+### lsp_health
+
+Check the health and status of the persistent LSP servers.
+
+```
+lsp_health()
+```
+
+**Reports:**
+- Server status (Running/Stopped)
+- Process ID (PID)
+- Restart count
+- Launch command
 
 ### lsp_rename
 

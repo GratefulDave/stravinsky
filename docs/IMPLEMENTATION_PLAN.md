@@ -686,21 +686,21 @@ The agentic orchestration layer is now operational, enabling complex, multi-step
 
 ### Phase 1: LSP Tools (Week 1)
 
-- [ ] Add `lsp_code_action_resolve` to `tools.py`
-- [ ] Add `lsp_extract_refactor` to `tools.py`
-- [ ] Register both in `server_tools.py`
-- [ ] Add handlers in `server.py`
-- [ ] Update `__init__.py` exports
-- [ ] Test with Python files
+- [x] Add `lsp_code_action_resolve` to `tools.py`
+- [x] Add `lsp_extract_refactor` to `tools.py`
+- [x] Register both in `server_tools.py`
+- [x] Add handlers in `server.py`
+- [x] Update `__init__.py` exports
+- [x] Test with Python files
 
 ### Phase 2: Persistent LSP (Week 2)
 
-- [ ] Create `mcp_bridge/tools/lsp/manager.py`
-- [ ] Add jedi-language-server support
-- [ ] Add typescript-language-server support
-- [ ] Update existing tools to use manager
-- [ ] Add graceful shutdown to MCP server
-- [ ] Test multi-language support
+- [x] Create `mcp_bridge/tools/lsp/manager.py`
+- [x] Add jedi-language-server support
+- [x] Add typescript-language-server support
+- [x] Update existing tools to use manager
+- [x] Add graceful shutdown to MCP server
+- [x] Test multi-language support
 
 ### Phase 3: Hierarchical Orchestration (Week 3)
 

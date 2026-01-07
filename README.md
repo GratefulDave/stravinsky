@@ -16,11 +16,12 @@
 - 🔐 **OAuth Authentication** - Secure browser-based auth for Google (Gemini) and OpenAI (ChatGPT)
 - 🤖 **Multi-Model Support** - Seamlessly invoke Gemini and GPT models from Claude
 - 🎯 **Native Subagent Orchestration** - Auto-delegating orchestrator with parallel execution (zero CLI overhead)
-- 🛠️ **35 MCP Tools** - Model invocation, code search, LSP refactoring, session management, and more
+- 🛠️ **38 MCP Tools** - Model invocation, code search, semantic search, LSP refactoring, session management, and more
 - 🧠 **9 Specialized Native Agents** - Stravinsky (orchestrator), Research Lead, Implementation Lead, Delphi (GPT-5.2 advisor), Dewey (documentation), Explore (code search), Frontend (Gemini 3 Pro High UI/UX), Code Reviewer, Debugger
 - 🔄 **Hook-Based Delegation** - PreToolUse hooks enforce delegation patterns with hard boundaries (exit code 2)
 - 📝 **LSP Integration** - Full Language Server Protocol support with persistent servers (35x speedup), code refactoring, and advanced navigation
 - 🔍 **AST-Aware Search** - Structural code search and refactoring with ast-grep
+- 🧠 **Semantic Code Search** - Natural language queries with local embeddings (ChromaDB + Ollama)
 - ⚡ **Cost-Optimized Routing** - Free/cheap agents (explore, dewey) always async, expensive (delphi) only when needed
 
 ## Quick Start
@@ -104,14 +105,15 @@ Stravinsky uses **native Claude Code subagents** (.claude/agents/) with automati
 - **ULTRAWORK**: Maximum parallel execution - spawn all async agents immediately
 ````
 
-## Tools (35)
+## Tools (38)
 
 | Category         | Tools                                                                              |
 | ---------------- | ---------------------------------------------------------------------------------- |
 | **Model Invoke** | `invoke_gemini`, `invoke_openai`, `get_system_health`                              |
 | **Environment**  | `get_project_context`, `task_spawn`, `task_status`, `task_list`                    |
-| **Agents**       | `agent_spawn`, `agent_output`, `agent_cancel`, `agent_list`, `agent_progress`      |
+| **Agents**       | `agent_spawn`, `agent_output`, `agent_cancel`, `agent_list`, `agent_progress`, `agent_retry` |
 | **Code Search**  | `ast_grep_search`, `ast_grep_replace`, `grep_search`, `glob_files`                 |
+| **Semantic**     | `semantic_search`, `semantic_index`, `semantic_stats`                              |
 | **LSP**          | `lsp_diagnostics`, `lsp_hover`, `lsp_goto_definition`, `lsp_find_references`, `lsp_document_symbols`, `lsp_workspace_symbols`, `lsp_prepare_rename`, `lsp_rename`, `lsp_code_actions`, `lsp_code_action_resolve`, `lsp_extract_refactor`, `lsp_servers` (12 tools) |
 | **Sessions**     | `session_list`, `session_read`, `session_search`                                   |
 | **Skills**       | `skill_list`, `skill_get`                                                          |
@@ -123,6 +125,47 @@ The Phase 2 update introduced the `LSPManager`, which maintains persistent langu
 - **35x Speedup**: Subsequent LSP calls are near-instant because the server no longer needs to re-initialize and re-index the codebase for every request
 - **Code Refactoring**: New support for `lsp_extract_refactor` allows automated code extraction (e.g., extracting a method or variable) with full symbol resolution
 - **Code Actions**: `lsp_code_action_resolve` enables complex, multi-step refactoring workflows with automatic fixes for diagnostics
+
+### Semantic Code Search
+
+Natural language code search powered by embeddings. Find code by meaning, not just keywords.
+
+**Prerequisites:**
+
+```bash
+# Install Ollama (default provider - free, local)
+brew install ollama
+
+# Pull the embedding model
+ollama pull nomic-embed-text
+```
+
+**Usage:**
+
+```python
+# Via MCP tools in Claude Code
+semantic_index(project_path=".", provider="ollama")  # First-time indexing
+semantic_search(query="OAuth authentication logic", n_results=5)
+semantic_stats()  # View index statistics
+```
+
+**Example queries:**
+- "find authentication logic"
+- "error handling in API endpoints"
+- "database connection pooling"
+
+**Providers:**
+
+| Provider | Model | Cost | Setup |
+|----------|-------|------|-------|
+| `ollama` (default) | nomic-embed-text | Free/local | `ollama pull nomic-embed-text` |
+| `gemini` | gemini-embedding-001 | OAuth/cloud | `stravinsky-auth login gemini` |
+| `openai` | text-embedding-3-small | OAuth/cloud | `stravinsky-auth login openai` |
+
+**Technical details:**
+- **AST-aware chunking**: Python files split by functions/classes for better semantic boundaries
+- **Persistent storage**: ChromaDB at `~/.stravinsky/vectordb/<project>_<provider>/`
+- **Async parallel embeddings**: 10 concurrent for fast indexing
 
 ## Native Subagents (9)
 
@@ -200,6 +243,7 @@ stravinsky/
 │   │   ├── model_invoke.py       # invoke_gemini, invoke_openai
 │   │   ├── agent_manager.py      # agent_spawn, agent_output, etc.
 │   │   ├── code_search.py        # ast_grep, grep, glob
+│   │   ├── semantic_search.py    # semantic_search, semantic_index, semantic_stats
 │   │   ├── session_manager.py    # session_list, session_read, etc.
 │   │   ├── skill_loader.py       # skill_list, skill_get
 │   │   ├── project_context.py    # get_project_context

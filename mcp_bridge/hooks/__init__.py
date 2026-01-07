@@ -99,21 +99,26 @@ __all__ = [
     "parallel_execution",
     "stravinsky_mode",
     "todo_delegation",
-    
     # Context & state
     "context",
     "todo_continuation",
     "pre_compact",
-    
     # Tool enhancement
     "tool_messaging",
     "edit_recovery",
     "truncator",
-    
     # Agent lifecycle
     "notification_hook",
     "subagent_stop",
 ]
+
+
+def initialize_hooks():
+    """Initialize and register all hooks with the HookManager."""
+    # Currently hooks are primarily external scripts or lazy-loaded.
+    # This entry point allows for future internal hook registration.
+    pass
+
 
 __version__ = "0.2.63"
 __author__ = "David Andrews"

@@ -136,9 +136,14 @@ Natural language code search powered by embeddings. Find code by meaning, not ju
 # Install Ollama (default provider - free, local)
 brew install ollama
 
-# Pull the embedding model
+# Pull the recommended lightweight embedding model (274MB)
 ollama pull nomic-embed-text
+
+# Or for better accuracy (670MB, slower):
+ollama pull mxbai-embed-large
 ```
+
+**Recommended model:** `nomic-embed-text` is lightweight (274MB), fast, and works great for code search. It's the best choice for most users, especially on space-constrained systems like MacBooks.
 
 **Usage:**
 
@@ -156,11 +161,12 @@ semantic_stats()  # View index statistics
 
 **Providers:**
 
-| Provider | Model | Cost | Setup |
-|----------|-------|------|-------|
-| `ollama` (default) | nomic-embed-text | Free/local | `ollama pull nomic-embed-text` |
-| `gemini` | gemini-embedding-001 | OAuth/cloud | `stravinsky-auth login gemini` |
-| `openai` | text-embedding-3-small | OAuth/cloud | `stravinsky-auth login openai` |
+| Provider | Model | Size | Cost | Setup |
+|----------|-------|------|------|-------|
+| `ollama` (default) | nomic-embed-text (recommended) | 274MB | Free/local | `ollama pull nomic-embed-text` |
+| `ollama` | mxbai-embed-large (advanced) | 670MB | Free/local | `ollama pull mxbai-embed-large` |
+| `gemini` | gemini-embedding-001 | N/A | OAuth/cloud | `stravinsky-auth login gemini` |
+| `openai` | text-embedding-3-small | N/A | OAuth/cloud | `stravinsky-auth login openai` |
 
 **Technical details:**
 - **AST-aware chunking**: Python files split by functions/classes for better semantic boundaries

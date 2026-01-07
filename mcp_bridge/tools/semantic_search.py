@@ -6,6 +6,7 @@ Uses ChromaDB for persistent vector storage with multiple embedding providers:
 - Mxbai (local, free) - mxbai-embed-large (1024 dims, better for code)
 - Gemini (cloud, OAuth) - gemini-embedding-001 (768-3072 dims)
 - OpenAI (cloud, OAuth) - text-embedding-3-small (1536 dims)
+- HuggingFace (cloud, token) - sentence-transformers/all-mpnet-base-v2 (768 dims)
 
 Enables natural language queries like "find authentication logic" without
 requiring exact pattern matching.
@@ -32,7 +33,7 @@ from mcp_bridge.auth.token_store import TokenStore
 logger = logging.getLogger(__name__)
 
 # Embedding provider type
-EmbeddingProvider = Literal["ollama", "mxbai", "gemini", "openai"]
+EmbeddingProvider = Literal["ollama", "mxbai", "gemini", "openai", "huggingface"]
 
 # Lazy imports to avoid startup cost
 _chromadb = None
@@ -427,6 +428,197 @@ class MxbaiProvider(BaseEmbeddingProvider):
         return response["embedding"]
 
 
+class HuggingFaceProvider(BaseEmbeddingProvider):
+    """Hugging Face Inference API embedding provider.
+
+    Uses the Hugging Face Inference API for embeddings. Requires HF_TOKEN from:
+    1. Environment variable: HF_TOKEN or HUGGING_FACE_HUB_TOKEN
+    2. HF CLI config: ~/.cache/huggingface/token or ~/.huggingface/token
+
+    Default model: sentence-transformers/all-mpnet-base-v2 (768 dims, high quality)
+    """
+
+    DEFAULT_MODEL = "sentence-transformers/all-mpnet-base-v2"
+    DEFAULT_DIMENSION = 768
+
+    def __init__(self, model: str | None = None):
+        self._available: bool | None = None
+        self._model = model or self.DEFAULT_MODEL
+        # Dimension varies by model, but we'll use default for common models
+        self._dimension = self.DEFAULT_DIMENSION
+        self._token: str | None = None
+
+    @property
+    def dimension(self) -> int:
+        return self._dimension
+
+    @property
+    def name(self) -> str:
+        return "huggingface"
+
+    def _get_hf_token(self) -> str | None:
+        """Discover HF token from environment or CLI config."""
+        import os
+
+        # Check environment variables first
+        token = os.getenv("HF_TOKEN") or os.getenv("HUGGING_FACE_HUB_TOKEN")
+        if token:
+            return token
+
+        # Check HF CLI config locations
+        hf_token_paths = [
+            Path.home() / ".cache" / "huggingface" / "token",
+            Path.home() / ".huggingface" / "token",
+        ]
+
+        for token_path in hf_token_paths:
+            if token_path.exists():
+                try:
+                    return token_path.read_text().strip()
+                except Exception:
+                    continue
+
+        return None
+
+    async def check_available(self) -> bool:
+        if self._available is not None:
+            return self._available
+
+        try:
+            self._token = self._get_hf_token()
+            if not self._token:
+                print(
+                    "⚠️  Hugging Face token not found. Run: huggingface-cli login or set HF_TOKEN env var",
+                    file=sys.stderr,
+                )
+                self._available = False
+                return False
+
+            self._available = True
+            return True
+        except Exception as e:
+            print(f"⚠️  Hugging Face not available: {e}", file=sys.stderr)
+            self._available = False
+            return False
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        retry=retry_if_exception_type(httpx.HTTPStatusError),
+    )
+    async def get_embedding(self, text: str) -> list[float]:
+        """Get embedding from HF Inference API with retry logic."""
+        if not self._token:
+            self._token = self._get_hf_token()
+            if not self._token:
+                raise ValueError(
+                    "Hugging Face token not found. Run: huggingface-cli login or set HF_TOKEN"
+                )
+
+        httpx_client = get_httpx()
+
+        # HF Serverless Inference API endpoint
+        # Note: Free tier may have limited availability for some models
+        api_url = f"https://api-inference.huggingface.co/pipeline/feature-extraction/{self._model}"
+
+        headers = {
+            "Authorization": f"Bearer {self._token}",
+        }
+
+        # Truncate text to reasonable length (most models have 512 token limit)
+        # ~2000 chars ≈ 500 tokens for safety
+        truncated = text[:2000] if len(text) > 2000 else text
+
+        # HF Inference API accepts raw JSON with inputs field
+        payload = {"inputs": [truncated], "options": {"wait_for_model": True}}
+
+        async with httpx_client.AsyncClient(timeout=60.0) as client:
+            response = await client.post(api_url, headers=headers, json=payload)
+
+            # Handle specific error codes
+            if response.status_code == 401:
+                raise ValueError(
+                    "Hugging Face authentication failed. Run: huggingface-cli login or set HF_TOKEN"
+                )
+            elif response.status_code == 410:
+                # Model removed from free tier
+                raise ValueError(
+                    f"Model {self._model} is no longer available on HF free Inference API (410 Gone). "
+                    "Try a different model or use Ollama for local embeddings instead."
+                )
+            elif response.status_code == 503:
+                # Model loading - retry will handle this
+                logger.info(f"Model {self._model} is loading, retrying...")
+                response.raise_for_status()
+            elif response.status_code == 429:
+                # Rate limit - retry will handle with exponential backoff
+                logger.warning("HF API rate limit hit, retrying with backoff...")
+                response.raise_for_status()
+
+            response.raise_for_status()
+
+            # Response is a single embedding vector (list of floats)
+            embedding = response.json()
+
+            # Handle different response formats
+            if isinstance(embedding, list):
+                # Direct embedding or batch with single item
+                if isinstance(embedding[0], (int, float)):
+                    return embedding
+                elif isinstance(embedding[0], list):
+                    # Batch response with single embedding
+                    return embedding[0]
+
+            raise ValueError(f"Unexpected response format from HF API: {type(embedding)}")
+
+    async def embed_batch(self, texts: list[str]) -> list[list[float]]:
+        """Batch embedding support for HF API.
+
+        HF API supports batch requests, so we can send multiple texts at once.
+        """
+        if not texts:
+            return []
+
+        if not self._token:
+            self._token = self._get_hf_token()
+            if not self._token:
+                raise ValueError(
+                    "Hugging Face token not found. Run: huggingface-cli login or set HF_TOKEN"
+                )
+
+        httpx_client = get_httpx()
+
+        # HF Serverless Inference API endpoint
+        api_url = f"https://api-inference.huggingface.co/pipeline/feature-extraction/{self._model}"
+
+        headers = {
+            "Authorization": f"Bearer {self._token}",
+        }
+
+        # Truncate all texts
+        truncated_texts = [text[:2000] if len(text) > 2000 else text for text in texts]
+
+        payload = {"inputs": truncated_texts, "options": {"wait_for_model": True}}
+
+        async with httpx_client.AsyncClient(timeout=120.0) as client:
+            response = await client.post(api_url, headers=headers, json=payload)
+
+            if response.status_code == 401:
+                raise ValueError(
+                    "Hugging Face authentication failed. Run: huggingface-cli login or set HF_TOKEN"
+                )
+
+            response.raise_for_status()
+
+            embeddings = response.json()
+
+            # Response should be a list of embeddings
+            if isinstance(embeddings, list) and all(isinstance(e, list) for e in embeddings):
+                return embeddings
+
+            raise ValueError(f"Unexpected batch response format from HF API: {type(embeddings)}")
+
+
 def get_embedding_provider(provider: EmbeddingProvider) -> BaseEmbeddingProvider:
     """Factory function to get an embedding provider instance."""
     providers = {
@@ -434,6 +626,7 @@ def get_embedding_provider(provider: EmbeddingProvider) -> BaseEmbeddingProvider
         "mxbai": MxbaiProvider,
         "gemini": GeminiProvider,
         "openai": OpenAIProvider,
+        "huggingface": HuggingFaceProvider,
     }
 
     if provider not in providers:
@@ -1112,7 +1305,7 @@ async def semantic_search(
         decorator: Filter by decorator (e.g., "@property", "@staticmethod")
         is_async: Filter by async status (True = async only, False = sync only)
         base_class: Filter by base class (e.g., "BaseClass")
-        provider: Embedding provider (ollama, gemini, openai)
+        provider: Embedding provider (ollama, mxbai, gemini, openai, huggingface)
 
     Returns:
         Formatted search results with file paths and code snippets.
@@ -1260,7 +1453,8 @@ async def index_codebase(
     Args:
         project_path: Path to the project root
         force: If True, reindex everything. Otherwise, only new/changed files.
-        provider: Embedding provider - ollama (local/free), gemini (cloud/OAuth), openai (cloud/OAuth)
+        provider: Embedding provider - ollama (local/free), mxbai (local/free),
+                  gemini (cloud/OAuth), openai (cloud/OAuth), huggingface (cloud/token)
 
     Returns:
         Indexing statistics.
@@ -1287,7 +1481,8 @@ async def semantic_stats(
 
     Args:
         project_path: Path to the project root
-        provider: Embedding provider - ollama (local/free), gemini (cloud/OAuth), openai (cloud/OAuth)
+        provider: Embedding provider - ollama (local/free), mxbai (local/free),
+                  gemini (cloud/OAuth), openai (cloud/OAuth), huggingface (cloud/token)
 
     Returns:
         Index statistics.

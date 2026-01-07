@@ -1,0 +1,168 @@
+MCP TOOL CALL FLOW - WHERE TO ADD FORMATTED OUTPUT
+=====================================================
+
+USER CALLS TOOL (via Claude Code)
+    |
+    v
+[MCP Protocol In]
+    |
+    v
+server.py:144 @server.call_tool()
+    |
+    ├─ Calls: _format_tool_log() [Line 147]  <-- INJECTION POINT #2
+    |  └─ Returns concise log message
+    |
+    v
+server.py:313-316 (agent_spawn dispatch)  <-- INJECTION POINT #1
+    |
+    ├─ Extract: agent_type, description, display_model, cost_emoji
+    |
+    ├─ Log: logger.info(formatted message)
+    |
+    v
+agent_manager.py:682 async def agent_spawn()
+    |
+    ├─ Calls: manager.spawn() [Line 892]
+    |
+    v
+agent_manager.py:211 def spawn()
+    |
+    ├─ Calls: _execute_agent() [Line 260]
+    |
+    v
+agent_manager.py:266 def _execute_agent()
+    |
+    ├─ Log: logger.info() [Line 295]  <-- INJECTION POINT #3
+    |
+    ├─ Print: stderr notification [NEW]
+    |
+    ├─ Start: subprocess with Claude CLI
+    |
+    v
+agent_manager.py:915-916 Format result
+    |
+    ├─ Already formatted perfectly!
+    │  Format: "{emoji} {type}:{model}('{desc}') {status}\ntask_id={task_id}"
+    |
+    v
+Return to Claude Code
+    |
+    v
+[MCP Protocol Out]
+    |
+    v
+Claude Code displays to user
+
+
+PARALLEL FLOW FOR INVOKE_GEMINI / INVOKE_OPENAI
+================================================
+
+USER CALLS TOOL
+    |
+    v
+server.py:158-168 (invoke_gemini dispatch)
+    |
+    v
+model_invoke.py:301 async def invoke_gemini()
+    |
+    ├─ Log: logger.info() [Line 361]
+    |
+    ├─ Print to stderr: [Line 367]
+    │  "🔮 GEMINI: {model} | agent={type} task={id} | {desc}"
+    │
+    │  ALREADY FORMATTED!
+    │  Enhancement: Could add cost emoji
+    |
+    v
+Invoke Gemini API
+    |
+    v
+Return formatted result
+
+
+TASK_SPAWN FLOW
+===============
+
+server.py:354-360 (task_spawn dispatch)  <-- INJECTION POINT #4
+    |
+    ├─ Extract: model, prompt
+    |
+    ├─ Log: logger.info(formatted message)
+    |
+    v
+background_tasks.py:132 async def task_spawn()
+    |
+    ├─ Create task
+    |
+    ├─ Call: manager.spawn() [Line 136]
+    |
+    v
+background_tasks.py:93 def spawn()
+    |
+    ├─ Build command  [Line 109-114]
+    |
+    ├─ Print to stderr: [NEW - INJECTION POINT #5]
+    │  "⏳ TASK_SPAWN: {model}('{desc}') | pid={pid}"
+    |
+    ├─ Start: subprocess.Popen()
+    |
+    v
+background_tasks.py:132-137 Format result
+    |
+    ├─ Return: Enhance format to match agent_spawn  [INJECTION POINT #4B]
+    │  "⏳ task [{model}]('{desc}') spawned\ntask_id={id}"
+    |
+    v
+Return to Claude Code
+
+
+KEY METRICS
+===========
+
+Lines of code to modify: ~15-20 lines total
+Files to touch: 3 files
+Risk level: LOW (only adding logging, no logic changes)
+Backwards compatibility: 100% (output only)
+
+Injection Point Impact Ranking:
+  1. HIGH   - server.py:313-316 (dispatcher)
+  2. HIGH   - server.py:98-141 (_format_tool_log)
+  3. MEDIUM - agent_manager.py:295 (stderr)
+  4. LOW    - background_tasks.py:132-137 (formatting)
+  5. LOW    - background_tasks.py:117-127 (stderr)
+
+WHAT'S ALREADY WORKING
+======================
+
+✅ agent_spawn output - Perfect formatting with emoji and task_id
+✅ invoke_gemini stderr - Shows model, agent, task info
+✅ invoke_openai stderr - Shows model, agent, task info
+✅ Cost tier emoji system - Fully implemented
+✅ Model display names - All mapped correctly
+✅ Agent context extraction - Working throughout
+
+WHAT NEEDS ENHANCEMENT
+======================
+
+? server.py dispatcher logging - Could be richer
+? _format_tool_log - Could include cost emoji for agent_spawn
+? task_spawn output - Could match agent_spawn format
+? subprocess notifications - Could provide stderr feedback
+
+
+EXAMPLE OUTPUT AFTER CHANGES
+=============================
+
+When user calls: agent_spawn(prompt="Find auth", agent_type="explore")
+
+Current:
+  [logs] → agent_spawn: [explore] Find auth
+  [returns] 🟢 explore:gemini-3-flash('Find auth') ⏳
+            task_id=agent_abc123
+
+After enhancement:
+  [logs] → agent_spawn: 🟢 explore:gemini-3-flash('Find auth')
+  [stderr] 🟢 SPAWNING_AGENT: explore:gemini-3-flash('Find auth') ...
+  [returns] 🟢 explore:gemini-3-flash('Find auth') ⏳
+            task_id=agent_abc123
+

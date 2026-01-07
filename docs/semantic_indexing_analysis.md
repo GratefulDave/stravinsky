@@ -2,7 +2,11 @@
 
 ## Executive Summary
 
-Stravinsky has a **fully implemented semantic search and indexing system**, but **auto-indexing is NOT currently active**. The system is in place, ready to use, but requires manual invocation. This report documents the current state and available options for automatic indexing.
+**UPDATE (January 2026)**: Stravinsky now has a **fully implemented semantic search and indexing system WITH automatic background file watching**. The FileWatcher feature enables real-time incremental reindexing on code changes.
+
+**Status**: ✅ Auto-indexing is now fully operational via the FileWatcher class.
+
+This document serves as a historical reference for the design decisions and implementation options that were considered.
 
 ---
 
@@ -62,17 +66,23 @@ Located in: `/Users/davidandrews/PycharmProjects/stravinsky/mcp_bridge/tools/sem
 
 ---
 
-## 2. Current Auto-Indexing State
+## 2. Auto-Indexing State (UPDATED)
 
-### 2.1 No Auto-Indexing Currently Active
+### 2.1 FileWatcher Implementation (COMPLETED - January 2026)
 
-**Findings:**
+**Status:**
 - ✅ Semantic index tools registered in server.py (lines 498-551)
 - ✅ Index_codebase() function fully implemented
-- ❌ No startup hooks trigger automatic indexing
-- ❌ No session-based auto-indexing
-- ❌ No file watcher for incremental updates
-- ❌ No lifecycle hooks in MCP server startup
+- ✅ **FileWatcher class implemented for real-time file monitoring**
+- ✅ **Background reindexing with debouncing (2s default)**
+- ✅ **Module-level API: start_file_watcher(), stop_file_watcher(), list_file_watchers()**
+- ✅ **Thread-safe daemon threads for clean shutdown**
+- ✅ **Integrated with all embedding providers (ollama, gemini, openai, huggingface)**
+
+**Implementation Location:**
+- `mcp_bridge/tools/semantic_search.py` (lines 2201-2459)
+- Classes: `CodebaseFileWatcher`, `_FileChangeHandler`
+- API functions: `start_file_watcher()`, `stop_file_watcher()`, `get_file_watcher()`, `list_file_watchers()`
 
 ### 2.2 Server Startup Flow
 

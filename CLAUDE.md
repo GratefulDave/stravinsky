@@ -112,6 +112,32 @@ Full Language Server Protocol support for Python (via jedi):
 - `ast_grep_search` - AST-aware code pattern search
 - `ast_grep_replace` - AST-aware code replacement
 
+### Semantic Search Tools
+
+- `semantic_search` - Natural language code search with embeddings
+- `semantic_index` - Index codebase for semantic search
+- `semantic_stats` - View index statistics
+
+**NEW: Automatic File Watching**
+```python
+# Start background file watcher for automatic reindexing
+from mcp_bridge.tools.semantic_search import start_file_watcher
+
+watcher = start_file_watcher(".", provider="ollama", debounce_seconds=2.0)
+# File changes now automatically trigger reindexing
+
+# Stop when done
+from mcp_bridge.tools.semantic_search import stop_file_watcher
+stop_file_watcher(".")
+```
+
+**Features:**
+- Monitors .py files for create/modify/delete/move events
+- Debounces rapid changes (2s default) to batch reindexing
+- Thread-safe daemon threads for clean shutdown
+- Skips venv, __pycache__, .git, node_modules
+- Works with all providers (ollama, gemini, openai, huggingface)
+
 ## Agent Prompts (7)
 
 | Prompt            | Purpose                                                       |

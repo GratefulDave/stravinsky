@@ -9,6 +9,7 @@ Architecture:
 - JSON-RPC over stdio using pygls BaseLanguageClient
 - Supports Python (jedi-language-server) and TypeScript (typescript-language-server)
 - Graceful shutdown on MCP server exit
+- Health checks and idle timeout management
 """
 
 import asyncio
@@ -17,7 +18,9 @@ import logging
 import os
 import shlex
 import signal
-from dataclasses import dataclass
+import threading
+import time
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
 
@@ -31,6 +34,13 @@ from lsprotocol.types import (
 
 logger = logging.getLogger(__name__)
 
+# Configuration for LSP server lifecycle management
+LSP_CONFIG = {
+    "idle_timeout": 1800,  # 30 minutes
+    "health_check_interval": 300,  # 5 minutes
+    "health_check_timeout": 5.0,
+}
+
 
 @dataclass
 class LSPServer:
@@ -40,7 +50,10 @@ class LSPServer:
     command: list[str]
     client: Optional[JsonRPCClient] = None
     initialized: bool = False
+    process: Optional[asyncio.subprocess.Process] = None
     pid: Optional[int] = None  # Track subprocess PID for explicit cleanup
+    last_used: float = field(default_factory=time.time)  # Timestamp of last usage
+    created_at: float = field(default_factory=time.time)  # Timestamp of server creation
 
 
 class LSPManager:
@@ -52,6 +65,7 @@ class LSPManager:
     - Process lifecycle management with GC protection
     - Exponential backoff for crash recovery
     - Graceful shutdown with signal handling
+    - Health checks and idle server shutdown
     """
 
     _instance: Optional["LSPManager"] = None
@@ -68,6 +82,7 @@ class LSPManager:
         self._servers: dict[str, LSPServer] = {}
         self._lock = asyncio.Lock()
         self._restart_attempts: dict[str, int] = {}
+        self._health_monitor_task: Optional[asyncio.Task] = None
 
         # Register available LSP servers
         self._register_servers()
@@ -97,16 +112,27 @@ class LSPManager:
 
         # Return existing initialized server
         if server.initialized and server.client:
+            # Update last_used timestamp
+            server.last_used = time.time()
+            # Start health monitor on first use
+            if self._health_monitor_task is None or self._health_monitor_task.done():
+                self._health_monitor_task = asyncio.create_task(self._background_health_monitor())
             return server.client
 
         # Start server with lock to prevent race conditions
         async with self._lock:
             # Double-check after acquiring lock
             if server.initialized and server.client:
+                server.last_used = time.time()
+                if self._health_monitor_task is None or self._health_monitor_task.done():
+                    self._health_monitor_task = asyncio.create_task(self._background_health_monitor())
                 return server.client
 
             try:
                 await self._start_server(server)
+                # Start health monitor on first server creation
+                if self._health_monitor_task is None or self._health_monitor_task.done():
+                    self._health_monitor_task = asyncio.create_task(self._background_health_monitor())
                 return server.client
             except Exception as e:
                 logger.error(f"Failed to start {language} LSP server: {e}")
@@ -120,6 +146,7 @@ class LSPManager:
         - Process health validation after start
         - LSP initialization handshake
         - GC protection via persistent reference
+        - Timestamp tracking for idle detection
 
         Args:
             server: LSPServer metadata object
@@ -136,18 +163,20 @@ class LSPManager:
             # Brief delay for process startup
             await asyncio.sleep(0.2)
 
-            # Capture PID for explicit cleanup
-            server_proc = getattr(client, "_server", None)
-            if server_proc and hasattr(server_proc, "pid"):
-                server.pid = server_proc.pid
-                logger.debug(f"{server.name} LSP server PID: {server.pid}")
-            else:
-                logger.warning(f"{server.name} LSP server PID not accessible")
-
-            # Validate process is running
-            if server_proc and getattr(server_proc, "returncode", None) is not None:
+            # Capture subprocess from client
+            if not hasattr(client, "_server") or client._server is None:
                 raise ConnectionError(
-                    f"{server.name} LSP server exited immediately (code {server_proc.returncode})"
+                    f"{server.name} LSP server process not accessible after start_io()"
+                )
+
+            server.process = client._server
+            server.pid = server.process.pid
+            logger.debug(f"{server.name} LSP server started with PID: {server.pid}")
+
+            # Validate process is still running
+            if server.process.returncode is not None:
+                raise ConnectionError(
+                    f"{server.name} LSP server exited immediately (code {server.process.returncode})"
                 )
 
             # Perform LSP initialization handshake
@@ -172,6 +201,8 @@ class LSPManager:
             # Store client reference (GC protection)
             server.client = client
             server.initialized = True
+            server.created_at = time.time()
+            server.last_used = time.time()
 
             # Reset restart attempts on successful start
             self._restart_attempts[server.name] = 0
@@ -188,6 +219,7 @@ class LSPManager:
                     pass
             server.client = None
             server.initialized = False
+            server.process = None
             server.pid = None
             raise
 
@@ -216,6 +248,7 @@ class LSPManager:
         # Reset state before restart
         server.initialized = False
         server.client = None
+        server.process = None
         server.pid = None
 
         try:
@@ -223,15 +256,151 @@ class LSPManager:
         except Exception as e:
             logger.error(f"Restart failed for {server.name}: {e}")
 
+    async def _health_check_server(self, server: LSPServer) -> bool:
+        """
+        Perform health check on an LSP server.
+
+        Args:
+            server: LSPServer to check
+
+        Returns:
+            True if server is healthy, False otherwise
+        """
+        if not server.initialized or not server.client:
+            return False
+
+        try:
+            # Simple health check: send initialize request
+            # Most servers respond to repeated initialize calls
+            init_params = InitializeParams(
+                process_id=None, root_uri=None, capabilities=ClientCapabilities()
+            )
+            response = await asyncio.wait_for(
+                server.client.protocol.send_request_async("initialize", init_params),
+                timeout=LSP_CONFIG["health_check_timeout"],
+            )
+            logger.debug(f"{server.name} LSP server health check passed")
+            return True
+        except asyncio.TimeoutError:
+            logger.warning(f"{server.name} LSP server health check timed out")
+            return False
+        except Exception as e:
+            logger.warning(f"{server.name} LSP server health check failed: {e}")
+            return False
+
+    async def _shutdown_single_server(self, name: str, server: LSPServer):
+        """
+        Gracefully shutdown a single LSP server.
+
+        Args:
+            name: Server name (key)
+            server: LSPServer instance
+        """
+        if not server.initialized or not server.client:
+            return
+
+        try:
+            logger.info(f"Shutting down {name} LSP server")
+
+            # LSP protocol shutdown request
+            try:
+                await asyncio.wait_for(
+                    server.client.protocol.send_request_async("shutdown", None), timeout=5.0
+                )
+            except asyncio.TimeoutError:
+                logger.warning(f"{name} LSP server shutdown request timed out")
+
+            # Send exit notification
+            server.client.protocol.notify("exit", None)
+
+            # Stop the client
+            await server.client.stop()
+
+            # Terminate subprocess using stored process reference
+            if server.process is not None:
+                try:
+                    if server.process.returncode is not None:
+                        logger.debug(f"{name} already exited (code {server.process.returncode})")
+                    else:
+                        server.process.terminate()
+                        try:
+                            await asyncio.wait_for(server.process.wait(), timeout=2.0)
+                        except asyncio.TimeoutError:
+                            server.process.kill()
+                            await asyncio.wait_for(server.process.wait(), timeout=1.0)
+                except Exception as e:
+                    logger.warning(f"Error terminating {name}: {e}")
+
+            # Mark as uninitialized
+            server.initialized = False
+            server.client = None
+            server.process = None
+            server.pid = None
+
+        except Exception as e:
+            logger.error(f"Error shutting down {name} LSP server: {e}")
+
+    async def _background_health_monitor(self):
+        """
+        Background task for health checking and idle server shutdown.
+
+        Runs periodically to:
+        - Check health of running servers
+        - Shutdown idle servers
+        - Restart crashed servers
+        """
+        logger.info("LSP health monitor task started")
+        try:
+            while True:
+                await asyncio.sleep(LSP_CONFIG["health_check_interval"])
+
+                current_time = time.time()
+                idle_threshold = current_time - LSP_CONFIG["idle_timeout"]
+
+                async with self._lock:
+                    for name, server in self._servers.items():
+                        if not server.initialized or not server.client:
+                            continue
+
+                        # Check if server is idle
+                        if server.last_used < idle_threshold:
+                            logger.info(
+                                f"{name} LSP server idle for {(current_time - server.last_used) / 60:.1f} minutes, shutting down"
+                            )
+                            await self._shutdown_single_server(name, server)
+                            continue
+
+                        # Health check for active servers
+                        is_healthy = await self._health_check_server(server)
+                        if not is_healthy:
+                            logger.warning(f"{name} LSP server health check failed, restarting")
+                            await self._shutdown_single_server(name, server)
+                            try:
+                                await self._start_server(server)
+                            except Exception as e:
+                                logger.error(f"Failed to restart {name} LSP server: {e}")
+
+        except asyncio.CancelledError:
+            logger.info("LSP health monitor task cancelled")
+            raise
+        except Exception as e:
+            logger.error(f"LSP health monitor task error: {e}", exc_info=True)
+
     def get_status(self) -> dict:
-        """Get status of managed servers."""
+        """Get status of managed servers including idle information."""
+        current_time = time.time()
         status = {}
         for name, server in self._servers.items():
+            idle_seconds = current_time - server.last_used
+            uptime_seconds = current_time - server.created_at if server.created_at else 0
             status[name] = {
                 "running": server.initialized and server.client is not None,
                 "pid": server.pid,
                 "command": " ".join(server.command),
                 "restarts": self._restart_attempts.get(name, 0),
+                "idle_seconds": idle_seconds,
+                "idle_minutes": idle_seconds / 60.0,
+                "uptime_seconds": uptime_seconds,
             }
         return status
 
@@ -240,104 +409,40 @@ class LSPManager:
         Gracefully shutdown all LSP servers.
 
         Implements:
+        - Health monitor cancellation
         - LSP protocol shutdown (shutdown request + exit notification)
         - Pending task cancellation
         - Process cleanup with timeout
         """
         logger.info("Shutting down LSP manager...")
 
+        # Cancel health monitor task
+        if self._health_monitor_task and not self._health_monitor_task.done():
+            logger.info("Cancelling health monitor task")
+            self._health_monitor_task.cancel()
+            try:
+                await self._health_monitor_task
+            except asyncio.CancelledError:
+                pass
+
         async with self._lock:
             for name, server in self._servers.items():
-                if not server.initialized or not server.client:
-                    continue
-
-                try:
-                    logger.info(f"Shutting down {name} LSP server")
-
-                    # LSP protocol shutdown request
-                    try:
-                        await asyncio.wait_for(
-                            server.client.protocol.send_request_async("shutdown", None), timeout=5.0
-                        )
-                    except asyncio.TimeoutError:
-                        logger.warning(f"{name} LSP server shutdown request timed out")
-
-                    # Send exit notification
-                    server.client.protocol.notify("exit", None)
-
-                    # Stop the client
-                    await server.client.stop()
-
-                    # Explicitly terminate subprocess using tracked PID
-                    if server.pid:
-                        try:
-                            # Check if process still exists
-                            os.kill(server.pid, 0)  # Signal 0 just checks existence
-                            logger.debug(
-                                f"{name} LSP server (PID {server.pid}) still running, terminating"
-                            )
-
-                            # Send SIGTERM first
-                            os.kill(server.pid, signal.SIGTERM)
-
-                            # Wait for graceful termination
-                            await asyncio.sleep(2.0)
-
-                            # Check if still alive
-                            try:
-                                os.kill(server.pid, 0)
-                                # Still alive, force kill
-                                logger.warning(
-                                    f"{name} LSP server (PID {server.pid}) didn't terminate, force killing"
-                                )
-                                os.kill(server.pid, signal.SIGKILL)
-                                await asyncio.sleep(0.5)
-                            except ProcessLookupError:
-                                # Process terminated successfully
-                                logger.debug(
-                                    f"{name} LSP server (PID {server.pid}) terminated gracefully"
-                                )
-
-                        except ProcessLookupError:
-                            # Process already dead
-                            logger.debug(f"{name} LSP server (PID {server.pid}) already terminated")
-                        except Exception as e:
-                            logger.warning(
-                                f"Error killing {name} LSP server (PID {server.pid}): {e}"
-                            )
-
-                    # Fallback: also try client._server if PID tracking failed
-                    elif hasattr(server.client, "_server") and server.client._server:
-                        proc = server.client._server
-                        if proc.returncode is None:
-                            try:
-                                proc.terminate()
-                                await asyncio.wait_for(proc.wait(), timeout=2.0)
-                            except asyncio.TimeoutError:
-                                logger.warning(
-                                    f"{name} LSP server process didn't terminate, force killing"
-                                )
-                                proc.kill()
-                                await proc.wait()
-
-                    # Mark as uninitialized
-                    server.initialized = False
-                    server.client = None
-                    server.pid = None
-
-                except Exception as e:
-                    logger.error(f"Error shutting down {name} LSP server: {e}")
+                await self._shutdown_single_server(name, server)
 
         logger.info("LSP manager shutdown complete")
 
 
 # Singleton accessor
 _manager_instance: Optional[LSPManager] = None
+_manager_lock = threading.Lock()
 
 
 def get_lsp_manager() -> LSPManager:
     """Get the global LSP manager singleton."""
     global _manager_instance
     if _manager_instance is None:
-        _manager_instance = LSPManager()
+        with _manager_lock:
+            # Double-check pattern to avoid race condition
+            if _manager_instance is None:
+                _manager_instance = LSPManager()
     return _manager_instance

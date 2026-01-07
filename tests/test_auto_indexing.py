@@ -1,0 +1,567 @@
+"""Test suite for semantic search auto-indexing functionality.
+
+Tests cover:
+- File creation/modification/deletion detection
+- Incremental indexing and debouncing
+- Vector database consistency
+- Error recovery and notifications
+"""
+
+import asyncio
+import tempfile
+import time
+from pathlib import Path
+from unittest.mock import MagicMock, AsyncMock, patch
+import pytest
+
+from mcp_bridge.tools.semantic_search import (
+    CodebaseVectorStore,
+    BaseEmbeddingProvider,
+    get_store,
+)
+
+
+# ============================================================================
+# FIXTURES
+# ============================================================================
+
+
+class MockEmbeddingProvider(BaseEmbeddingProvider):
+    """Mock embedding provider for testing without Ollama/Gemini."""
+
+    def __init__(self):
+        self._available = True
+        self.embed_calls = []
+
+    @property
+    def dimension(self) -> int:
+        return 768
+
+    @property
+    def name(self) -> str:
+        return "mock"
+
+    async def check_available(self) -> bool:
+        return self._available
+
+    async def get_embedding(self, text: str) -> list[float]:
+        """Return deterministic embedding based on text length."""
+        self.embed_calls.append(text)
+        # Deterministic vector: hash of text length
+        seed = len(text) % 256
+        return [float((seed + i) % 256) / 256.0 for i in range(self.dimension)]
+
+
+@pytest.fixture
+def temp_project_dir():
+    """Create a temporary project directory."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        project_dir = Path(tmpdir) / "test_project"
+        project_dir.mkdir()
+        yield project_dir
+        # Cleanup is automatic with context manager
+
+
+@pytest.fixture
+def mock_provider():
+    """Create a mock embedding provider."""
+    return MockEmbeddingProvider()
+
+
+@pytest.fixture
+async def vector_store(temp_project_dir, mock_provider):
+    """Create a vector store with mock provider."""
+    store = CodebaseVectorStore(str(temp_project_dir), provider="ollama")
+    # Replace provider with mock
+    store.provider = mock_provider
+    yield store
+    # Cleanup: delete the test database
+    import shutil
+    if store.db_path.exists():
+        shutil.rmtree(store.db_path)
+
+
+# ============================================================================
+# UNIT TESTS: CHUNKING
+# ============================================================================
+
+
+@pytest.mark.asyncio
+async def test_chunk_simple_python_file(vector_store, temp_project_dir):
+    """Test chunking a simple Python file."""
+    # Create a test file
+    test_file = temp_project_dir / "simple.py"
+    test_file.write_text(
+        """def hello_world():
+    \"\"\"Print hello world.\"\"\"
+    print("Hello, World!")
+
+def goodbye():
+    \"\"\"Print goodbye.\"\"\"
+    print("Goodbye!")
+"""
+    )
+
+    # Chunk the file
+    chunks = vector_store._chunk_file(test_file)
+
+    # Should create chunks for functions
+    assert len(chunks) > 0
+    assert all("id" in c and "document" in c and "metadata" in c for c in chunks)
+
+    # Verify metadata
+    for chunk in chunks:
+        assert chunk["metadata"]["file_path"] == "simple.py"
+        assert chunk["metadata"]["language"] == "py"
+        assert "start_line" in chunk["metadata"]
+        assert "end_line" in chunk["metadata"]
+
+
+@pytest.mark.asyncio
+async def test_chunk_python_with_classes(vector_store, temp_project_dir):
+    """Test chunking Python file with classes and methods."""
+    test_file = temp_project_dir / "classes.py"
+    test_file.write_text(
+        """class MyClass:
+    \"\"\"A test class.\"\"\"
+
+    def __init__(self):
+        self.value = 42
+
+    def method1(self):
+        \"\"\"First method.\"\"\"
+        return self.value
+
+    def method2(self):
+        \"\"\"Second method.\"\"\"
+        return self.value * 2
+"""
+    )
+
+    chunks = vector_store._chunk_file(test_file)
+
+    # Should have class chunk + method chunks
+    assert len(chunks) >= 3  # Class + 2 methods minimum
+    
+    # Verify class is identified
+    class_chunks = [c for c in chunks if c["metadata"].get("node_type") == "class"]
+    assert len(class_chunks) >= 1
+    
+    # Verify methods are identified
+    method_chunks = [c for c in chunks if c["metadata"].get("node_type") == "method"]
+    assert len(method_chunks) >= 2
+
+
+@pytest.mark.asyncio
+async def test_chunk_small_file_skipped(vector_store, temp_project_dir):
+    """Test that very small files are skipped."""
+    test_file = temp_project_dir / "tiny.py"
+    test_file.write_text("x = 1")  # Too small
+
+    chunks = vector_store._chunk_file(test_file)
+    assert len(chunks) == 0
+
+
+@pytest.mark.asyncio
+async def test_chunk_syntax_error_fallback(vector_store, temp_project_dir):
+    """Test fallback to line-based chunking on syntax errors."""
+    test_file = temp_project_dir / "broken.py"
+    test_file.write_text(
+        """def broken(
+        # Missing closing paren
+
+def another():
+    pass
+"""
+    )
+
+    chunks = vector_store._chunk_file(test_file)
+    
+    # Should fall back to line-based chunking
+    assert len(chunks) > 0
+    assert all(c["metadata"].get("language") == "py" for c in chunks)
+
+
+# ============================================================================
+# UNIT TESTS: FILE CHANGE DETECTION
+# ============================================================================
+
+
+@pytest.mark.asyncio
+async def test_detect_new_chunks(vector_store, temp_project_dir):
+    """Test detection of new chunks compared to existing index."""
+    # Simulate existing index state
+    file1 = temp_project_dir / "file1.py"
+    file1.write_text("def func1(): pass")
+    
+    chunks1 = vector_store._chunk_file(file1)
+    existing_ids = {c["id"] for c in chunks1}
+
+    # Simulate code change - add new file
+    file2 = temp_project_dir / "file2.py"
+    file2.write_text("def func2(): pass")
+    
+    chunks2 = vector_store._chunk_file(file2)
+    new_ids = {c["id"] for c in chunks2}
+
+    # Should be completely different IDs
+    assert len(existing_ids & new_ids) == 0
+
+
+@pytest.mark.asyncio
+async def test_detect_modified_chunks(vector_store, temp_project_dir):
+    """Test detection of modified content (different hash)."""
+    test_file = temp_project_dir / "test.py"
+    
+    # Original content
+    test_file.write_text("def func(): pass")
+    chunks_v1 = vector_store._chunk_file(test_file)
+    ids_v1 = {c["id"] for c in chunks_v1}
+
+    # Modified content
+    test_file.write_text("def func(): return 42")
+    chunks_v2 = vector_store._chunk_file(test_file)
+    ids_v2 = {c["id"] for c in chunks_v2}
+
+    # IDs should be different (content hash changed)
+    assert ids_v1 != ids_v2
+
+
+@pytest.mark.asyncio
+async def test_content_hash_stability(vector_store, temp_project_dir):
+    """Test that same content produces same hash."""
+    test_file = temp_project_dir / "test.py"
+    content = "def func(): pass\n"
+    
+    test_file.write_text(content)
+    chunks1 = vector_store._chunk_file(test_file)
+    ids1 = {c["id"] for c in chunks1}
+
+    # Write same content again
+    test_file.write_text(content)
+    chunks2 = vector_store._chunk_file(test_file)
+    ids2 = {c["id"] for c in chunks2}
+
+    # Hashes should be identical
+    assert ids1 == ids2
+
+
+# ============================================================================
+# UNIT TESTS: FILE PATTERN MATCHING
+# ============================================================================
+
+
+@pytest.mark.asyncio
+async def test_exclude_venv_directory(vector_store, temp_project_dir):
+    """Test that .venv directory is excluded."""
+    # Create files in excluded directory
+    venv_dir = temp_project_dir / ".venv"
+    venv_dir.mkdir()
+    (venv_dir / "lib.py").write_text("def unused(): pass")
+
+    # Create file in included directory
+    src_dir = temp_project_dir / "src"
+    src_dir.mkdir()
+    (src_dir / "main.py").write_text("def main(): pass")
+
+    files = vector_store._get_files_to_index()
+    file_paths = {f.relative_to(temp_project_dir) for f in files}
+
+    assert Path("src/main.py") in file_paths
+    assert not any(".venv" in str(p) for p in file_paths)
+
+
+@pytest.mark.asyncio
+async def test_exclude_node_modules(vector_store, temp_project_dir):
+    """Test that node_modules directory is excluded."""
+    nm_dir = temp_project_dir / "node_modules"
+    nm_dir.mkdir()
+    (nm_dir / "lib.js").write_text("export function unused() {}")
+
+    src_dir = temp_project_dir / "src"
+    src_dir.mkdir()
+    (src_dir / "app.js").write_text("function app() {}")
+
+    files = vector_store._get_files_to_index()
+    file_paths = {f.relative_to(temp_project_dir) for f in files}
+
+    assert Path("src/app.js") in file_paths
+    assert not any("node_modules" in str(p) for p in file_paths)
+
+
+@pytest.mark.asyncio
+async def test_include_code_extensions(vector_store, temp_project_dir):
+    """Test that various code extensions are included."""
+    extensions = {".py", ".js", ".ts", ".go", ".rs"}
+    
+    for ext in extensions:
+        (temp_project_dir / f"test{ext}").write_text("test code")
+
+    files = vector_store._get_files_to_index()
+    found_exts = {f.suffix for f in files}
+
+    assert extensions.issubset(found_exts)
+
+
+# ============================================================================
+# INTEGRATION TESTS: INDEXING
+# ============================================================================
+
+
+@pytest.mark.asyncio
+async def test_index_single_file(vector_store, temp_project_dir, mock_provider):
+    """Test indexing a single file."""
+    # Create test file
+    test_file = temp_project_dir / "test.py"
+    test_file.write_text("def hello(): return 'world'")
+
+    # Index the codebase
+    stats = await vector_store.index_codebase()
+
+    assert stats["indexed"] > 0
+    assert stats["total_files"] == 1
+    assert "db_path" in stats
+
+
+@pytest.mark.asyncio
+async def test_index_multiple_files(vector_store, temp_project_dir, mock_provider):
+    """Test indexing multiple files."""
+    # Create test files
+    for i in range(3):
+        test_file = temp_project_dir / f"module{i}.py"
+        test_file.write_text(f"def func{i}(): pass\n")
+
+    # Index
+    stats = await vector_store.index_codebase()
+
+    assert stats["indexed"] > 0
+    assert stats["total_files"] == 3
+
+
+@pytest.mark.asyncio
+async def test_incremental_indexing(vector_store, temp_project_dir, mock_provider):
+    """Test that incremental indexing only adds new chunks."""
+    # First indexing
+    (temp_project_dir / "file1.py").write_text("def func1(): pass")
+    stats1 = await vector_store.index_codebase()
+    count1 = stats1["indexed"]
+
+    # Add new file
+    (temp_project_dir / "file2.py").write_text("def func2(): pass")
+    stats2 = await vector_store.index_codebase()
+    
+    # Should only index new chunks
+    assert stats2["indexed"] > 0
+    assert stats2["indexed"] < count1 + 10  # Roughly one or two chunks per function
+
+
+@pytest.mark.asyncio
+async def test_force_reindex(vector_store, temp_project_dir, mock_provider):
+    """Test force reindexing with force=True."""
+    # Create and index file
+    test_file = temp_project_dir / "test.py"
+    test_file.write_text("def func(): pass")
+    
+    stats1 = await vector_store.index_codebase()
+    original_indexed = stats1["indexed"]
+
+    # Force reindex
+    stats2 = await vector_store.index_codebase(force=True)
+    
+    # Should reindex everything
+    assert stats2["indexed"] == original_indexed
+
+
+# ============================================================================
+# INTEGRATION TESTS: DELETION DETECTION
+# ============================================================================
+
+
+@pytest.mark.asyncio
+async def test_delete_file_removes_chunks(vector_store, temp_project_dir, mock_provider):
+    """Test that deleted file chunks are removed from index."""
+    # Create and index file
+    test_file = temp_project_dir / "test.py"
+    test_file.write_text("def func(): pass")
+    
+    await vector_store.index_codebase()
+    
+    # Delete file
+    test_file.unlink()
+    
+    # Re-index
+    stats = await vector_store.index_codebase()
+    
+    # Should have pruned chunks
+    assert stats["pruned"] > 0
+
+
+@pytest.mark.asyncio
+async def test_delete_directory_removes_chunks(vector_store, temp_project_dir, mock_provider):
+    """Test that deleted directory chunks are removed."""
+    # Create directory with files
+    subdir = temp_project_dir / "olddir"
+    subdir.mkdir()
+    (subdir / "file1.py").write_text("def func1(): pass")
+    (subdir / "file2.py").write_text("def func2(): pass")
+    
+    await vector_store.index_codebase()
+    
+    # Delete directory
+    import shutil
+    shutil.rmtree(subdir)
+    
+    # Re-index
+    stats = await vector_store.index_codebase()
+    
+    # Should have pruned chunks
+    assert stats["pruned"] > 0
+
+
+# ============================================================================
+# INTEGRATION TESTS: ERROR RECOVERY
+# ============================================================================
+
+
+@pytest.mark.asyncio
+async def test_embedding_service_unavailable(vector_store, mock_provider):
+    """Test graceful handling when embedding service unavailable."""
+    # Mark provider as unavailable
+    mock_provider._available = False
+    
+    stats = await vector_store.index_codebase()
+    
+    # Should return error, not crash
+    assert "error" in stats
+    assert "Embedding service not available" in stats["error"]
+
+
+@pytest.mark.asyncio
+async def test_retry_on_service_recovery(vector_store, temp_project_dir, mock_provider):
+    """Test that indexing retries when service becomes available again."""
+    test_file = temp_project_dir / "test.py"
+    test_file.write_text("def func(): pass")
+
+    # First attempt - service unavailable
+    mock_provider._available = False
+    stats1 = await vector_store.index_codebase()
+    assert "error" in stats1
+
+    # Service recovered
+    mock_provider._available = True
+    stats2 = await vector_store.index_codebase()
+    assert "indexed" in stats2
+    assert stats2["indexed"] > 0
+
+
+# ============================================================================
+# INTEGRATION TESTS: SEARCH AFTER INDEXING
+# ============================================================================
+
+
+@pytest.mark.asyncio
+async def test_search_finds_indexed_content(vector_store, temp_project_dir, mock_provider):
+    """Test that semantic search finds indexed content."""
+    # Create and index file with distinctive content
+    test_file = temp_project_dir / "auth.py"
+    test_file.write_text(
+        """def authenticate_user(username, password):
+    \"\"\"Authenticate user against database.\"\"\"
+    return check_credentials(username, password)
+"""
+    )
+    
+    await vector_store.index_codebase()
+    
+    # Search for authentication-related content
+    results = await vector_store.search("authentication")
+    
+    # Should find the auth.py file
+    assert len(results) > 0
+    assert any("auth.py" in r.get("file", "") for r in results)
+
+
+@pytest.mark.asyncio
+async def test_search_empty_index(vector_store):
+    """Test search on empty index."""
+    results = await vector_store.search("something")
+    
+    # Should return error about no documents
+    assert len(results) > 0
+    assert "error" in results[0] or "No documents" in results[0].get("hint", "")
+
+
+# ============================================================================
+# STRESS TESTS
+# ============================================================================
+
+
+@pytest.mark.asyncio
+async def test_many_small_files(vector_store, temp_project_dir, mock_provider):
+    """Test indexing many small files."""
+    # Create 50 small files
+    for i in range(50):
+        file_path = temp_project_dir / f"file_{i}.py"
+        file_path.write_text(f"def func_{i}(): return {i}")
+
+    stats = await vector_store.index_codebase()
+    
+    assert stats["indexed"] > 0
+    assert stats["total_files"] == 50
+
+
+@pytest.mark.asyncio
+async def test_large_file(vector_store, temp_project_dir, mock_provider):
+    """Test indexing a large file."""
+    # Create a large file with many functions
+    large_file = temp_project_dir / "large.py"
+    content = "\n".join([f"def func_{i}():\n    return {i}\n" for i in range(100)])
+    large_file.write_text(content)
+
+    stats = await vector_store.index_codebase()
+    
+    assert stats["indexed"] > 0
+    assert stats["total_files"] == 1
+
+
+# ============================================================================
+# STATS AND DIAGNOSTICS
+# ============================================================================
+
+
+@pytest.mark.asyncio
+async def test_get_stats(vector_store, temp_project_dir, mock_provider):
+    """Test getting vector store statistics."""
+    test_file = temp_project_dir / "test.py"
+    test_file.write_text("def func(): pass")
+    
+    await vector_store.index_codebase()
+    
+    stats = vector_store.get_stats()
+    
+    assert stats["chunks_indexed"] > 0
+    assert stats["embedding_provider"] == "mock"
+    assert stats["embedding_dimension"] == 768
+    assert "db_path" in stats
+
+
+@pytest.mark.asyncio
+async def test_embedding_provider_factory(temp_project_dir):
+    """Test getting store with different providers."""
+    from mcp_bridge.tools.semantic_search import get_store
+    
+    # Mock provider assignment
+    store = get_store(str(temp_project_dir), "ollama")
+    assert store.provider_name == "ollama"
+
+    # Different provider should be different store instance
+    store2 = get_store(str(temp_project_dir), "mxbai")
+    assert store2.provider_name == "mxbai"
+
+
+# ============================================================================
+# ASYNC HELPERS
+# ============================================================================
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

@@ -152,6 +152,13 @@ ollama pull mxbai-embed-large
 semantic_index(project_path=".", provider="ollama")  # First-time indexing
 semantic_search(query="OAuth authentication logic", n_results=5)
 semantic_stats()  # View index statistics
+
+# NEW: Automatic background reindexing on file changes
+from mcp_bridge.tools.semantic_search import start_file_watcher, stop_file_watcher
+
+watcher = start_file_watcher(".", provider="ollama", debounce_seconds=2.0)
+# Now any .py file changes automatically trigger reindexing
+stop_file_watcher(".")  # Stop watching when done
 ```
 
 **Example queries:**
@@ -172,6 +179,7 @@ semantic_stats()  # View index statistics
 - **AST-aware chunking**: Python files split by functions/classes for better semantic boundaries
 - **Persistent storage**: ChromaDB at `~/.stravinsky/vectordb/<project>_<provider>/`
 - **Async parallel embeddings**: 10 concurrent for fast indexing
+- **Automatic file watching**: Background reindexing on code changes with configurable debouncing (2s default)
 
 ## Native Subagents (9)
 

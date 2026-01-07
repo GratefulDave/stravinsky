@@ -1,0 +1,322 @@
+EXACT CODE LOCATIONS FOR MCP TOOL CALL INJECTION POINTS
+========================================================
+
+This file contains the exact line numbers and file paths for all injection points
+where formatted output logging can be added.
+
+
+PRIORITY 1: AGENT SPAWN DISPATCHER
+===================================
+
+File: /Users/davidandrews/PycharmProjects/stravinsky/mcp_bridge/server.py
+Lines: 313-316
+
+Current code:
+    elif name == "agent_spawn":
+        from .tools.agent_manager import agent_spawn
+        
+        result_content = await agent_spawn(**arguments)
+
+What to add:
+    - Extract: agent_type, description, display_model, cost_emoji from arguments
+    - Log: logger.info() with formatted message including emoji and model name
+    
+Code reference: QUICK_REFERENCE_INJECTION_POINTS.md line 1
+Full details: MCP_TOOL_CALL_INJECTION_POINTS.md Location 1a
+
+
+PRIORITY 2: FORMAT TOOL LOG FUNCTION
+====================================
+
+File: /Users/davidandrews/PycharmProjects/stravinsky/mcp_bridge/server.py
+Lines: 132-135 (within _format_tool_log function)
+
+Current code:
+    if name == "agent_spawn":
+        agent_type = arguments.get("agent_type", "explore")
+        desc = arguments.get("description", "")[:40]
+        return f"→ {name}: [{agent_type}] {desc}"
+
+What to enhance:
+    - Add: Import get_agent_emoji and AGENT_DISPLAY_MODELS
+    - Add: cost_emoji to output
+    - Add: display_model name
+    - Change format to: "{cost_emoji} {name}: {agent_type}:{display_model}['{desc}']"
+
+Code reference: QUICK_REFERENCE_INJECTION_POINTS.md line 2
+Full details: MCP_TOOL_CALL_INJECTION_POINTS.md Location 4
+
+
+PRIORITY 3: EXECUTE AGENT STDERR NOTIFICATION
+==============================================
+
+File: /Users/davidandrews/PycharmProjects/stravinsky/mcp_bridge/tools/agent_manager.py
+Lines: 295 (within _execute_agent method)
+
+Current code:
+    logger.info(f"[AgentManager] Spawning Claude CLI agent {task_id} ({agent_type})")
+
+What to add after this line:
+    - Import sys at top of file
+    - Add: print() to sys.stderr with formatted message
+    - Format: "{cost_emoji} SPAWNING: {agent_type}:{model}('{desc}') ..."
+    - Include task_id in message
+
+Code reference: QUICK_REFERENCE_INJECTION_POINTS.md line 3
+Full details: MCP_TOOL_CALL_INJECTION_POINTS.md Location 1c
+
+
+PRIORITY 4: TASK SPAWN DISPATCHER
+==================================
+
+File: /Users/davidandrews/PycharmProjects/stravinsky/mcp_bridge/server.py
+Lines: 354-360
+
+Current code:
+    elif name == "task_spawn":
+        from .tools.background_tasks import task_spawn
+        
+        result_content = await task_spawn(
+            prompt=arguments["prompt"],
+            model=arguments.get("model", "gemini-3-flash"),
+        )
+
+What to add:
+    - Extract: model, prompt
+    - Create: short description from prompt
+    - Log: logger.info() with formatted message
+    - Format: Similar to agent_spawn
+
+Code reference: QUICK_REFERENCE_INJECTION_POINTS.md line 4
+Full details: MCP_TOOL_CALL_INJECTION_POINTS.md Location 3a
+
+
+PRIORITY 5: TASK SPAWN FUNCTION RESULT FORMAT
+==============================================
+
+File: /Users/davidandrews/PycharmProjects/stravinsky/mcp_bridge/tools/background_tasks.py
+Lines: 132-137
+
+Current code:
+    async def task_spawn(prompt: str, model: str = "gemini-3-flash") -> str:
+        """Spawns a new background task."""
+        manager = BackgroundManager()
+        task_id = manager.create_task(prompt, model)
+        manager.spawn(task_id)
+        return f"Task spawned with ID: {task_id}. Use task_status('{task_id}') to check progress."
+
+What to enhance:
+    - Change return format to match agent_spawn style
+    - Include emoji and model name
+    - Format: "⏳ task [{model}]('{desc}') spawned\ntask_id={task_id}"
+
+Code reference: QUICK_REFERENCE_INJECTION_POINTS.md line 4
+Full details: MCP_TOOL_CALL_INJECTION_POINTS.md Location 3b
+
+
+PRIORITY 6: BACKGROUND MANAGER SPAWN NOTIFICATION
+==================================================
+
+File: /Users/davidandrews/PycharmProjects/stravinsky/mcp_bridge/tools/background_tasks.py
+Lines: 117-127 (within BackgroundManager.spawn method)
+
+Current code:
+        try:
+            # Using Popen to run in background
+            process = subprocess.Popen(
+                cmd,
+                stdout=open(log_file, "w"),
+                stderr=subprocess.STDOUT,
+                start_new_session=True
+            )
+            
+            self.update_task(task_id, status="running", pid=process.pid, ...)
+
+What to add before Popen:
+    - Import sys at top of file
+    - Get task details: model, prompt
+    - Print to sys.stderr: "{emoji} TASK_SPAWN: {model}('{desc}') ..."
+
+Code reference: QUICK_REFERENCE_INJECTION_POINTS.md line 5
+Full details: MCP_TOOL_CALL_INJECTION_POINTS.md Location 3c
+
+
+ALREADY COMPLETE (NO CHANGES NEEDED)
+====================================
+
+File: /Users/davidandrews/PycharmProjects/stravinsky/mcp_bridge/tools/agent_manager.py
+Lines: 915-916 (within agent_spawn function, return statement)
+
+Current code (ALREADY PERFECT):
+    return f"""{cost_emoji} {agent_type}:{display_model}('{short_desc}') ⏳
+task_id={task_id}"""
+
+Status: This is exactly the format we want! No changes needed.
+
+Ref: MCP_TOOL_CALL_INJECTION_POINTS.md Location 1b
+
+
+File: /Users/davidandrews/PycharmProjects/stravinsky/mcp_bridge/tools/model_invoke.py
+Lines: 363-367 (within invoke_gemini function)
+
+Current code (ALREADY GOOD):
+    # Log with agent context and prompt summary
+    logger.info(f"[{agent_type}] → {model}: {prompt_summary}")
+    
+    # USER-VISIBLE NOTIFICATION (stderr) - Shows when Gemini is invoked
+    import sys
+    task_info = f" task={task_id}" if task_id else ""
+    desc_info = f" | {description}" if description else ""
+    print(f"🔮 GEMINI: {model} | agent={agent_type}{task_info}{desc_info}", file=sys.stderr)
+
+Status: Already prints formatted message to stderr. Enhancement possible but not required.
+
+Ref: MCP_TOOL_CALL_INJECTION_POINTS.md Location 2a
+
+
+File: /Users/davidandrews/PycharmProjects/stravinsky/mcp_bridge/tools/model_invoke.py
+Lines: 890-897 (within invoke_openai function)
+
+Current code (ALREADY GOOD):
+    # Log with agent context and prompt summary
+    logger.info(f"[{agent_type}] → {model}: {prompt_summary}")
+    
+    # USER-VISIBLE NOTIFICATION (stderr) - Shows when OpenAI is invoked
+    import sys
+    task_info = f" task={task_id}" if task_id else ""
+    desc_info = f" | {description}" if description else ""
+    print(f"🧠 OPENAI: {model} | agent={agent_type}{task_info}{desc_info}", file=sys.stderr)
+
+Status: Already prints formatted message to stderr. No changes needed.
+
+Ref: MCP_TOOL_CALL_INJECTION_POINTS.md Location 2b
+
+
+SUMMARY TABLE
+=============
+
+Priority | File                          | Lines        | Status      | Impact
+---------|-------------------------------|--------------|-------------|--------
+1        | server.py                     | 313-316      | ENHANCE     | HIGH
+2        | server.py                     | 132-135      | ENHANCE     | HIGH
+3        | agent_manager.py              | 295          | ENHANCE     | MEDIUM
+4        | server.py                     | 354-360      | ENHANCE     | LOW
+5        | background_tasks.py           | 132-137      | ENHANCE     | LOW
+6        | background_tasks.py           | 117-127      | ENHANCE     | LOW
+-        | agent_manager.py              | 915-916      | COMPLETE    | -
+-        | model_invoke.py               | 363-367      | COMPLETE    | -
+-        | model_invoke.py               | 890-897      | COMPLETE    | -
+
+
+IMPORTS TO ADD
+==============
+
+server.py (at top, or lazy-loaded):
+    from .tools.agent_manager import (
+        AGENT_DISPLAY_MODELS,
+        get_agent_emoji,
+    )
+
+agent_manager.py:
+    import sys  # for stderr printing
+
+background_tasks.py:
+    import sys  # for stderr printing
+
+
+FORMAT TEMPLATE
+===============
+
+All output follows this format:
+    {emoji} {action}: {agent_type}:{model}('{description}') {status}
+    task_id={task_id}
+
+Emoji legend:
+    🟢 = Cheap (gemini-3-flash, haiku)
+    🔵 = Medium (gemini-3-pro-high)
+    🟣 = Expensive (gpt-5.2, opus)
+    🟠 = Claude (sonnet, opus CLI)
+    🔮 = Gemini model invoked
+    🧠 = OpenAI model invoked
+    ⏳ = Task spawned, waiting
+
+Actions:
+    agent_spawn, task_spawn, invoke_gemini, invoke_openai
+
+Statuses:
+    ⏳ (waiting), 🔄 (running), ✅ (completed), ❌ (failed)
+
+
+CONSTANTS REFERENCE
+===================
+
+AGENT_DISPLAY_MODELS (maps agent_type to display name):
+    {
+        "explore": "gemini-3-flash",
+        "dewey": "gemini-3-flash",
+        "frontend": "gemini-3-pro-high",
+        "delphi": "gpt-5.2",
+        "document_writer": "gemini-3-flash",
+        "multimodal": "gemini-3-flash",
+        "planner": "opus-4.5",
+        ...
+    }
+
+AGENT_COST_TIERS (maps agent_type to cost):
+    {
+        "explore": "CHEAP",
+        "dewey": "CHEAP",
+        "frontend": "MEDIUM",
+        "delphi": "EXPENSIVE",
+        ...
+    }
+
+COST_TIER_EMOJI (maps cost tier to emoji):
+    {
+        "CHEAP": "🟢",
+        "MEDIUM": "🔵",
+        "EXPENSIVE": "🟣",
+    }
+
+Functions:
+    get_agent_emoji(agent_type: str) -> str
+    get_model_emoji(model_name: str) -> str
+
+
+VALIDATION CHECKLIST
+====================
+
+After implementation:
+    [ ] Lines added at all 6 priority locations
+    [ ] All imports added (sys, AGENT_DISPLAY_MODELS, get_agent_emoji)
+    [ ] agent_spawn logs include emoji and model
+    [ ] agent_spawn returns task_id= format
+    [ ] _format_tool_log shows cost emoji for agent_spawn
+    [ ] _execute_agent prints stderr on spawn
+    [ ] task_spawn dispatcher logs formatted message
+    [ ] task_spawn returns enhanced format
+    [ ] BackgroundManager.spawn prints stderr notification
+    [ ] Gemini/OpenAI stderr output unchanged
+    [ ] No circular imports or AttributeErrors
+    [ ] All existing tests pass
+    [ ] Output matches spec format
+
+
+DOCUMENTATION REFERENCES
+=========================
+
+Quick reference:
+    docs/QUICK_REFERENCE_INJECTION_POINTS.md
+
+Full analysis:
+    docs/MCP_TOOL_CALL_INJECTION_POINTS.md
+
+Execution flow:
+    docs/CALL_FLOW_DIAGRAM.txt
+
+This file:
+    docs/INJECTION_POINT_CODE_LOCATIONS.txt
+
+Index:
+    docs/INDEX_TOOL_CALL_LOGGING.md
+

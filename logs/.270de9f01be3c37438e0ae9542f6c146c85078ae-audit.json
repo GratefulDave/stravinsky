@@ -19,6 +19,16 @@
             "date": 1767589718735,
             "name": "/Users/davidandrews/PycharmProjects/stravinsky/logs/application-2026-01-05.log",
             "hash": "29110f88747a5a620543b5138d9e935014ec5d9a3bead7b74dfe51f45331933e"
+        },
+        {
+            "date": 1767680356634,
+            "name": "/Users/davidandrews/PycharmProjects/stravinsky/logs/application-2026-01-06.log",
+            "hash": "c227884ecbecc2e4960075ef9c15e48770f3a2f67edb25b842a022ff031a95f1"
+        },
+        {
+            "date": 1767765818006,
+            "name": "/Users/davidandrews/PycharmProjects/stravinsky/logs/application-2026-01-07.log",
+            "hash": "2cd6324a79175d1dbaf2bab4f321a6b14b814a02ec5f93e2d8e759924c4f835d"
         }
     ],
     "hashType": "sha256"

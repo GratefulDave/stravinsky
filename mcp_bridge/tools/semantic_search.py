@@ -21,6 +21,7 @@ Architecture:
 import hashlib
 import logging
 import sys
+import threading
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Literal
@@ -32,6 +33,24 @@ from mcp_bridge.auth.token_store import TokenStore
 
 logger = logging.getLogger(__name__)
 
+
+# Lazy imports for watchdog (avoid startup cost)
+_watchdog = None
+_watchdog_import_lock = threading.Lock()
+
+
+def get_watchdog():
+    """Lazy import of watchdog components for file watching."""
+    global _watchdog
+    if _watchdog is None:
+        with _watchdog_import_lock:
+            if _watchdog is None:
+                from watchdog.observers import Observer
+                from watchdog.events import FileSystemEventHandler
+
+                _watchdog = {"Observer": Observer, "FileSystemEventHandler": FileSystemEventHandler}
+    return _watchdog
+
 # Embedding provider type
 EmbeddingProvider = Literal["ollama", "mxbai", "gemini", "openai", "huggingface"]
 
@@ -40,41 +59,50 @@ _chromadb = None
 _ollama = None
 _httpx = None
 _filelock = None
+_import_lock = threading.Lock()
 
 
 def get_filelock():
     global _filelock
     if _filelock is None:
-        import filelock
+        with _import_lock:
+            if _filelock is None:
+                import filelock
 
-        _filelock = filelock
+                _filelock = filelock
     return _filelock
 
 
 def get_chromadb():
     global _chromadb
     if _chromadb is None:
-        import chromadb
+        with _import_lock:
+            if _chromadb is None:
+                import chromadb
 
-        _chromadb = chromadb
+                _chromadb = chromadb
     return _chromadb
 
 
 def get_ollama():
     global _ollama
     if _ollama is None:
-        import ollama
+        with _import_lock:
+            if _ollama is None:
+                import ollama
 
-        _ollama = ollama
+                _ollama = ollama
     return _ollama
 
 
 def get_httpx():
     global _httpx
     if _httpx is None:
-        import httpx
+        with _import_lock:
+            if _httpx is None:
+                import httpx
 
-        _httpx = httpx
+                _httpx = httpx
     return _httpx
 
 
@@ -153,8 +181,8 @@ class OllamaProvider(BaseEmbeddingProvider):
     async def get_embedding(self, text: str) -> list[float]:
         ollama = get_ollama()
         # nomic-embed-text has 8192 token context. Code can be 1-2 chars/token.
-        # Truncate to 4000 chars (~2000-4000 tokens) for safety margin
-        truncated = text[:4000] if len(text) > 4000 else text
+        # Truncate to 2000 chars (~1000-2000 tokens) for larger safety margin
+        truncated = text[:2000] if len(text) > 2000 else text
         response = ollama.embeddings(model=self.MODEL, prompt=truncated)
         return response["embedding"]
 
@@ -619,20 +647,31 @@ class HuggingFaceProvider(BaseEmbeddingProvider):
             raise ValueError(f"Unexpected batch response format from HF API: {type(embeddings)}")
 
 
+# Embedding provider instance cache
+_embedding_provider_cache: dict[str, BaseEmbeddingProvider] = {}
+_embedding_provider_lock = threading.Lock()
+
+
 def get_embedding_provider(provider: EmbeddingProvider) -> BaseEmbeddingProvider:
-    """Factory function to get an embedding provider instance."""
-    providers = {
-        "ollama": OllamaProvider,
-        "mxbai": MxbaiProvider,
-        "gemini": GeminiProvider,
-        "openai": OpenAIProvider,
-        "huggingface": HuggingFaceProvider,
-    }
+    """Factory function to get an embedding provider instance with caching."""
+    if provider not in _embedding_provider_cache:
+        with _embedding_provider_lock:
+            # Double-check pattern to avoid race condition
+            if provider not in _embedding_provider_cache:
+                providers = {
+                    "ollama": OllamaProvider,
+                    "mxbai": MxbaiProvider,
+                    "gemini": GeminiProvider,
+                    "openai": OpenAIProvider,
+                    "huggingface": HuggingFaceProvider,
+                }
 
-    if provider not in providers:
-        raise ValueError(f"Unknown provider: {provider}. Available: {list(providers.keys())}")
+                if provider not in providers:
+                    raise ValueError(f"Unknown provider: {provider}. Available: {list(providers.keys())}")
 
-    return providers[provider]()
+                _embedding_provider_cache[provider] = providers[provider]()
+
+    return _embedding_provider_cache[provider]
 
 
 class CodebaseVectorStore:
@@ -714,6 +753,10 @@ class CodebaseVectorStore:
 
         self._client = None
         self._collection = None
+
+        # File watcher attributes
+        self._watcher: "CodebaseFileWatcher | None" = None
+        self._watcher_lock = threading.Lock()
 
     @property
     def file_lock(self):
@@ -1067,6 +1110,7 @@ class CodebaseVectorStore:
         print(f"🔍 SEMANTIC-INDEX: {self.project_path}", file=sys.stderr)
 
         # Notify reindex start (non-blocking)
+        notifier = None  # Initialize to avoid NameError in error handlers
         try:
             from mcp_bridge.notifications import get_notification_manager
             notifier = get_notification_manager()
@@ -1079,7 +1123,8 @@ class CodebaseVectorStore:
                 error_msg = "Embedding service not available"
                 # Notify error
                 try:
-                    await notifier.notify_reindex_error(error_msg)
+                    if notifier:
+                        await notifier.notify_reindex_error(error_msg)
                 except Exception as e:
                     logger.warning(f"Failed to send reindex error notification: {e}")
                 return {"error": error_msg, "indexed": 0}
@@ -1135,7 +1180,8 @@ class CodebaseVectorStore:
                 }
                 # Notify completion
                 try:
-                    await notifier.notify_reindex_complete(stats)
+                    if notifier:
+                        await notifier.notify_reindex_complete(stats)
                 except Exception as e:
                     logger.warning(f"Failed to send reindex complete notification: {e}")
                 return stats
@@ -1169,7 +1215,8 @@ class CodebaseVectorStore:
 
             # Notify completion
             try:
-                await notifier.notify_reindex_complete(stats)
+                if notifier:
+                    await notifier.notify_reindex_complete(stats)
             except Exception as e:
                 logger.warning(f"Failed to send reindex complete notification: {e}")
 
@@ -1181,7 +1228,8 @@ class CodebaseVectorStore:
 
             # Notify error
             try:
-                await notifier.notify_reindex_error(error_msg)
+                if notifier:
+                    await notifier.notify_reindex_error(error_msg)
             except Exception as notify_error:
                 logger.warning(f"Failed to send reindex error notification: {notify_error}")
 
@@ -1311,10 +1359,64 @@ class CodebaseVectorStore:
         except Exception as e:
             return {"error": str(e)}
 
+    def start_watching(self, debounce_seconds: float = 2.0) -> "CodebaseFileWatcher":
+        """Start watching the project directory for file changes.
+
+        Args:
+            debounce_seconds: Time to wait before reindexing after changes (default: 2.0s)
+
+        Returns:
+            The CodebaseFileWatcher instance
+        """
+        with self._watcher_lock:
+            if self._watcher is None:
+                # Avoid circular import by importing here
+                self._watcher = CodebaseFileWatcher(
+                    project_path=self.project_path,
+                    store=self,
+                    debounce_seconds=debounce_seconds,
+                )
+                self._watcher.start()
+            else:
+                if not self._watcher.is_running():
+                    self._watcher.start()
+                else:
+                    logger.warning(f"Watcher for {self.project_path} is already running")
+            return self._watcher
+
+    def stop_watching(self) -> bool:
+        """Stop watching the project directory.
+
+        Returns:
+            True if watcher was stopped, False if no watcher was active
+        """
+        with self._watcher_lock:
+            if self._watcher is not None:
+                self._watcher.stop()
+                self._watcher = None
+                return True
+            return False
+
+    def is_watching(self) -> bool:
+        """Check if the project directory is being watched.
+
+        Returns:
+            True if watcher is active and running, False otherwise
+        """
+        with self._watcher_lock:
+            if self._watcher is not None:
+                return self._watcher.is_running()
+            return False
+
 
 # --- Module-level API for MCP tools ---
 
 _stores: dict[str, CodebaseVectorStore] = {}
+_stores_lock = threading.Lock()
+
+# Module-level watcher management
+_watchers: dict[str, "CodebaseFileWatcher"] = {}
+_watchers_lock = threading.Lock()
 
 
 def get_store(project_path: str, provider: EmbeddingProvider = "ollama") -> CodebaseVectorStore:
@@ -1326,7 +1428,10 @@ def get_store(project_path: str, provider: EmbeddingProvider = "ollama") -> Code
     path = str(Path(project_path).resolve())
     cache_key = f"{path}:{provider}"
     if cache_key not in _stores:
-        _stores[cache_key] = CodebaseVectorStore(path, provider)
+        with _stores_lock:
+            # Double-check pattern to avoid race condition
+            if cache_key not in _stores:
+                _stores[cache_key] = CodebaseVectorStore(path, provider)
     return _stores[cache_key]
 
 
@@ -1391,6 +1496,7 @@ async def hybrid_search(
     project_path: str = ".",
     n_results: int = 10,
     language: str | None = None,
+    node_type: str | None = None,
     decorator: str | None = None,
     is_async: bool | None = None,
     base_class: str | None = None,
@@ -1408,6 +1514,7 @@ async def hybrid_search(
         project_path: Path to the project root
         n_results: Maximum number of results to return
         language: Filter by language (e.g., "py", "ts", "js")
+        node_type: Filter by node type (e.g., "function", "class", "method")
         decorator: Filter by decorator (e.g., "@property", "@staticmethod")
         is_async: Filter by async status (True = async only, False = sync only)
         base_class: Filter by base class (e.g., "BaseClass")
@@ -1425,6 +1532,7 @@ async def hybrid_search(
         project_path=project_path,
         n_results=fetch_count,
         language=language,
+        node_type=node_type,
         decorator=decorator,
         is_async=is_async,
         base_class=base_class,
@@ -1572,6 +1680,108 @@ async def semantic_health(project_path: str = ".", provider: EmbeddingProvider =
         status.append(f"Vector DB: ❌ Error - {e}")
 
     return "\n".join(status)
+
+
+# ========================
+# FILE WATCHER MANAGEMENT
+# ========================
+
+
+def start_file_watcher(
+    project_path: str,
+    provider: EmbeddingProvider = "ollama",
+    debounce_seconds: float = 2.0,
+) -> "CodebaseFileWatcher":
+    """Start watching a project directory for file changes.
+
+    Args:
+        project_path: Path to the project root
+        provider: Embedding provider to use for reindexing
+        debounce_seconds: Time to wait before reindexing after changes
+
+    Returns:
+        The started CodebaseFileWatcher instance
+    """
+    path = str(Path(project_path).resolve())
+    with _watchers_lock:
+        if path not in _watchers:
+            store = get_store(project_path, provider)
+
+            # Check if index exists
+            try:
+                stats = store.get_stats()
+                chunks_indexed = stats.get("chunks_indexed", 0)
+                if chunks_indexed == 0:
+                    logger.warning(
+                        f"No index found for {path}. Consider running semantic_index() "
+                        f"first for better performance. FileWatcher will still monitor changes."
+                    )
+            except Exception as e:
+                logger.debug(f"Could not check index status: {e}")
+
+            watcher = store.start_watching(debounce_seconds=debounce_seconds)
+            _watchers[path] = watcher
+        else:
+            watcher = _watchers[path]
+            if not watcher.is_running():
+                watcher.start()
+        return _watchers[path]
+
+
+def stop_file_watcher(project_path: str) -> bool:
+    """Stop watching a project directory.
+
+    Args:
+        project_path: Path to the project root
+
+    Returns:
+        True if watcher was stopped, False if no watcher was active
+    """
+    path = str(Path(project_path).resolve())
+    with _watchers_lock:
+        if path in _watchers:
+            watcher = _watchers[path]
+            watcher.stop()
+            del _watchers[path]
+            return True
+        return False
+
+
+def get_file_watcher(project_path: str) -> "CodebaseFileWatcher | None":
+    """Get an active file watcher for a project.
+
+    Args:
+        project_path: Path to the project root
+
+    Returns:
+        The CodebaseFileWatcher if active, None otherwise
+    """
+    path = str(Path(project_path).resolve())
+    with _watchers_lock:
+        watcher = _watchers.get(path)
+        if watcher is not None and watcher.is_running():
+            return watcher
+        return None
+
+
+def list_file_watchers() -> list[dict]:
+    """List all active file watchers.
+
+    Returns:
+        List of dicts with watcher info (project_path, debounce_seconds, provider, status)
+    """
+    with _watchers_lock:
+        watchers_info = []
+        for path, watcher in _watchers.items():
+            watchers_info.append(
+                {
+                    "project_path": path,
+                    "debounce_seconds": watcher.debounce_seconds,
+                    "provider": watcher.store.provider_name,
+                    "status": "running" if watcher.is_running() else "stopped",
+                }
+            )
+        return watchers_info
 
 
 # ========================
@@ -1994,3 +2204,280 @@ async def enhanced_search(
 
     else:
         return f"Unknown mode: {mode}. Use 'auto', 'expand', 'decompose', or 'both'"
+
+
+# ========================
+# FILE WATCHER IMPLEMENTATION
+# ========================
+
+
+class CodebaseFileWatcher:
+    """Watch a project directory for file changes and trigger reindexing.
+
+    Features:
+    - Watches for file create, modify, delete, move events
+    - Filters to .py files only
+    - Skips hidden files and directories (., .git, __pycache__, venv, etc.)
+    - Debounces rapid changes to batch them into a single reindex
+    - Thread-safe with daemon threads for clean shutdown
+    - Integrates with CodebaseVectorStore for incremental indexing
+    """
+
+    # Default debounce time in seconds
+    DEFAULT_DEBOUNCE_SECONDS = 2.0
+
+    def __init__(
+        self,
+        project_path: Path | str,
+        store: CodebaseVectorStore,
+        debounce_seconds: float = DEFAULT_DEBOUNCE_SECONDS,
+    ):
+        """Initialize the file watcher.
+
+        Args:
+            project_path: Path to the project root to watch
+            store: CodebaseVectorStore instance for reindexing
+            debounce_seconds: Time to wait before reindexing after changes (default: 2.0s)
+        """
+        self.project_path = Path(project_path).resolve()
+        self.store = store
+        self.debounce_seconds = debounce_seconds
+
+        # Observer and handler for watchdog
+        self._observer = None
+        self._event_handler = None
+
+        # Thread safety
+        self._lock = threading.Lock()
+        self._running = False
+
+        # Debouncing
+        self._pending_reindex_timer: threading.Timer | None = None
+        self._pending_files: set[Path] = set()
+        self._pending_lock = threading.Lock()
+
+    def start(self) -> None:
+        """Start watching the project directory.
+
+        Creates and starts a watchdog observer in a daemon thread.
+        """
+        with self._lock:
+            if self._running:
+                logger.warning(f"Watcher for {self.project_path} is already running")
+                return
+
+            try:
+                watchdog = get_watchdog()
+                Observer = watchdog["Observer"]
+
+                # Create event handler class and instantiate
+                FileChangeHandler = _create_file_change_handler_class()
+                self._event_handler = FileChangeHandler(
+                    project_path=self.project_path,
+                    watcher=self,
+                )
+
+                # Create and start observer (daemon mode for clean shutdown)
+                self._observer = Observer()
+                self._observer.daemon = True
+                self._observer.schedule(
+                    self._event_handler,
+                    str(self.project_path),
+                    recursive=True,
+                )
+                self._observer.start()
+                self._running = True
+                logger.info(f"File watcher started for {self.project_path}")
+
+            except Exception as e:
+                logger.error(f"Failed to start file watcher: {e}")
+                self._running = False
+                raise
+
+    def stop(self) -> None:
+        """Stop watching the project directory.
+
+        Cancels any pending reindex timers and stops the observer.
+        """
+        with self._lock:
+            # Cancel pending reindex
+            if self._pending_reindex_timer is not None:
+                self._pending_reindex_timer.cancel()
+                self._pending_reindex_timer = None
+
+            # Stop observer
+            if self._observer is not None:
+                self._observer.stop()
+                self._observer.join(timeout=5)  # Wait up to 5 seconds for shutdown
+                self._observer = None
+
+            self._event_handler = None
+            self._running = False
+            logger.info(f"File watcher stopped for {self.project_path}")
+
+    def is_running(self) -> bool:
+        """Check if the watcher is currently running.
+
+        Returns:
+            True if watcher is active, False otherwise
+        """
+        with self._lock:
+            return self._running and self._observer is not None and self._observer.is_alive()
+
+    def _on_file_changed(self, file_path: Path) -> None:
+        """Called when a file changes (internal use by _FileChangeHandler).
+
+        Accumulates files and triggers debounced reindex.
+
+        Args:
+            file_path: Path to the changed file
+        """
+        with self._pending_lock:
+            self._pending_files.add(file_path)
+
+            # Cancel previous timer
+            if self._pending_reindex_timer is not None:
+                self._pending_reindex_timer.cancel()
+
+            # Start new timer
+            self._pending_reindex_timer = self._create_debounce_timer()
+            self._pending_reindex_timer.start()
+
+    def _create_debounce_timer(self) -> threading.Timer:
+        """Create a new debounce timer for reindexing.
+
+        Returns:
+            A threading.Timer configured for debounce reindexing
+        """
+        return threading.Timer(
+            self.debounce_seconds,
+            self._trigger_reindex,
+        )
+
+    def _trigger_reindex(self) -> None:
+        """Trigger reindexing of accumulated changed files.
+
+        This is called after the debounce period expires. It performs an
+        incremental reindex focusing on the changed files.
+        """
+        import asyncio
+
+        with self._pending_lock:
+            if not self._pending_files:
+                self._pending_reindex_timer = None
+                return
+
+            files_to_index = list(self._pending_files)
+            self._pending_files.clear()
+            self._pending_reindex_timer = None
+
+        # Run async reindex in a new event loop
+        try:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                loop.run_until_complete(self.store.index_codebase(force=False))
+                logger.debug(f"Reindexed {len(files_to_index)} changed files")
+            finally:
+                loop.close()
+        except Exception as e:
+            logger.error(f"Error during file watcher reindex: {e}")
+
+
+def _create_file_change_handler_class():
+    """Create FileChangeHandler class that inherits from FileSystemEventHandler.
+
+    This is a factory function that creates the handler class dynamically
+    after watchdog is imported, allowing for lazy loading.
+    """
+    watchdog = get_watchdog()
+    FileSystemEventHandler = watchdog["FileSystemEventHandler"]
+
+    class _FileChangeHandler(FileSystemEventHandler):
+        """Watchdog event handler for file system changes.
+
+        Detects file create, modify, delete, and move events, filters them,
+        and notifies the watcher of relevant changes.
+        """
+
+        def __init__(self, project_path: Path, watcher: CodebaseFileWatcher):
+            """Initialize the event handler.
+
+            Args:
+                project_path: Root path of the project being watched
+                watcher: CodebaseFileWatcher instance to notify
+            """
+            super().__init__()
+            self.project_path = project_path
+            self.watcher = watcher
+
+        def on_created(self, event) -> None:
+            """Called when a file is created."""
+            if not event.is_directory and self._should_index_file(event.src_path):
+                logger.debug(f"File created: {event.src_path}")
+                self.watcher._on_file_changed(Path(event.src_path))
+
+        def on_modified(self, event) -> None:
+            """Called when a file is modified."""
+            if not event.is_directory and self._should_index_file(event.src_path):
+                logger.debug(f"File modified: {event.src_path}")
+                self.watcher._on_file_changed(Path(event.src_path))
+
+        def on_deleted(self, event) -> None:
+            """Called when a file is deleted."""
+            if not event.is_directory and self._should_index_file(event.src_path):
+                logger.debug(f"File deleted: {event.src_path}")
+                self.watcher._on_file_changed(Path(event.src_path))
+
+        def on_moved(self, event) -> None:
+            """Called when a file is moved."""
+            if not event.is_directory:
+                # Check destination path
+                if self._should_index_file(event.dest_path):
+                    logger.debug(f"File moved: {event.src_path} -> {event.dest_path}")
+                    self.watcher._on_file_changed(Path(event.dest_path))
+                # Also check source path (for deletion case)
+                elif self._should_index_file(event.src_path):
+                    logger.debug(f"File moved out: {event.src_path}")
+                    self.watcher._on_file_changed(Path(event.src_path))
+
+        def _should_index_file(self, file_path: str) -> bool:
+            """Check if a file should trigger reindexing.
+
+            Filters based on:
+            - File extension (.py only)
+            - Hidden files and directories (starting with .)
+            - Skip directories (venv, __pycache__, .git, node_modules, etc.)
+
+            Args:
+                file_path: Path to the file to check
+
+            Returns:
+                True if file should trigger reindexing, False otherwise
+            """
+            path = Path(file_path)
+
+            # Only .py files
+            if path.suffix != ".py":
+                return False
+
+            # Skip hidden files
+            if path.name.startswith("."):
+                return False
+
+            # Check for skip directories in the path
+            for part in path.parts:
+                if part.startswith("."):  # Hidden directories like .git, .venv
+                    return False
+                if part in {"__pycache__", "venv", "env", "node_modules"}:
+                    return False
+
+            # File is within project (resolve both paths to handle symlinks)
+            try:
+                path.resolve().relative_to(self.project_path)
+                return True
+            except ValueError:
+                # File is outside project
+                return False
+
+    return _FileChangeHandler

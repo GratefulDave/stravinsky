@@ -1,8 +1,3 @@
 {
-  "mcpServers": {
-    "stravinsky": {
-      "command": "/Users/davidandrews/PycharmProjects/stravinsky/run-mcp.sh",
-      "args": []
-    }
-  }
+  "mcpServers": {}
 }

@@ -615,7 +615,7 @@ async def get_prompt(name: str, arguments: dict[str, str] | None) -> GetPromptRe
     )
 
 
-async def async_main():
+async def async_main(skip_auto_update: bool = False):
     """Server execution entry point."""
     # Initialize hooks at runtime, not import time
     try:
@@ -633,6 +633,15 @@ async def async_main():
         logger.info("Background token refresh scheduler started")
     except Exception as e:
         logger.warning(f"Failed to start token refresh scheduler: {e}")
+
+    # Schedule auto-update check (non-blocking, runs in background)
+    try:
+        from .update_manager_pypi import check_for_updates
+
+        asyncio.create_task(check_for_updates(skip_updates=skip_auto_update))
+        logger.info("Auto-update checker scheduled")
+    except Exception as e:
+        logger.warning(f"Failed to schedule auto-update checker: {e}")
 
     try:
         async with stdio_server() as (read_stream, write_stream):
@@ -671,6 +680,17 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("--version", action="version", version=f"stravinsky {__version__}")
+    parser.add_argument(
+        "--skip-auto-update",
+        action="store_true",
+        help="Disable auto-update check on startup (non-blocking)",
+    )
+    parser.add_argument(
+        "--skip-updates",
+        action="store_true",
+        dest="skip_auto_update",
+        help="Deprecated: use --skip-auto-update instead",
+    )
 
     subparsers = parser.add_subparsers(dest="command", help="Available commands", metavar="COMMAND")
 
@@ -689,10 +709,21 @@ def main():
     )
 
     # start command (explicit server start)
-    subparsers.add_parser(
+    start_parser = subparsers.add_parser(
         "start",
         help="Explicitly start the MCP server (STDIO transport)",
         description="Starts the MCP server for communication with Claude Code. Usually started automatically.",
+    )
+    start_parser.add_argument(
+        "--skip-auto-update",
+        action="store_true",
+        help="Disable auto-update check on startup (non-blocking)",
+    )
+    start_parser.add_argument(
+        "--skip-updates",
+        action="store_true",
+        dest="skip_auto_update",
+        help="Deprecated: use --skip-auto-update instead",
     )
 
     # stop command (stop all agents)
@@ -806,7 +837,8 @@ def main():
         return cmd_status(TokenStore())
 
     elif args.command == "start":
-        asyncio.run(async_main())
+        skip_auto_update = getattr(args, "skip_auto_update", False)
+        asyncio.run(async_main(skip_auto_update=skip_auto_update))
         return 0
 
     elif args.command == "stop":
@@ -855,9 +887,10 @@ def main():
     else:
         # Default behavior: start server (fallback for MCP runners and unknown args)
         # This ensures that flags like --transport stdio don't cause an exit
+        skip_auto_update = getattr(args, "skip_auto_update", False)
         if unknown:
             logger.info(f"Starting MCP server with unknown arguments: {unknown}")
-        asyncio.run(async_main())
+        asyncio.run(async_main(skip_auto_update=skip_auto_update))
         return 0
 
 

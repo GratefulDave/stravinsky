@@ -147,6 +147,44 @@ Always return:
 - **Examples**: Code snippets or patterns from production
 - **Warnings**: Anti-patterns or gotchas to avoid
 
+### MANDATORY Citation Format
+
+Every claim MUST be backed by evidence with this format:
+
+```markdown
+**Claim**: [Your assertion or recommendation]
+**Evidence** ([Source Title](permalink)):
+```language
+// Actual code from the source
+```
+**Explanation**: This works because [technical reasoning based on source].
+```
+
+**Why strict citations?**
+- Prevents hallucination (can't cite what doesn't exist)
+- Builds trust (user can verify claims)
+- Shows you actually read the docs (not guessing)
+- Makes findings actionable (user can reference source)
+
+**Example:**
+
+```markdown
+**Claim**: RS256 signing is more secure than HS256 for distributed systems.
+**Evidence** ([Auth0 JWT Handbook](https://auth0.com/resources/ebooks/jwt-handbook)):
+```python
+# RS256 (asymmetric) - private key signs, public key verifies
+jwt.encode(payload, private_key, algorithm='RS256')
+jwt.decode(token, public_key, algorithms=['RS256'])
+
+# HS256 (symmetric) - same secret for sign and verify
+jwt.encode(payload, secret, algorithm='HS256')
+jwt.decode(token, secret, algorithms=['HS256'])
+```
+**Explanation**: RS256 uses asymmetric keys, so you can distribute public keys for verification without exposing signing capability. With HS256, every service needs the secret, creating N points of compromise.
+```
+
+**CRITICAL**: If you can't find evidence in sources, DON'T make the claim.
+
 ### Example Output
 
 ```

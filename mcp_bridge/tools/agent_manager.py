@@ -90,6 +90,33 @@ MODEL_FAMILY_EMOJI = {
     "gpt-5.2": "🟣",
 }
 
+# ANSI color codes for terminal output
+class Colors:
+    """ANSI color codes for colorized terminal output."""
+    RESET = "\033[0m"
+    BOLD = "\033[1m"
+    DIM = "\033[2m"
+
+    # Foreground colors
+    BLACK = "\033[30m"
+    RED = "\033[31m"
+    GREEN = "\033[32m"
+    YELLOW = "\033[33m"
+    BLUE = "\033[34m"
+    MAGENTA = "\033[35m"
+    CYAN = "\033[36m"
+    WHITE = "\033[37m"
+
+    # Bright foreground colors
+    BRIGHT_BLACK = "\033[90m"
+    BRIGHT_RED = "\033[91m"
+    BRIGHT_GREEN = "\033[92m"
+    BRIGHT_YELLOW = "\033[93m"
+    BRIGHT_BLUE = "\033[94m"
+    BRIGHT_MAGENTA = "\033[95m"
+    BRIGHT_CYAN = "\033[96m"
+    BRIGHT_WHITE = "\033[97m"
+
 
 def get_agent_emoji(agent_type: str) -> str:
     """Get the colored emoji indicator for an agent based on its cost tier."""
@@ -100,6 +127,38 @@ def get_agent_emoji(agent_type: str) -> str:
 def get_model_emoji(model_name: str) -> str:
     """Get the colored emoji indicator for a model."""
     return MODEL_FAMILY_EMOJI.get(model_name, "⚪")
+
+
+def colorize_agent_spawn_message(
+    cost_emoji: str,
+    agent_type: str,
+    display_model: str,
+    description: str,
+    task_id: str,
+) -> str:
+    """
+    Create a colorized agent spawn message with ANSI color codes.
+
+    Format:
+    🟢 explore:gemini-3-flash('Find auth...') ⏳
+    task_id=agent_abc123
+
+    With colors:
+    🟢 {CYAN}explore{RESET}:{YELLOW}gemini-3-flash{RESET}('{BOLD}Find auth...{RESET}') ⏳
+    task_id={BRIGHT_BLACK}agent_abc123{RESET}
+    """
+    short_desc = (description or "")[:50].strip()
+
+    # Build colorized message
+    colored_message = (
+        f"{cost_emoji} "
+        f"{Colors.CYAN}{agent_type}{Colors.RESET}:"
+        f"{Colors.YELLOW}{display_model}{Colors.RESET}"
+        f"('{Colors.BOLD}{short_desc}{Colors.RESET}') "
+        f"{Colors.BRIGHT_GREEN}⏳{Colors.RESET}\n"
+        f"task_id={Colors.BRIGHT_BLACK}{task_id}{Colors.RESET}"
+    )
+    return colored_message
 
 
 @dataclass
@@ -525,39 +584,39 @@ class AgentManager:
 
         if status == "completed":
             result = task.get("result", "(no output)")
-            return f"""{cost_emoji} ✅ Agent Task Completed
+            return f"""{cost_emoji} {Colors.BRIGHT_GREEN}✅ Agent Task Completed{Colors.RESET}
 
-**Task ID**: {task_id}
-**Agent**: {agent_type}:{display_model}('{description}')
+**Task ID**: {Colors.BRIGHT_BLACK}{task_id}{Colors.RESET}
+**Agent**: {Colors.CYAN}{agent_type}{Colors.RESET}:{Colors.YELLOW}{display_model}{Colors.RESET}('{Colors.BOLD}{description}{Colors.RESET}')
 
 **Result**:
 {result}"""
 
         elif status == "failed":
             error = task.get("error", "(no error details)")
-            return f"""{cost_emoji} ❌ Agent Task Failed
+            return f"""{cost_emoji} {Colors.BRIGHT_RED}❌ Agent Task Failed{Colors.RESET}
 
-**Task ID**: {task_id}
-**Agent**: {agent_type}:{display_model}('{description}')
+**Task ID**: {Colors.BRIGHT_BLACK}{task_id}{Colors.RESET}
+**Agent**: {Colors.CYAN}{agent_type}{Colors.RESET}:{Colors.YELLOW}{display_model}{Colors.RESET}('{Colors.BOLD}{description}{Colors.RESET}')
 
 **Error**:
 {error}"""
 
         elif status == "cancelled":
-            return f"""{cost_emoji} ⚠️ Agent Task Cancelled
+            return f"""{cost_emoji} {Colors.BRIGHT_YELLOW}⚠️ Agent Task Cancelled{Colors.RESET}
 
-**Task ID**: {task_id}
-**Agent**: {agent_type}:{display_model}('{description}')"""
+**Task ID**: {Colors.BRIGHT_BLACK}{task_id}{Colors.RESET}
+**Agent**: {Colors.CYAN}{agent_type}{Colors.RESET}:{Colors.YELLOW}{display_model}{Colors.RESET}('{Colors.BOLD}{description}{Colors.RESET}')"""
 
         else:  # pending or running
             pid = task.get("pid", "N/A")
             started = task.get("started_at", "N/A")
-            return f"""{cost_emoji} ⏳ Agent Task Running
+            return f"""{cost_emoji} {Colors.BRIGHT_YELLOW}⏳ Agent Task Running{Colors.RESET}
 
-**Task ID**: {task_id}
-**Agent**: {agent_type}:{display_model}('{description}')
-**PID**: {pid}
-**Started**: {started}
+**Task ID**: {Colors.BRIGHT_BLACK}{task_id}{Colors.RESET}
+**Agent**: {Colors.CYAN}{agent_type}{Colors.RESET}:{Colors.YELLOW}{display_model}{Colors.RESET}('{Colors.BOLD}{description}{Colors.RESET}')
+**PID**: {Colors.DIM}{pid}{Colors.RESET}
+**Started**: {Colors.DIM}{started}{Colors.RESET}
 
 Use `agent_output` with block=true to wait for completion."""
 
@@ -903,12 +962,17 @@ Use invoke_gemini with model="gemini-3-flash" for ALL synthesis work.
     # If blocking mode (recommended for delphi), wait for completion
     if blocking:
         result = manager.get_output(task_id, block=True, timeout=timeout)
-        return f"{cost_emoji} {agent_type}:{display_model}('{short_desc}') [BLOCKING]\n\n{result}"
+        blocking_msg = colorize_agent_spawn_message(
+            cost_emoji, agent_type, display_model, short_desc, task_id
+        )
+        return f"{blocking_msg} {Colors.BOLD}[BLOCKING]{Colors.RESET}\n\n{result}"
 
-    # Enhanced format: cost_emoji agent:model('description') status_emoji
+    # Enhanced format with ANSI colors: cost_emoji agent:model('description') status_emoji
     # 🟢 explore:gemini-3-flash('Find auth...') ⏳
-    return f"""{cost_emoji} {agent_type}:{display_model}('{short_desc}') ⏳
-task_id={task_id}"""
+    # With colors: agent type in cyan, model in yellow, description bold
+    return colorize_agent_spawn_message(
+        cost_emoji, agent_type, display_model, short_desc, task_id
+    )
 
 
 async def agent_output(task_id: str, block: bool = False) -> str:
@@ -1013,9 +1077,16 @@ async def agent_list() -> str:
         display_model = AGENT_DISPLAY_MODELS.get(agent_type, AGENT_DISPLAY_MODELS["_default"])
         cost_emoji = get_agent_emoji(agent_type)
         desc = t.get("description", t.get("prompt", "")[:40])
-        # Concise format: cost_emoji status agent:model('desc') id=xxx
+        task_id = t["id"]
+
+        # Concise format with colors: cost_emoji status agent:model('desc') id=xxx
+        # Agent type in cyan, model in yellow, task_id in dim
         lines.append(
-            f"{cost_emoji} {status_emoji} {agent_type}:{display_model}('{desc}') id={t['id']}"
+            f"{cost_emoji} {status_emoji} "
+            f"{Colors.CYAN}{agent_type}{Colors.RESET}:"
+            f"{Colors.YELLOW}{display_model}{Colors.RESET}"
+            f"('{Colors.BOLD}{desc}{Colors.RESET}') "
+            f"id={Colors.BRIGHT_BLACK}{task_id}{Colors.RESET}"
         )
 
     return "\n".join(lines)

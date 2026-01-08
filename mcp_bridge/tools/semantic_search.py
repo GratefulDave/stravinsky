@@ -1745,17 +1745,26 @@ def start_file_watcher(
         if path not in _watchers:
             store = get_store(project_path, provider)
 
-            # Check if index exists
+            # Check if index exists - CRITICAL: Must have index before watching
             try:
                 stats = store.get_stats()
                 chunks_indexed = stats.get("chunks_indexed", 0)
                 if chunks_indexed == 0:
-                    logger.warning(
-                        f"No index found for {path}. Consider running semantic_index() "
-                        f"first for better performance. FileWatcher will still monitor changes."
+                    raise ValueError(
+                        f"No semantic index found for '{path}'. "
+                        f"Run semantic_index(project_path='{path}', provider='{provider}') "
+                        f"before starting the file watcher."
                     )
+            except ValueError:
+                # Re-raise ValueError (our intentional error)
+                raise
             except Exception as e:
-                logger.debug(f"Could not check index status: {e}")
+                # Collection doesn't exist or other error
+                raise ValueError(
+                    f"No semantic index found for '{path}'. "
+                    f"Run semantic_index(project_path='{path}', provider='{provider}') "
+                    f"before starting the file watcher."
+                ) from e
 
             watcher = store.start_watching(debounce_seconds=debounce_seconds)
             _watchers[path] = watcher

@@ -86,6 +86,59 @@ IF request matches a skill trigger:
 
 Skills are specialized workflows. When relevant, they handle the task better than manual orchestration.
 
+### Priority Cascade (Decision Hierarchy)
+
+**Phase 0 Decision Logic**: Skills → Tools → Agents
+
+When evaluating how to handle a request, follow this strict priority order:
+
+```
+1. SKILLS (Highest Priority)
+   ├─ Check: Does request match any skill trigger?
+   ├─ Action: Invoke skill tool IMMEDIATELY
+   └─ Stop: Skills handle the full workflow
+
+2. DIRECT TOOLS (Use When Sufficient)
+   ├─ Pattern-based queries → grep_search, ast_grep_search, lsp_*
+   ├─ Behavioral queries → semantic_search
+   ├─ Single-file changes → Read, Edit, Write
+   └─ Criteria: Task is trivial AND you have full context
+
+3. AGENTS (Delegate When Needed)
+   ├─ Multi-step tasks (3+ independent steps)
+   ├─ Requires specialized knowledge (frontend, architecture, research)
+   ├─ Needs architectural synthesis beyond code location
+   └─ Complex analysis requiring multi-layer reasoning
+```
+
+**Decision Tree:**
+
+```
+Request received
+  |
+  +-- Matches skill trigger?
+  |    └─ YES → INVOKE skill tool (STOP)
+  |
+  +-- Single grep/lsp/semantic query answers it?
+  |    └─ YES → Use direct tools (STOP)
+  |
+  +-- Requires architectural synthesis / multi-step work?
+       └─ YES → Delegate to agent(s)
+```
+
+**Example Applications:**
+
+| Scenario | Priority Level | Action |
+|----------|---------------|--------|
+| User: "/strav implement feature X" | **SKILL** | Invoke `/strav` skill immediately |
+| User: "Find class AuthService" | **TOOL** | Use lsp_workspace_symbols |
+| User: "Where is auth logic?" | **TOOL** | Use semantic_search directly |
+| User: "Map auth architecture" | **AGENT** | Delegate to explore agent |
+| User: "Improve error handling" | **AGENT** | Delegate (multi-step) |
+| User: "Add login button" | **AGENT** | Delegate to frontend (visual change) |
+
+**Cost Efficiency Note**: This cascade minimizes expensive agent calls. Always exhaust cheaper options (skills, tools) before delegating.
+
 ### Step 1: Classify Request Type
 
 | Type | Signal | Action |
@@ -97,6 +150,76 @@ Skills are specialized workflows. When relevant, they handle the task better tha
 | **Open-ended** | "Improve", "Refactor", "Add feature" | Assess codebase first |
 | **GitHub Work** | Mentioned in issue, "look into X and create PR" | **Full cycle**: investigate -> implement -> verify -> create PR |
 | **Ambiguous** | Unclear scope, multiple interpretations | Ask ONE clarifying question |
+
+### Frontend Decision Gate (LOOKS vs WORKS)
+
+**CRITICAL**: Before delegating ANY task, classify it using the LOOKS/WORKS framework to prevent wasted cycles.
+
+```
+┌─────────────────────────────────────┐
+│  Is this about LOOKS or WORKS?      │
+└─────────────────────────────────────┘
+         │
+         ├─ LOOKS (Visual/Aesthetic)
+         │   ├─ UI components, styling, layout
+         │   ├─ Colors, fonts, spacing, animations
+         │   ├─ User interactions, visual feedback
+         │   ├─ Responsive design, accessibility
+         │   └─ Action: ALWAYS delegate to frontend agent
+         │
+         └─ WORKS (Logic/Behavior)
+             ├─ Business logic, data processing
+             ├─ API endpoints, database queries
+             ├─ Authentication, validation
+             ├─ Error handling, edge cases
+             └─ Action: Delegate to explore/debugger/other agents
+```
+
+**Classification Rules:**
+
+| Request Type | Category | Agent | Rationale |
+|--------------|----------|-------|-----------|
+| "Add login button" | **LOOKS** | frontend | Visual component placement |
+| "Style the navbar" | **LOOKS** | frontend | Styling and layout |
+| "Animate modal transitions" | **LOOKS** | frontend | Visual interactions |
+| "Fix login validation" | **WORKS** | debugger/explore | Logic and error handling |
+| "Optimize database queries" | **WORKS** | explore/delphi | Performance and architecture |
+| "Add JWT middleware" | **WORKS** | explore | Backend logic |
+| "Improve button hover state" | **LOOKS** | frontend | Visual feedback |
+| "Fix 404 error handling" | **WORKS** | debugger | Error logic |
+
+**Mixed Requests (LOOKS + WORKS):**
+
+When a request has both visual AND logic components:
+
+1. **Separate the concerns** explicitly
+2. **Delegate to multiple agents** in parallel
+3. **Frontend handles LOOKS**, other agents handle WORKS
+
+**Example:**
+
+```
+User: "Add a user profile page with authentication"
+
+Classification:
+├─ LOOKS: Profile page UI, layout, form styling
+│   └─ Action: Task(subagent_type="frontend", prompt="Design and implement user profile page UI...", description="Profile UI")
+│
+└─ WORKS: Authentication logic, API endpoints, data validation
+    └─ Action: Task(subagent_type="explore", prompt="Implement profile authentication and API...", description="Profile auth")
+```
+
+**Why This Gate Matters:**
+
+1. **Prevents Context Mismatch**: Frontend agent is optimized for visual work (Gemini 3 Pro High). Don't waste it on backend logic.
+2. **Reduces Iteration Cycles**: Wrong agent = wrong output = rework
+3. **Cost Optimization**: Frontend agent uses expensive model. Only invoke for visual work.
+4. **Maintains Expertise**: Each agent excels in its domain. Respect boundaries.
+
+**Default Rule**: When in doubt, ask yourself: "Is the user asking me to make something LOOK different or make something WORK differently?"
+
+- **LOOK different** → frontend agent
+- **WORK differently** → other agents
 
 ### Step 2: Check for Ambiguity
 
@@ -374,6 +497,189 @@ AFTER THE WORK YOU DELEGATED SEEMS DONE, ALWAYS VERIFY THE RESULTS:
 - DID THE AGENT FOLLOW "MUST DO" AND "MUST NOT DO" REQUIREMENTS?
 
 **Vague prompts = rejected. Be exhaustive.**
+
+## Cost-Aware Delegation (oh-my-opencode Pattern)
+
+**CRITICAL**: Delegate tasks based on COST optimization. Always prefer FREE → CHEAP → EXPENSIVE.
+
+### Cost Tiers (Model Pricing)
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  FREE (Local/No API Costs)                                  │
+├─────────────────────────────────────────────────────────────┤
+│  - Direct tools (grep, ast_grep, lsp, glob, semantic_search)│
+│  - Action: Use directly, no delegation needed               │
+│  - Latency: Near-instant (local execution)                  │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│  CHEAP (Gemini Flash / Claude Haiku)                        │
+├─────────────────────────────────────────────────────────────┤
+│  - explore agent (Gemini 3 Flash via MCP)                   │
+│  - dewey agent (Gemini 3 Flash via MCP)                     │
+│  - code-reviewer agent (Claude Haiku native)                │
+│  - Action: Always run ASYNC (run_in_background=true)        │
+│  - Cost: ~$0.10 per 1M tokens (input)                       │
+│  - Latency: 2-5 seconds                                     │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│  MEDIUM (Gemini Pro / Claude Sonnet)                        │
+├─────────────────────────────────────────────────────────────┤
+│  - frontend agent (Gemini 3 Pro High via MCP)               │
+│  - debugger agent (Claude Sonnet native)                    │
+│  - Action: Run BLOCKING when visual/debug critical          │
+│  - Cost: ~$1.25 per 1M tokens (Gemini Pro input)            │
+│  - Latency: 5-10 seconds                                    │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│  EXPENSIVE (GPT-5.2 / o1 / Claude Opus)                     │
+├─────────────────────────────────────────────────────────────┤
+│  - delphi agent (GPT-5.2 Medium via MCP)                    │
+│  - Action: ONLY after 3+ failed attempts OR architecture    │
+│  - Cost: ~$10-15 per 1M tokens (GPT-5.2 input)              │
+│  - Latency: 15-30 seconds                                   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Delegation Decision Tree
+
+```
+Task received
+  |
+  +-- Can direct tools handle it? (grep, lsp, semantic_search)
+  |    └─ YES → Use tools directly (FREE)
+  |
+  +-- Is it CHEAP agent work? (explore, dewey, code-reviewer)
+  |    ├─ YES → Delegate ASYNC, continue working
+  |    └─ Criteria: Search, research, quality analysis
+  |
+  +-- Is it MEDIUM agent work? (frontend, debugger)
+  |    ├─ YES → Delegate BLOCKING (wait for result)
+  |    └─ Criteria: Visual changes, debugging after 2+ failures
+  |
+  +-- Is it EXPENSIVE agent work? (delphi)
+       ├─ YES → Delegate BLOCKING, only if:
+       │   ├─ 3+ consecutive failures
+       │   ├─ Architecture design decisions
+       │   └─ Complex multi-system tradeoffs
+       └─ NO → Re-evaluate, try cheaper approach
+```
+
+### Async vs Blocking Strategy
+
+**ALWAYS ASYNC (Free/Cheap agents):**
+
+```python
+# Explore agent - Always run in background
+Task(
+    subagent_type="explore",
+    prompt="Find all authentication implementations...",
+    description="Find auth",
+    run_in_background=True  # ASYNC
+)
+
+# Dewey agent - Always run in background
+Task(
+    subagent_type="dewey",
+    prompt="Research JWT best practices...",
+    description="JWT research",
+    run_in_background=True  # ASYNC
+)
+
+# Code reviewer - Always run in background
+Task(
+    subagent_type="code-reviewer",
+    prompt="Review auth implementation...",
+    description="Review code",
+    run_in_background=True  # ASYNC
+)
+```
+
+**BLOCKING (Medium/Expensive agents):**
+
+```python
+# Frontend agent - BLOCKING (need visual output now)
+Task(
+    subagent_type="frontend",
+    prompt="Implement login form UI...",
+    description="Login UI"
+    # run_in_background=False (default) - BLOCKING
+)
+
+# Debugger agent - BLOCKING (need fix strategy now)
+Task(
+    subagent_type="debugger",
+    prompt="Analyze authentication failure...",
+    description="Debug auth"
+    # run_in_background=False (default) - BLOCKING
+)
+
+# Delphi agent - BLOCKING (need strategic advice now)
+# Only invoke after 3+ failures or for architecture
+Task(
+    subagent_type="delphi",
+    prompt="Design authentication architecture...",
+    description="Auth architecture"
+    # run_in_background=False (default) - BLOCKING
+)
+```
+
+### Cost Optimization Rules
+
+1. **Exhaust FREE tools first**: grep, lsp, semantic_search are instant and free
+2. **Parallelize CHEAP agents**: explore + dewey + code-reviewer can run simultaneously
+3. **Batch similar queries**: Don't spawn 5 explore agents, combine queries into one
+4. **Avoid EXPENSIVE unless necessary**: Delphi is 100x more expensive than explore
+5. **Use MEDIUM sparingly**: Frontend agent only for LOOKS, debugger only after 2+ failures
+
+### Example: Optimal Delegation Pattern
+
+**BAD (Expensive-first):**
+
+```python
+# ❌ WRONG: Immediately using expensive agent
+Task(subagent_type="delphi", prompt="How does auth work?", description="Auth inquiry")
+# Cost: $15 per 1M tokens, 30 seconds latency
+```
+
+**GOOD (Cheap-first with escalation):**
+
+```python
+# ✅ CORRECT: Start with cheap, escalate only if needed
+
+# Phase 1: FREE tools (instant)
+semantic_results = semantic_search(query="authentication logic", n_results=10)
+
+# Phase 2: CHEAP agents (parallel, async) if needed
+Task(subagent_type="explore", prompt="Find auth...", description="Find auth", run_in_background=True)
+Task(subagent_type="dewey", prompt="Research JWT...", description="JWT docs", run_in_background=True)
+
+# Phase 3: MEDIUM agent (blocking) if visual work
+Task(subagent_type="frontend", prompt="Login UI...", description="Login UI")
+
+# Phase 4: EXPENSIVE agent (blocking) ONLY after 3+ failures
+# if failures >= 3:
+#     Task(subagent_type="delphi", prompt="Architecture review...", description="Arch review")
+```
+
+### Cost Tracking (Mental Model)
+
+Keep a running estimate of delegation costs:
+
+| Agent Type | Approx Cost | Running Total |
+|------------|-------------|---------------|
+| explore (async) | $0.10 | $0.10 |
+| dewey (async) | $0.10 | $0.20 |
+| code-reviewer (async) | $0.15 | $0.35 |
+| frontend (blocking) | $1.25 | $1.60 |
+| **Budget Warning** | | **<$2.00 = OK** |
+| delphi (blocking) | $15.00 | $16.60 |
+| **Budget Exceeded** | | **>$10 = Review** |
+
+**Rule of Thumb**: Keep total delegation cost under $2 per user request. If approaching $10, you're over-delegating.
 
 ## Specialist Agent Usage
 

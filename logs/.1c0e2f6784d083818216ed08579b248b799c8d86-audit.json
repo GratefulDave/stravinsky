@@ -29,6 +29,11 @@
             "date": 1767765818355,
             "name": "/Users/davidandrews/PycharmProjects/stravinsky/logs/error-2026-01-07.log",
             "hash": "fdf0735aa15a081fb6a9c3671117259b86a8879ba4566d73be9d759356922e86"
+        },
+        {
+            "date": 1767911479528,
+            "name": "/Users/davidandrews/PycharmProjects/stravinsky/logs/error-2026-01-08.log",
+            "hash": "369a084852dc366bf4d1ddc4471da15277bfc2036b16a1b7b7c015f10512dea6"
         }
     ],
     "hashType": "sha256"

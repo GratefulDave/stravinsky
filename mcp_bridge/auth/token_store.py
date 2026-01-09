@@ -117,16 +117,14 @@ class TokenStore:
         Returns:
             TokenData if found and valid, None otherwise.
         """
-        # Lazy import to avoid triggering keychain prompts during module load
-        import keyring
-
-        # Try keyring first
+        # Try keyring first (import inside try to catch backend initialization errors)
         try:
+            import keyring
             data = keyring.get_password(self.service_name, self._key(provider))
             if data:
                 return json.loads(data)
-        except (json.JSONDecodeError, keyring.errors.KeyringError, Exception):
-            pass  # Fall back to encrypted file
+        except Exception:
+            pass  # Fall back to encrypted file (catches KeyringError, import errors, etc.)
 
         # Fall back to encrypted file storage
         try:
@@ -172,15 +170,14 @@ class TokenStore:
                 token_data["expires_at"] = expires_at
             data = json.dumps(token_data)
 
-        # Lazy import to avoid triggering keychain prompts during module load
-        import keyring
-
         # Try keyring first, but always also write to encrypted storage
+        # Import inside try to catch backend initialization errors (e.g., "No recommended backend")
         keyring_failed = False
         try:
+            import keyring
             keyring.set_password(self.service_name, self._key(provider), data)
-        except Exception as e:
-            # Log but don't fail - fall back to encrypted file
+        except Exception:
+            # Keyring failed - fall back to encrypted file
             keyring_failed = True
 
         # Always write to encrypted file storage as fallback
@@ -204,17 +201,14 @@ class TokenStore:
         Returns:
             True if deleted, False if not found.
         """
-        # Lazy import to avoid triggering keychain prompts during module load
-        import keyring
-
-        # Try keyring first
+        # Try keyring first (import inside try to catch backend initialization errors)
         deleted_from_keyring = False
         try:
+            import keyring
             keyring.delete_password(self.service_name, self._key(provider))
             deleted_from_keyring = True
-        except keyring.errors.PasswordDeleteError:
-            pass
         except Exception:
+            # Keyring failed (no backend, delete error, etc.) - continue to encrypted file
             pass
 
         # Also delete from encrypted file storage

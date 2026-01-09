@@ -22,21 +22,28 @@ stravinsky-auth logout gemini
 
 ### Installation
 
-**CRITICAL: ALWAYS install with --scope user and @latest for auto-updates**
+**CRITICAL: ALWAYS install with --scope user, @latest, and Python 3.13**
 
 ```bash
-# CORRECT: User-scoped installation with auto-updates
-claude mcp add --scope user stravinsky -- uvx stravinsky@latest
+# CORRECT: User-scoped installation with Python 3.13 and auto-updates
+claude mcp add --scope user stravinsky -- uvx --python python3.13 stravinsky@latest
 
 # WRONG: Never use local installation
 # ❌ claude mcp add stravinsky -- uvx stravinsky  (NO @latest = stale cache)
 # ❌ uv tool install --editable .  (local dev only)
+# ❌ claude mcp add --scope user stravinsky -- uvx stravinsky@latest  (missing --python)
 ```
 
 **Why @latest is REQUIRED:**
 - Forces uvx to check PyPI on every Claude restart
 - Without it, uvx caches the package and NEVER updates
 - You'll be stuck on old versions forever
+
+**Why --python python3.13 is REQUIRED:**
+- Stravinsky depends on chromadb, which uses onnxruntime
+- onnxruntime does not have wheels for Python 3.14+
+- Python 3.13 is the latest stable version with full compatibility
+- Forcing Python 3.13 prevents installation/runtime errors on unsupported versions
 
 **Development (local source only):**
 
@@ -189,6 +196,19 @@ The Codex CLI uses the same port. Stop it with: `killall codex`
 
 - Ensure you have a ChatGPT Plus/Pro subscription.
 - Tokens expire occasionally; run `python -m mcp_bridge.auth.cli login openai` to refresh manually if automatic refresh fails.
+
+### Python Version / onnxruntime Errors
+
+If you see errors like `ModuleNotFoundError: No module named 'onnxruntime'` or wheel build failures:
+
+**Root cause**: You're running Python 3.14+ (onnxruntime lacks wheels for these versions)
+
+**Solution**: Reinstall with Python 3.13:
+```bash
+claude mcp add --scope user stravinsky -- uvx --python python3.13 stravinsky@latest
+```
+
+**Why this works**: chromadb → onnxruntime only has pre-built wheels for Python ≤3.13
 
 ## Stravinsky MCP (Parallel Agents)
 

@@ -28,25 +28,31 @@
 
 ### Installation
 
-**CRITICAL: Always use --global with @latest for auto-updates**
+**CRITICAL: Always use --global with @latest for auto-updates and Python 3.13**
 
 ```bash
-# CORRECT: Global installation with automatic updates
-claude mcp add --global stravinsky -- uvx stravinsky@latest
+# CORRECT: Global installation with Python 3.13 and automatic updates
+claude mcp add --global stravinsky -- uvx --python python3.13 stravinsky@latest
 
 # Why this matters:
 # - --global: Works across all projects (not just current directory)
 # - @latest: Auto-checks PyPI on every Claude restart (no stale cache)
+# - --python python3.13: Required due to chromadb → onnxruntime dependency (no Python 3.14+ support)
 ```
+
+**⚠️ Python 3.13 Required**: Stravinsky requires Python 3.13 or earlier. Python 3.14+ is not supported because chromadb depends on onnxruntime, which lacks wheels for Python 3.14+.
 
 **WRONG - Do NOT use these:**
 
 ```bash
+# ❌ Missing --python python3.13 (will fail on system Python 3.14+)
+claude mcp add --global stravinsky -- uvx stravinsky@latest
+
 # ❌ Local scope (only works in one project)
-claude mcp add stravinsky -- uvx stravinsky@latest
+claude mcp add stravinsky -- uvx --python python3.13 stravinsky@latest
 
 # ❌ No @latest (cache never updates, stays on old version)
-claude mcp add --global stravinsky -- uvx stravinsky
+claude mcp add --global stravinsky -- uvx --python python3.13 stravinsky
 
 # ❌ uv tool install (requires manual upgrades)
 uv tool install stravinsky
@@ -75,6 +81,15 @@ stravinsky-auth status
 # Logout
 stravinsky-auth logout gemini
 ```
+
+**Secure Token Storage:**
+
+OAuth tokens are stored securely with automatic fallback:
+- **Primary**: System keyring (macOS Keychain, Linux Secret Service, Windows Credential Locker)
+- **Fallback**: Encrypted files at `~/.stravinsky/tokens/` using Fernet symmetric encryption
+- **Encryption**: AES-128-CBC with keys stored at `~/.stravinsky/tokens/.key` (0o600 permissions)
+- **No password prompts**: Seamless authentication across all terminal sessions after initial login
+- **Global access**: Works everywhere after one-time authentication per provider
 
 ### Slash Commands
 

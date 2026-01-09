@@ -8,8 +8,8 @@ when implementation tasks are detected. Eliminates timing ambiguity.
 CRITICAL: Also activates stravinsky mode marker when /stravinsky is invoked,
 enabling hard blocking of direct tools (Read, Grep, Bash) via stravinsky_mode.py.
 
-ULTRAWORK MODE (oh-my-opencode parity):
-When "ultrawork" or "ulw" is detected in prompt:
+IRONSTAR MODE (oh-my-opencode parity):
+When "ironstar" is detected in prompt (case insensitive):
 - Injects aggressive parallelization instructions
 - Forces maximum agent concurrency
 - Enables 32k thinking budget guidance
@@ -24,19 +24,14 @@ from pathlib import Path
 # Marker file that enables hard blocking of direct tools
 STRAVINSKY_MODE_FILE = Path.home() / ".stravinsky_mode"
 
-# Ultrawork mode patterns for aggressive parallel execution
-ULTRAWORK_PATTERNS = [
-    r"\bultrawork\b",
-    r"\bulw\b",
-    r"<ultrawork-mode>",
-    r"\[ultrawork\]",
-]
+# IRONSTAR mode pattern for aggressive parallel execution
+IRONSTAR_PATTERN = r"\bironstar\b"
 
 
-def detect_ultrawork_mode(prompt):
-    """Detect if ultrawork mode is requested for maximum parallel execution."""
+def detect_ironstar_mode(prompt):
+    """Detect if IRONSTAR mode is requested for maximum parallel execution."""
     prompt_lower = prompt.lower()
-    return any(re.search(p, prompt_lower) for p in ULTRAWORK_PATTERNS)
+    return bool(re.search(IRONSTAR_PATTERN, prompt_lower))
 
 
 def detect_stravinsky_invocation(prompt):
@@ -45,8 +40,7 @@ def detect_stravinsky_invocation(prompt):
         r"/stravinsky",
         r"<command-name>/stravinsky</command-name>",
         r"stravinsky orchestrator",
-        r"ultrawork",
-        r"ultrathink",
+        r"\bironstar\b",
     ]
     prompt_lower = prompt.lower()
     return any(re.search(p, prompt_lower) for p in patterns)
@@ -86,12 +80,12 @@ def detect_implementation_task(prompt):
     return any(kw in prompt_lower for kw in keywords)
 
 
-def get_ultrawork_instruction():
-    """Return the aggressive ultrawork mode instruction injection."""
+def get_ironstar_instruction():
+    """Return the aggressive IRONSTAR mode instruction injection."""
     return """
-<ultrawork-mode>
+<ironstar-mode>
 
-**MANDATORY**: You MUST say "ULTRAWORK MODE ENABLED!" to the user as your first response when this mode activates. This is non-negotiable.
+**MANDATORY**: You MUST say "IRONSTAR MODE ENABLED!" to the user as your first response when this mode activates. This is non-negotiable.
 
 [CODE RED] Maximum precision required. Ultrathink before acting.
 
@@ -144,7 +138,7 @@ Write these criteria explicitly. Share with user if scope is non-trivial.
 
 THE USER ASKED FOR X. DELIVER EXACTLY X. NOT A SUBSET. NOT A DEMO. NOT A STARTING POINT.
 
-</ultrawork-mode>
+</ironstar-mode>
 
 ---
 
@@ -204,18 +198,18 @@ def main():
     if is_stravinsky:
         activate_stravinsky_mode()
 
-    # Check for ultrawork mode - maximum parallel execution
-    is_ultrawork = detect_ultrawork_mode(prompt)
+    # Check for IRONSTAR mode - maximum parallel execution
+    is_ironstar = detect_ironstar_mode(prompt)
 
-    # Only inject for implementation tasks, stravinsky invocation, or ultrawork
-    if not detect_implementation_task(prompt) and not is_stravinsky and not is_ultrawork:
+    # Only inject for implementation tasks, stravinsky invocation, or IRONSTAR
+    if not detect_implementation_task(prompt) and not is_stravinsky and not is_ironstar:
         print(prompt)
         return 0
 
     # Select instruction based on mode
-    if is_ultrawork:
-        # Ultrawork mode: aggressive parallelization + verification
-        instruction = get_ultrawork_instruction()
+    if is_ironstar:
+        # IRONSTAR mode: aggressive parallelization + verification
+        instruction = get_ironstar_instruction()
     else:
         # Standard parallel execution mode
         instruction = get_parallel_instruction()

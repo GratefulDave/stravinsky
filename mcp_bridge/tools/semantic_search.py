@@ -925,28 +925,67 @@ class CodebaseVectorStore:
         ".toml",
     }
 
-    # Directories to skip
+    # Directories to skip (non-code related)
     SKIP_DIRS = {
-        "node_modules",
-        ".git",
+        # Python
         "__pycache__",
         ".venv",
         "venv",
         "env",
-        "dist",
-        "build",
-        ".next",
-        ".nuxt",
-        "target",
+        ".env",
+        "virtualenv",
+        ".virtualenv",
         ".tox",
+        ".nox",
         ".pytest_cache",
         ".mypy_cache",
         ".ruff_cache",
+        ".pytype",
+        ".pyre",
+        "*.egg-info",
+        ".eggs",
+        "pip-wheel-metadata",
+        # Node.js
+        "node_modules",
+        ".npm",
+        ".yarn",
+        ".pnpm-store",
+        "bower_components",
+        # Build outputs
+        "dist",
+        "build",
+        "out",
+        "_build",
+        ".next",
+        ".nuxt",
+        ".output",
+        ".cache",
+        ".parcel-cache",
+        ".turbo",
+        # Version control
+        ".git",
+        ".svn",
+        ".hg",
+        # IDE/Editor
+        ".idea",
+        ".vscode",
+        ".vs",
+        # Test/coverage
         "coverage",
+        "htmlcov",
+        ".coverage",
+        ".nyc_output",
+        # Rust/Go/Java
+        "target",
+        "vendor",
+        "Godeps",
+        # Misc
         ".stravinsky",
         "scratches",
         "consoles",
-        ".idea",
+        "logs",
+        "tmp",
+        "temp",
     }
 
     def __init__(self, project_path: str, provider: EmbeddingProvider = "ollama"):
@@ -1307,8 +1346,80 @@ class CodebaseVectorStore:
 
         return chunks
 
+    def _load_whitelist(self) -> set[Path] | None:
+        """Load whitelist from .stravinskyadd file if present.
+
+        File format:
+        - One path per line (relative to project root)
+        - Lines starting with # are comments
+        - Empty lines are ignored
+        - Glob patterns are supported (e.g., src/**/*.py)
+        - Directories implicitly include all files within (src/ includes src/**/*.*)
+
+        Returns:
+            Set of resolved file paths to include, or None if no whitelist file exists.
+        """
+        whitelist_file = self.project_path / ".stravinskyadd"
+        if not whitelist_file.exists():
+            return None
+
+        whitelist_paths: set[Path] = set()
+        try:
+            content = whitelist_file.read_text(encoding="utf-8")
+            for line in content.splitlines():
+                line = line.strip()
+                # Skip empty lines and comments
+                if not line or line.startswith("#"):
+                    continue
+
+                # Handle glob patterns
+                if "*" in line or "?" in line:
+                    for matched_path in self.project_path.glob(line):
+                        if (
+                            matched_path.is_file()
+                            and matched_path.suffix.lower() in self.CODE_EXTENSIONS
+                        ):
+                            whitelist_paths.add(matched_path.resolve())
+                else:
+                    target = self.project_path / line
+                    if target.exists():
+                        if target.is_file():
+                            # Direct file reference
+                            if target.suffix.lower() in self.CODE_EXTENSIONS:
+                                whitelist_paths.add(target.resolve())
+                        elif target.is_dir():
+                            # Directory: include all code files recursively
+                            for file_path in target.rglob("*"):
+                                if (
+                                    file_path.is_file()
+                                    and file_path.suffix.lower() in self.CODE_EXTENSIONS
+                                ):
+                                    # Apply SKIP_DIRS even within whitelisted directories
+                                    if not any(
+                                        skip_dir in file_path.parts for skip_dir in self.SKIP_DIRS
+                                    ):
+                                        whitelist_paths.add(file_path.resolve())
+
+            logger.info(f"Loaded whitelist from .stravinskyadd: {len(whitelist_paths)} files")
+            return whitelist_paths
+
+        except Exception as e:
+            logger.warning(f"Failed to parse .stravinskyadd: {e}")
+            return None
+
     def _get_files_to_index(self) -> list[Path]:
-        """Get all indexable files in the project."""
+        """Get all indexable files in the project.
+
+        If a .stravinskyadd whitelist file exists, ONLY those paths are indexed.
+        Otherwise, all code files are indexed (excluding SKIP_DIRS).
+        """
+        # Check for whitelist mode
+        whitelist = self._load_whitelist()
+        if whitelist is not None:
+            logger.info(f"Whitelist mode: indexing {len(whitelist)} files from .stravinskyadd")
+            return sorted(whitelist)  # Return sorted for deterministic order
+
+        # Standard mode: crawl entire project
         files = []
         for file_path in self.project_path.rglob("*"):
             if file_path.is_file():

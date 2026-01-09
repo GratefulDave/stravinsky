@@ -91,6 +91,29 @@ OAuth tokens are stored securely with automatic fallback:
 - **No password prompts**: Seamless authentication across all terminal sessions after initial login
 - **Global access**: Works everywhere after one-time authentication per provider
 
+#### Troubleshooting: Password Prompts (macOS)
+
+If you experience persistent password prompts when authenticating, configure keyring to bypass macOS Keychain:
+
+```bash
+# 1. Create keyring config directory
+mkdir -p ~/.config/python_keyring
+
+# 2. Configure keyring to use fail backend (bypasses Keychain entirely)
+cat <<EOT > ~/.config/python_keyring/keyringrc.cfg
+[backend]
+default-keyring = keyring.backends.fail.Keyring
+EOT
+
+# 3. Verify configuration
+cat ~/.config/python_keyring/keyringrc.cfg
+
+# 4. Re-authenticate (tokens will be stored in encrypted files only)
+stravinsky-auth login gemini
+```
+
+This configuration stores tokens in encrypted files at `~/.stravinsky/tokens/` instead of macOS Keychain, eliminating password prompts across terminal sessions. See [docs/KEYRING_AUTH_FIX.md](docs/KEYRING_AUTH_FIX.md) for detailed information.
+
 ### Slash Commands
 
 Slash commands are discovered from:

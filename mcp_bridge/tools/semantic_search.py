@@ -18,6 +18,7 @@ Architecture:
 - Chunking strategy: function/class level with context
 """
 
+import atexit
 import hashlib
 import logging
 import sys
@@ -788,6 +789,22 @@ class CodebaseVectorStore:
     def client(self):
         if self._client is None:
             chromadb = get_chromadb()
+
+            # Check for stale lock before attempting acquisition
+            # Prevents 30s timeout from dead processes causing MCP "Connection closed" errors
+            if self._lock_path.exists():
+                import time
+                lock_age = time.time() - self._lock_path.stat().st_mtime
+                # Lock older than 5 minutes is likely from a crashed process
+                if lock_age > 300:
+                    logger.warning(
+                        f"Removing stale ChromaDB lock (age: {lock_age:.0f}s, path: {self._lock_path})"
+                    )
+                    try:
+                        self._lock_path.unlink(missing_ok=True)
+                    except Exception as e:
+                        logger.warning(f"Could not remove stale lock: {e}")
+
             # Acquire lock before creating client to prevent concurrent access
             try:
                 with self.file_lock:  # Auto-releases on exit
@@ -1456,6 +1473,25 @@ _stores_lock = threading.Lock()
 # Module-level watcher management
 _watchers: dict[str, "CodebaseFileWatcher"] = {}
 _watchers_lock = threading.Lock()
+
+
+def _cleanup_watchers():
+    """Cleanup function to stop all watchers on exit.
+
+    Registered with atexit to ensure graceful shutdown when Python exits normally.
+    Note: This won't be called if the process is killed (SIGKILL) or crashes.
+    """
+    with _watchers_lock:
+        for path, watcher in list(_watchers.items()):
+            try:
+                logger.debug(f"Stopping watcher for {path} on exit")
+                watcher.stop()
+            except Exception as e:
+                logger.warning(f"Error stopping watcher for {path}: {e}")
+
+
+# Register cleanup handler for graceful shutdown
+atexit.register(_cleanup_watchers)
 
 
 def get_store(project_path: str, provider: EmbeddingProvider = "ollama") -> CodebaseVectorStore:

@@ -13,7 +13,6 @@ import time
 from pathlib import Path
 from typing import TypedDict
 
-import keyring
 from cryptography.fernet import Fernet
 
 
@@ -118,6 +117,9 @@ class TokenStore:
         Returns:
             TokenData if found and valid, None otherwise.
         """
+        # Lazy import to avoid triggering keychain prompts during module load
+        import keyring
+
         # Try keyring first
         try:
             data = keyring.get_password(self.service_name, self._key(provider))
@@ -170,21 +172,27 @@ class TokenStore:
                 token_data["expires_at"] = expires_at
             data = json.dumps(token_data)
 
-        # Try keyring first
+        # Lazy import to avoid triggering keychain prompts during module load
+        import keyring
+
+        # Try keyring first, but always also write to encrypted storage
+        keyring_failed = False
         try:
             keyring.set_password(self.service_name, self._key(provider), data)
-            return
         except Exception as e:
             # Log but don't fail - fall back to encrypted file
-            pass
+            keyring_failed = True
 
-        # Fall back to encrypted file storage
+        # Always write to encrypted file storage as fallback
         try:
             self._save_encrypted(provider, data)
         except Exception as e:
-            raise RuntimeError(
-                f"Failed to save token to both keyring and encrypted storage: {e}"
-            )
+            # Only fail if both backends failed
+            if keyring_failed:
+                raise RuntimeError(
+                    f"Failed to save token to both keyring and encrypted storage: {e}"
+                )
+
 
     def delete_token(self, provider: str) -> bool:
         """
@@ -196,6 +204,9 @@ class TokenStore:
         Returns:
             True if deleted, False if not found.
         """
+        # Lazy import to avoid triggering keychain prompts during module load
+        import keyring
+
         # Try keyring first
         deleted_from_keyring = False
         try:

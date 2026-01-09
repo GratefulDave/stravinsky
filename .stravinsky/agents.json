@@ -1406,5 +1406,37 @@
     "pid": 71808,
     "timeout": 300,
     "progress": null
+  },
+  "agent_8c48b71a": {
+    "id": "agent_8c48b71a",
+    "prompt": "CRITICAL DEBUG: User is getting password prompts when trying to authenticate with stravinsky-auth.\n\nContext:\n- We fixed token_store.py to write to BOTH keyring and encrypted files\n- Fix is in place (lines 173-189 of mcp_bridge/auth/token_store.py)\n- ~/.stravinsky/tokens/ is empty (no encrypted files exist)\n- User says \"still prompting me\" when trying to authenticate\n\nYour task:\n1. Investigate WHY password prompts appear during `stravinsky-auth login gemini`\n2. Check if the login flow is trying to READ tokens before WRITING them\n3. Look for any code that accesses keyring during login BEFORE set_token() is called\n4. Check if there's a get_token() call happening during the login process\n5. Identify the exact line/function causing the password prompt\n\nFiles to investigate:\n- mcp_bridge/auth/cli.py (login command implementation)\n- mcp_bridge/auth/google.py (Gemini OAuth flow)\n- mcp_bridge/auth/token_store.py (token operations)\n\nExpected behavior: Login should ONLY write tokens, never read them. OAuth flow should use browser only, no keychain access until SAVING the token.\n\nReport back the root cause and exact location of the password prompt trigger.",
+    "agent_type": "debugger",
+    "description": "Debug password prompt during login",
+    "status": "completed",
+    "created_at": "2026-01-08T23:45:14.164363",
+    "parent_session_id": null,
+    "started_at": "2026-01-08T23:45:14.166989",
+    "completed_at": "2026-01-08T23:45:54.885623",
+    "result": "Perfect! Now I can analyze the authentication flow. Let me trace through the code to find where the password prompt occurs.\n\n## Root Cause Analysis\n\nI found the issue! The password prompt appears **before** `set_token()` is called during login. Here's the problem:\n\n### The Issue\n\nIn `cli.py`, line **235**, the `TokenStore` is instantiated:\n\n```python\ntoken_store = TokenStore()\n```\n\nThis triggers `TokenStore.__init__()` (token_store.py:42-49), which calls:\n\n```python\ndef __init__(self, service_name: str | None = None):\n    self.service_name = service_name or self.SERVICE_NAME\n    self._init_fallback_storage()  # \u2190 This line\n```\n\nThen `_init_fallback_storage()` (token_store.py:51-53) runs:\n\n```python\ndef _init_fallback_storage(self) -> None:\n    \"\"\"Initialize encrypted file storage fallback directory.\"\"\"\n    self.FALLBACK_DIR.mkdir(parents=True, exist_ok=True)  # \u2190 This accesses keychain!\n```\n\n### Why It Prompts for Password\n\nOn macOS, when you call `Path.mkdir()` with `parents=True`, it can trigger keychain access if:\n1. The parent directory `~/.stravinsky/` doesn't exist\n2. The system tries to verify directory permissions\n3. **Python's keyring library is imported** (line 16 of token_store.py)\n\nThe mere **import** of `keyring` at the top of the file causes macOS to register the keyring backend, which then intercepts filesystem operations that touch user directories.\n\n### The Smoking Gun\n\n```python\n# token_store.py:16\nimport keyring  # \u2190 This import registers macOS Keychain backend immediately\n```\n\nWhen `keyring` is imported, it initializes the macOS Keychain backend, which hooks into system calls. Later, when `mkdir()` is called, macOS Keychain prompts for password to verify access rights.\n\n### Why Encrypted Files Don't Exist\n\nThe user never gets past the password prompt during `__init__()`, so `set_token()` is never reached, and no encrypted files are written to `~/.stravinsky/tokens/`.\n\n## The Fix\n\nMove the `keyring` import inside the methods that actually use it, not at module level:\n\n```python\ndef get_token(self, provider: str) -> TokenData | None:\n    import keyring  # \u2190 Lazy import only when needed\n    # ... rest of method\n```\n\nThis way, the keyring backend is only initialized when actually reading/writing tokens, not during `TokenStore` instantiation.\n\n**File to fix:** `mcp_bridge/auth/token_store.py:16`\n\nWould you like me to implement this fix?",
+    "error": null,
+    "pid": 20893,
+    "timeout": 300,
+    "progress": null
+  },
+  "agent_1688270c": {
+    "id": "agent_1688270c",
+    "prompt": "CRITICAL: User still getting password/keychain popup after lazy import fix.\n\nContext:\n- We moved `import keyring` inside methods (get_token, set_token, delete_token)\n- User ran: `uv run stravinsky-auth login gemini`\n- Still getting a popup to authenticate (likely macOS Keychain password prompt)\n\nYour task - trace EVERY possible code path that could trigger keyring:\n\n1. Check if there are OTHER files importing keyring at module level:\n   - mcp_bridge/auth/google.py\n   - mcp_bridge/auth/openai.py\n   - mcp_bridge/auth/cli.py\n   - mcp_bridge/server.py\n   - Any other files in mcp_bridge/\n\n2. Check if token_store.py is being imported somewhere BEFORE the fix takes effect:\n   - Look for \"from mcp_bridge.auth.token_store import TokenStore\" or similar\n   - Check if server.py imports it at module level\n\n3. Check if there's a .pyc cached bytecode file with the old code:\n   - Look for __pycache__/token_store.*.pyc\n\n4. Check if the lazy import actually prevents the ChainerBackend from initializing:\n   - Maybe the issue is that keyring.backends gets registered on first import in ANY module?\n\n5. Look for ANY other code that touches ~/.stravinsky/ during initialization\n\nReport back:\n- EXACT file and line number causing the keyring prompt\n- Whether it's an import statement or a function call\n- Proposed fix\n\nBe thorough - the user is frustrated and we need to nail this.",
+    "agent_type": "debugger",
+    "description": "Debug persistent keychain popup",
+    "status": "failed",
+    "created_at": "2026-01-08T23:49:43.782102",
+    "parent_session_id": null,
+    "started_at": "2026-01-08T23:49:43.784385",
+    "completed_at": "2026-01-08T23:50:37.573464",
+    "result": null,
+    "error": "Claude CLI exited with code 1",
+    "pid": 28066,
+    "timeout": 300,
+    "progress": null
   }
 }

@@ -1,6 +1,6 @@
 version = 1
 revision = 3
-requires-python = ">=3.11, <=3.13"
+requires-python = ">=3.11, <3.14"
 resolution-markers = [
     "python_full_version >= '3.13'",
     "python_full_version < '3.13'",
@@ -2145,7 +2145,7 @@ wheels = [
 
 [[package]]
 name = "stravinsky"
-version = "0.3.8"
+version = "0.4.6"
 source = { editable = "." }
 dependencies = [
     { name = "aiofiles" },

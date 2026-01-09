@@ -468,20 +468,38 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         elif name == "start_file_watcher":
             from .tools.semantic_search import start_file_watcher
             import json
+            import sys
 
-            watcher = start_file_watcher(
-                project_path=arguments.get("project_path", "."),
-                provider=arguments.get("provider", "ollama"),
-                debounce_seconds=arguments.get("debounce_seconds", 2.0),
-            )
+            try:
+                watcher = start_file_watcher(
+                    project_path=arguments.get("project_path", "."),
+                    provider=arguments.get("provider", "ollama"),
+                    debounce_seconds=arguments.get("debounce_seconds", 2.0),
+                )
 
-            result_content = json.dumps({
-                "status": "started",
-                "project_path": str(watcher.project_path),
-                "debounce_seconds": watcher.debounce_seconds,
-                "provider": watcher.store.provider_name,
-                "is_running": watcher.is_running()
-            }, indent=2)
+                result_content = json.dumps({
+                    "status": "started",
+                    "project_path": str(watcher.project_path),
+                    "debounce_seconds": watcher.debounce_seconds,
+                    "provider": watcher.store.provider_name,
+                    "is_running": watcher.is_running()
+                }, indent=2)
+            except ValueError as e:
+                # No index exists
+                result_content = json.dumps({
+                    "error": str(e),
+                    "hint": "Run semantic_index() before starting file watcher"
+                }, indent=2)
+                print(f"⚠️  start_file_watcher ValueError: {e}", file=sys.stderr)
+            except Exception as e:
+                # Unexpected error
+                import traceback
+                result_content = json.dumps({
+                    "error": f"{type(e).__name__}: {str(e)}",
+                    "hint": "Check MCP server logs for details"
+                }, indent=2)
+                print(f"❌ start_file_watcher error: {e}", file=sys.stderr)
+                traceback.print_exc(file=sys.stderr)
 
         elif name == "stop_file_watcher":
             from .tools.semantic_search import stop_file_watcher

@@ -37,7 +37,13 @@ stravinsky/
 # Stravinsky temp files
 .stravinsky/agents/*.out
 .stravinsky/agents/*.system
+.stravinsky/agents.json
 logs/*.log
+logs/*.json
 
 # External dependencies (cloned repos)
 pygls/
+
+# Temporary hook files
+.claude/hooks/send_event.py
+.claude/hooks/utils/

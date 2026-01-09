@@ -53,6 +53,7 @@ def get_watchdog():
                 _watchdog = {"Observer": Observer, "FileSystemEventHandler": FileSystemEventHandler}
     return _watchdog
 
+
 # Embedding provider type
 EmbeddingProvider = Literal["ollama", "mxbai", "gemini", "openai", "huggingface"]
 
@@ -82,9 +83,11 @@ def get_chromadb():
             if _chromadb is None:
                 try:
                     import chromadb
+
                     _chromadb = chromadb
                 except ImportError as e:
                     import sys
+
                     if sys.version_info >= (3, 14):
                         raise ImportError(
                             "ChromaDB is not available on Python 3.14+. "
@@ -115,6 +118,201 @@ def get_httpx():
 
                 _httpx = httpx
     return _httpx
+
+
+# ========================
+# GITIGNORE MANAGER
+# ========================
+
+# Lazy import for pathspec
+_pathspec = None
+_pathspec_lock = threading.Lock()
+
+
+def get_pathspec():
+    """Lazy import of pathspec for gitignore pattern matching."""
+    global _pathspec
+    if _pathspec is None:
+        with _pathspec_lock:
+            if _pathspec is None:
+                import pathspec
+
+                _pathspec = pathspec
+    return _pathspec
+
+
+class GitIgnoreManager:
+    """Manages .gitignore and .stravignore pattern matching.
+
+    Loads and caches gitignore-style patterns from:
+    - .gitignore (standard git ignore patterns)
+    - .stravignore (Stravinsky-specific ignore patterns)
+
+    Patterns are combined and cached per project for efficient matching.
+    The manager automatically reloads patterns if the ignore files are modified.
+    """
+
+    # Cache of GitIgnoreManager instances per project path
+    _instances: dict[str, "GitIgnoreManager"] = {}
+    _instances_lock = threading.Lock()
+
+    @classmethod
+    def get_instance(cls, project_path: Path) -> "GitIgnoreManager":
+        """Get or create a GitIgnoreManager for a project.
+
+        Args:
+            project_path: Root path of the project
+
+        Returns:
+            Cached GitIgnoreManager instance for the project
+        """
+        path_str = str(project_path.resolve())
+        if path_str not in cls._instances:
+            with cls._instances_lock:
+                if path_str not in cls._instances:
+                    cls._instances[path_str] = cls(project_path)
+        return cls._instances[path_str]
+
+    @classmethod
+    def clear_cache(cls, project_path: Path | None = None) -> None:
+        """Clear cached GitIgnoreManager instances.
+
+        Args:
+            project_path: Clear only this project's cache, or all if None
+        """
+        with cls._instances_lock:
+            if project_path is None:
+                cls._instances.clear()
+            else:
+                path_str = str(project_path.resolve())
+                cls._instances.pop(path_str, None)
+
+    def __init__(self, project_path: Path):
+        """Initialize the GitIgnoreManager.
+
+        Args:
+            project_path: Root path of the project
+        """
+        self.project_path = project_path.resolve()
+        self._spec = None
+        self._gitignore_mtime: float | None = None
+        self._stravignore_mtime: float | None = None
+        self._lock = threading.Lock()
+
+    def _get_file_mtime(self, file_path: Path) -> float | None:
+        """Get modification time of a file, or None if it doesn't exist."""
+        try:
+            return file_path.stat().st_mtime
+        except (OSError, FileNotFoundError):
+            return None
+
+    def _needs_reload(self) -> bool:
+        """Check if ignore patterns need to be reloaded."""
+        gitignore_path = self.project_path / ".gitignore"
+        stravignore_path = self.project_path / ".stravignore"
+
+        current_gitignore_mtime = self._get_file_mtime(gitignore_path)
+        current_stravignore_mtime = self._get_file_mtime(stravignore_path)
+
+        # Check if either file has been modified or if we haven't loaded yet
+        if self._spec is None:
+            return True
+
+        if current_gitignore_mtime != self._gitignore_mtime:
+            return True
+
+        if current_stravignore_mtime != self._stravignore_mtime:
+            return True
+
+        return False
+
+    def _load_patterns(self) -> None:
+        """Load patterns from .gitignore and .stravignore files."""
+        pathspec = get_pathspec()
+
+        patterns = []
+        gitignore_path = self.project_path / ".gitignore"
+        stravignore_path = self.project_path / ".stravignore"
+
+        # Load .gitignore patterns
+        if gitignore_path.exists():
+            try:
+                with open(gitignore_path, encoding="utf-8") as f:
+                    patterns.extend(f.read().splitlines())
+                self._gitignore_mtime = self._get_file_mtime(gitignore_path)
+                logger.debug(f"Loaded .gitignore from {gitignore_path}")
+            except Exception as e:
+                logger.warning(f"Failed to load .gitignore: {e}")
+                self._gitignore_mtime = None
+        else:
+            self._gitignore_mtime = None
+
+        # Load .stravignore patterns
+        if stravignore_path.exists():
+            try:
+                with open(stravignore_path, encoding="utf-8") as f:
+                    patterns.extend(f.read().splitlines())
+                self._stravignore_mtime = self._get_file_mtime(stravignore_path)
+                logger.debug(f"Loaded .stravignore from {stravignore_path}")
+            except Exception as e:
+                logger.warning(f"Failed to load .stravignore: {e}")
+                self._stravignore_mtime = None
+        else:
+            self._stravignore_mtime = None
+
+        # Filter out empty lines and comments
+        patterns = [p for p in patterns if p.strip() and not p.strip().startswith("#")]
+
+        # Create pathspec matcher
+        self._spec = pathspec.PathSpec.from_lines("gitwildmatch", patterns)
+        logger.debug(f"Loaded {len(patterns)} ignore patterns for {self.project_path}")
+
+    @property
+    def spec(self):
+        """Get the PathSpec matcher, reloading if necessary."""
+        with self._lock:
+            if self._needs_reload():
+                self._load_patterns()
+            return self._spec
+
+    def is_ignored(self, file_path: Path) -> bool:
+        """Check if a file path should be ignored.
+
+        Args:
+            file_path: Absolute or relative path to check
+
+        Returns:
+            True if the file matches any ignore pattern, False otherwise
+        """
+        try:
+            # Convert to relative path from project root
+            if file_path.is_absolute():
+                rel_path = file_path.resolve().relative_to(self.project_path)
+            else:
+                rel_path = file_path
+
+            # pathspec expects forward slashes and string paths
+            rel_path_str = str(rel_path).replace("\\", "/")
+
+            # Check against patterns
+            return self.spec.match_file(rel_path_str)
+        except ValueError:
+            # Path is outside project - not ignored by gitignore (but may be ignored for other reasons)
+            return False
+        except Exception as e:
+            logger.warning(f"Error checking ignore status for {file_path}: {e}")
+            return False
+
+    def filter_paths(self, paths: list[Path]) -> list[Path]:
+        """Filter a list of paths, removing ignored ones.
+
+        Args:
+            paths: List of paths to filter
+
+        Returns:
+            List of paths that are not ignored
+        """
+        return [p for p in paths if not self.is_ignored(p)]
 
 
 # ========================
@@ -678,7 +876,9 @@ def get_embedding_provider(provider: EmbeddingProvider) -> BaseEmbeddingProvider
                 }
 
                 if provider not in providers:
-                    raise ValueError(f"Unknown provider: {provider}. Available: {list(providers.keys())}")
+                    raise ValueError(
+                        f"Unknown provider: {provider}. Available: {list(providers.keys())}"
+                    )
 
                 _embedding_provider_cache[provider] = providers[provider]()
 
@@ -798,6 +998,7 @@ class CodebaseVectorStore:
             # Prevents 30s timeout from dead processes causing MCP "Connection closed" errors
             if self._lock_path.exists():
                 import time
+
                 lock_age = time.time() - self._lock_path.stat().st_mtime
                 # Lock older than 60 seconds is likely from a crashed process
                 # (Reduced from 300s to catch recently crashed processes)
@@ -1200,6 +1401,7 @@ class CodebaseVectorStore:
         notifier = None  # Initialize to avoid NameError in error handlers
         try:
             from mcp_bridge.notifications import get_notification_manager
+
             notifier = get_notification_manager()
             await notifier.notify_reindex_start(str(self.project_path))
         except Exception as e:
@@ -2766,12 +2968,10 @@ def _is_process_alive(pid: int) -> bool:
     if sys.platform == "win32":
         # Windows: Use tasklist command
         import subprocess
+
         try:
             result = subprocess.run(
-                ["tasklist", "/FI", f"PID eq {pid}"],
-                capture_output=True,
-                text=True,
-                timeout=2
+                ["tasklist", "/FI", f"PID eq {pid}"], capture_output=True, text=True, timeout=2
             )
             return str(pid) in result.stdout
         except Exception:
@@ -2804,6 +3004,7 @@ def cleanup_stale_chromadb_locks() -> int:
         return 0  # No vectordb yet, nothing to cleanup
 
     import time
+
     removed_count = 0
 
     for project_dir in vectordb_base.iterdir():

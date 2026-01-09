@@ -134,6 +134,9 @@ _SESSION_CACHE: dict[str, str] = {}
 # Pooled HTTP client for connection reuse
 _HTTP_CLIENT: httpx.AsyncClient | None = None
 
+# Rate limiting: Max 5 concurrent Gemini requests to prevent burst rate limits
+_GEMINI_SEMAPHORE: asyncio.Semaphore | None = None
+
 
 def _get_session_id(conversation_key: str | None = None) -> str:
     """
@@ -172,6 +175,19 @@ async def _get_http_client() -> httpx.AsyncClient:
     if _HTTP_CLIENT is None or _HTTP_CLIENT.is_closed:
         _HTTP_CLIENT = httpx.AsyncClient(timeout=120.0)
     return _HTTP_CLIENT
+
+
+def _get_gemini_semaphore() -> asyncio.Semaphore:
+    """
+    Get or create semaphore for Gemini API rate limiting.
+
+    Limits concurrent Gemini requests to prevent burst rate limits (429 errors).
+    Max 5 concurrent requests balances throughput with API quota constraints.
+    """
+    global _GEMINI_SEMAPHORE
+    if _GEMINI_SEMAPHORE is None:
+        _GEMINI_SEMAPHORE = asyncio.Semaphore(5)
+    return _GEMINI_SEMAPHORE
 
 
 def _extract_gemini_response(data: dict) -> str:
@@ -284,18 +300,25 @@ async def _ensure_valid_token(token_store: TokenStore, provider: str) -> str:
 
 
 def is_retryable_exception(e: Exception) -> bool:
-    """Check if an exception is retryable (429 or 5xx)."""
+    """
+    Check if an exception is retryable (5xx only, NOT 429).
+
+    429 (Rate Limit) errors should fail fast - retrying makes the problem worse
+    by adding more requests to an already exhausted quota. The semaphore prevents
+    these in the first place, but if one slips through, we shouldn't retry.
+    """
     if isinstance(e, httpx.HTTPStatusError):
-        return e.response.status_code == 429 or 500 <= e.response.status_code < 600
+        # Only retry server errors (5xx), not rate limits (429)
+        return 500 <= e.response.status_code < 600
     return False
 
 
 @retry(
-    stop=stop_after_attempt(5),
-    wait=wait_exponential(multiplier=1, min=4, max=60),
+    stop=stop_after_attempt(2),  # Reduced from 5 to 2 attempts
+    wait=wait_exponential(multiplier=2, min=10, max=120),  # Longer waits: 10s → 20s → 40s
     retry=retry_if_exception(is_retryable_exception),
     before_sleep=lambda retry_state: logger.info(
-        f"Rate limited or server error, retrying in {retry_state.next_action.sleep} seconds..."
+        f"Server error, retrying in {retry_state.next_action.sleep} seconds..."
     ),
 )
 async def invoke_gemini(
@@ -366,182 +389,185 @@ async def invoke_gemini(
     desc_info = f" | {description}" if description else ""
     print(f"🔮 GEMINI: {model} | agent={agent_type}{task_info}{desc_info}", file=sys.stderr)
 
-    access_token = await _ensure_valid_token(token_store, "gemini")
+    # Acquire semaphore to limit concurrent Gemini requests (prevents 429 rate limits)
+    semaphore = _get_gemini_semaphore()
+    async with semaphore:
+        access_token = await _ensure_valid_token(token_store, "gemini")
 
-    # Resolve user-friendly model name to actual API model ID
-    api_model = resolve_gemini_model(model)
+        # Resolve user-friendly model name to actual API model ID
+        api_model = resolve_gemini_model(model)
 
-    # Use persistent session ID for thinking signature caching
-    session_id = _get_session_id()
-    project_id = os.getenv("STRAVINSKY_ANTIGRAVITY_PROJECT_ID", ANTIGRAVITY_DEFAULT_PROJECT_ID)
+        # Use persistent session ID for thinking signature caching
+        session_id = _get_session_id()
+        project_id = os.getenv("STRAVINSKY_ANTIGRAVITY_PROJECT_ID", ANTIGRAVITY_DEFAULT_PROJECT_ID)
 
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "Content-Type": "application/json",
-        **ANTIGRAVITY_HEADERS,  # Include Antigravity headers
-    }
-
-    # Build inner request payload
-    # Per API spec: contents must include role ("user" or "model")
-
-    # Build parts list - text prompt plus optional image
-    parts = [{"text": prompt}]
-
-    # Add image data for vision analysis (token optimization for multimodal)
-    if image_path:
-        import base64
-        from pathlib import Path
-
-        image_file = Path(image_path)
-        if image_file.exists():
-            # Determine MIME type
-            suffix = image_file.suffix.lower()
-            mime_types = {
-                ".png": "image/png",
-                ".jpg": "image/jpeg",
-                ".jpeg": "image/jpeg",
-                ".gif": "image/gif",
-                ".webp": "image/webp",
-                ".pdf": "application/pdf",
-            }
-            mime_type = mime_types.get(suffix, "image/png")
-
-            # Read and base64 encode
-            image_data = base64.b64encode(image_file.read_bytes()).decode("utf-8")
-
-            # Add inline image data for Gemini Vision API
-            parts.append({
-                "inlineData": {
-                    "mimeType": mime_type,
-                    "data": image_data,
-                }
-            })
-            logger.info(f"[multimodal] Added vision data: {image_path} ({mime_type})")
-
-    inner_payload = {
-        "contents": [{"role": "user", "parts": parts}],
-        "generationConfig": {
-            "temperature": temperature,
-            "maxOutputTokens": max_tokens,
-        },
-        "sessionId": session_id,
-    }
-
-    # Add thinking budget if supported by model/API
-    if thinking_budget > 0:
-        # For Gemini 2.0+ Thinking models
-        # Per Antigravity API: use "thinkingBudget", NOT "tokenLimit"
-        inner_payload["generationConfig"]["thinkingConfig"] = {
-            "includeThoughts": True,
-            "thinkingBudget": thinking_budget,
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json",
+            **ANTIGRAVITY_HEADERS,  # Include Antigravity headers
         }
 
-    # Wrap request body per reference implementation
-    try:
-        import uuid as uuid_module  # Local import workaround for MCP context issue
+        # Build inner request payload
+        # Per API spec: contents must include role ("user" or "model")
 
-        request_id = f"invoke-{uuid_module.uuid4()}"
-    except Exception as e:
-        logger.error(f"UUID IMPORT FAILED: {e}")
-        raise RuntimeError(f"CUSTOM ERROR: UUID import failed: {e}")
+        # Build parts list - text prompt plus optional image
+        parts = [{"text": prompt}]
 
-    wrapped_payload = {
-        "project": project_id,
-        "model": api_model,
-        "userAgent": "antigravity",
-        "requestId": request_id,
-        "request": inner_payload,
-    }
+        # Add image data for vision analysis (token optimization for multimodal)
+        if image_path:
+            import base64
+            from pathlib import Path
 
-    # Get pooled HTTP client for connection reuse
-    client = await _get_http_client()
+            image_file = Path(image_path)
+            if image_file.exists():
+                # Determine MIME type
+                suffix = image_file.suffix.lower()
+                mime_types = {
+                    ".png": "image/png",
+                    ".jpg": "image/jpeg",
+                    ".jpeg": "image/jpeg",
+                    ".gif": "image/gif",
+                    ".webp": "image/webp",
+                    ".pdf": "application/pdf",
+                }
+                mime_type = mime_types.get(suffix, "image/png")
 
-    # Try endpoints in fallback order with thinking recovery
-    response = None
-    last_error = None
-    max_retries = 2  # For thinking recovery
+                # Read and base64 encode
+                image_data = base64.b64encode(image_file.read_bytes()).decode("utf-8")
 
-    for retry_attempt in range(max_retries):
-        for endpoint in ANTIGRAVITY_ENDPOINTS:
-            # Reference uses: {endpoint}/v1internal:generateContent (NOT /models/{model})
-            api_url = f"{endpoint}/v1internal:generateContent"
+                # Add inline image data for Gemini Vision API
+                parts.append({
+                    "inlineData": {
+                        "mimeType": mime_type,
+                        "data": image_data,
+                    }
+                })
+                logger.info(f"[multimodal] Added vision data: {image_path} ({mime_type})")
 
-            try:
-                response = await client.post(
-                    api_url,
-                    headers=headers,
-                    json=wrapped_payload,
-                    timeout=120.0,
-                )
+        inner_payload = {
+            "contents": [{"role": "user", "parts": parts}],
+            "generationConfig": {
+                "temperature": temperature,
+                "maxOutputTokens": max_tokens,
+            },
+            "sessionId": session_id,
+        }
 
-                # 401/403 might be endpoint-specific, try next endpoint
-                if response.status_code in (401, 403):
-                    logger.warning(
-                        f"[Gemini] Endpoint {endpoint} returned {response.status_code}, trying next"
+        # Add thinking budget if supported by model/API
+        if thinking_budget > 0:
+            # For Gemini 2.0+ Thinking models
+            # Per Antigravity API: use "thinkingBudget", NOT "tokenLimit"
+            inner_payload["generationConfig"]["thinkingConfig"] = {
+                "includeThoughts": True,
+                "thinkingBudget": thinking_budget,
+            }
+
+        # Wrap request body per reference implementation
+        try:
+            import uuid as uuid_module  # Local import workaround for MCP context issue
+
+            request_id = f"invoke-{uuid_module.uuid4()}"
+        except Exception as e:
+            logger.error(f"UUID IMPORT FAILED: {e}")
+            raise RuntimeError(f"CUSTOM ERROR: UUID import failed: {e}")
+
+        wrapped_payload = {
+            "project": project_id,
+            "model": api_model,
+            "userAgent": "antigravity",
+            "requestId": request_id,
+            "request": inner_payload,
+        }
+
+        # Get pooled HTTP client for connection reuse
+        client = await _get_http_client()
+
+        # Try endpoints in fallback order with thinking recovery
+        response = None
+        last_error = None
+        max_retries = 2  # For thinking recovery
+
+        for retry_attempt in range(max_retries):
+            for endpoint in ANTIGRAVITY_ENDPOINTS:
+                # Reference uses: {endpoint}/v1internal:generateContent (NOT /models/{model})
+                api_url = f"{endpoint}/v1internal:generateContent"
+
+                try:
+                    response = await client.post(
+                        api_url,
+                        headers=headers,
+                        json=wrapped_payload,
+                        timeout=120.0,
                     )
-                    last_error = Exception(f"{response.status_code} from {endpoint}")
-                    continue
 
-                # Check for thinking-related errors that need recovery
-                if response.status_code in (400, 500):
-                    error_text = response.text.lower()
-                    if "thinking" in error_text or "signature" in error_text:
+                    # 401/403 might be endpoint-specific, try next endpoint
+                    if response.status_code in (401, 403):
                         logger.warning(
-                            f"[Gemini] Thinking error detected, clearing session cache and retrying"
+                            f"[Gemini] Endpoint {endpoint} returned {response.status_code}, trying next"
                         )
-                        clear_session_cache()
-                        # Update session ID for retry
-                        wrapped_payload["request"]["sessionId"] = _get_session_id()
-                        last_error = Exception(f"Thinking error: {response.text[:200]}")
-                        break  # Break inner loop to retry with new session
+                        last_error = Exception(f"{response.status_code} from {endpoint}")
+                        continue
 
-                # If we got a non-retryable response (success or 4xx client error), use it
-                if response.status_code < 500 and response.status_code != 429:
-                    break
+                    # Check for thinking-related errors that need recovery
+                    if response.status_code in (400, 500):
+                        error_text = response.text.lower()
+                        if "thinking" in error_text or "signature" in error_text:
+                            logger.warning(
+                                f"[Gemini] Thinking error detected, clearing session cache and retrying"
+                            )
+                            clear_session_cache()
+                            # Update session ID for retry
+                            wrapped_payload["request"]["sessionId"] = _get_session_id()
+                            last_error = Exception(f"Thinking error: {response.text[:200]}")
+                            break  # Break inner loop to retry with new session
 
-            except httpx.TimeoutException as e:
-                last_error = e
+                    # If we got a non-retryable response (success or 4xx client error), use it
+                    if response.status_code < 500 and response.status_code != 429:
+                        break
+
+                except httpx.TimeoutException as e:
+                    last_error = e
+                    continue
+                except Exception as e:
+                    last_error = e
+                    continue
+            else:
+                # Inner loop completed without break - no thinking recovery needed
+                break
+
+            # If we broke out of inner loop for thinking recovery, continue outer retry loop
+            if response and response.status_code in (400, 500):
                 continue
-            except Exception as e:
-                last_error = e
-                continue
-        else:
-            # Inner loop completed without break - no thinking recovery needed
             break
 
-        # If we broke out of inner loop for thinking recovery, continue outer retry loop
-        if response and response.status_code in (400, 500):
-            continue
-        break
+        if response is None:
+            # FALLBACK: Try Claude sonnet-4.5 for agents that support it
+            agent_context = params.get("agent_context", {})
+            agent_type = agent_context.get("agent_type", "unknown")
 
-    if response is None:
-        # FALLBACK: Try Claude sonnet-4.5 for agents that support it
-        agent_context = params.get("agent_context", {})
-        agent_type = agent_context.get("agent_type", "unknown")
+            if agent_type in ("dewey", "explore", "document_writer", "multimodal"):
+                logger.warning(f"[{agent_type}] Gemini failed, falling back to Claude sonnet-4.5")
+                try:
+                    import subprocess
+                    fallback_result = subprocess.run(
+                        ["claude", "-p", prompt, "--model", "sonnet", "--output-format", "text"],
+                        capture_output=True,
+                        text=True,
+                        timeout=120,
+                        cwd=os.getcwd(),
+                    )
+                    if fallback_result.returncode == 0 and fallback_result.stdout.strip():
+                        return fallback_result.stdout.strip()
+                except Exception as fallback_error:
+                    logger.error(f"Fallback to Claude also failed: {fallback_error}")
 
-        if agent_type in ("dewey", "explore", "document_writer", "multimodal"):
-            logger.warning(f"[{agent_type}] Gemini failed, falling back to Claude sonnet-4.5")
-            try:
-                import subprocess
-                fallback_result = subprocess.run(
-                    ["claude", "-p", prompt, "--model", "sonnet", "--output-format", "text"],
-                    capture_output=True,
-                    text=True,
-                    timeout=120,
-                    cwd=os.getcwd(),
-                )
-                if fallback_result.returncode == 0 and fallback_result.stdout.strip():
-                    return fallback_result.stdout.strip()
-            except Exception as fallback_error:
-                logger.error(f"Fallback to Claude also failed: {fallback_error}")
+            raise ValueError(f"All Antigravity endpoints failed: {last_error}")
 
-        raise ValueError(f"All Antigravity endpoints failed: {last_error}")
+        response.raise_for_status()
+        data = response.json()
 
-    response.raise_for_status()
-    data = response.json()
-
-    # Extract text from response using thinking-aware parser
-    return _extract_gemini_response(data)
+        # Extract text from response using thinking-aware parser
+        return _extract_gemini_response(data)
 
 
 # ========================
@@ -828,11 +854,11 @@ async def invoke_gemini_agentic(
 
 
 @retry(
-    stop=stop_after_attempt(5),
-    wait=wait_exponential(multiplier=1, min=4, max=60),
+    stop=stop_after_attempt(2),  # Reduced from 5 to 2 attempts
+    wait=wait_exponential(multiplier=2, min=10, max=120),  # Longer waits: 10s → 20s → 40s
     retry=retry_if_exception(is_retryable_exception),
     before_sleep=lambda retry_state: logger.info(
-        f"Rate limited or server error, retrying in {retry_state.next_action.sleep} seconds..."
+        f"Server error, retrying in {retry_state.next_action.sleep} seconds..."
     ),
 )
 async def invoke_openai(

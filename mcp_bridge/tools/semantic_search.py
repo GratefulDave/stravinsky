@@ -795,8 +795,9 @@ class CodebaseVectorStore:
             if self._lock_path.exists():
                 import time
                 lock_age = time.time() - self._lock_path.stat().st_mtime
-                # Lock older than 5 minutes is likely from a crashed process
-                if lock_age > 300:
+                # Lock older than 60 seconds is likely from a crashed process
+                # (Reduced from 300s to catch recently crashed processes)
+                if lock_age > 60:
                     logger.warning(
                         f"Removing stale ChromaDB lock (age: {lock_age:.0f}s, path: {self._lock_path})"
                     )
@@ -2571,3 +2572,100 @@ def _create_file_change_handler_class():
                 return False
 
     return _FileChangeHandler
+
+
+# ========================
+# CHROMADB LOCK CLEANUP
+# ========================
+
+
+def _is_process_alive(pid: int) -> bool:
+    """Check if a process with given PID is currently running.
+
+    Cross-platform process existence check.
+
+    Args:
+        pid: Process ID to check
+
+    Returns:
+        True if process exists, False otherwise
+    """
+    import os
+    import sys
+
+    if sys.platform == "win32":
+        # Windows: Use tasklist command
+        import subprocess
+        try:
+            result = subprocess.run(
+                ["tasklist", "/FI", f"PID eq {pid}"],
+                capture_output=True,
+                text=True,
+                timeout=2
+            )
+            return str(pid) in result.stdout
+        except Exception:
+            return False
+    else:
+        # Unix/Linux/macOS: Use os.kill(pid, 0)
+        try:
+            os.kill(pid, 0)
+            return True
+        except OSError:
+            return False
+        except Exception:
+            return False
+
+
+def cleanup_stale_chromadb_locks() -> int:
+    """Remove stale ChromaDB lock files on MCP server startup.
+
+    Scans all vectordb directories and removes lock files that:
+    1. Are older than 60 seconds (short grace period for active operations)
+    2. Don't have an owning process running (if PID can be determined)
+
+    This prevents 'Connection closed' errors from dead process locks.
+
+    Returns:
+        Number of stale locks removed
+    """
+    vectordb_base = Path.home() / ".stravinsky" / "vectordb"
+    if not vectordb_base.exists():
+        return 0  # No vectordb yet, nothing to cleanup
+
+    import time
+    removed_count = 0
+
+    for project_dir in vectordb_base.iterdir():
+        if not project_dir.is_dir():
+            continue
+
+        lock_path = project_dir / ".chromadb.lock"
+        if not lock_path.exists():
+            continue
+
+        # Check lock age
+        try:
+            lock_age = time.time() - lock_path.stat().st_mtime
+        except Exception:
+            continue
+
+        # Aggressive cleanup: remove locks older than 60 seconds
+        # This catches recently crashed processes (old 300s was too conservative)
+        is_stale = lock_age > 60
+
+        # TODO: If lock file contains PID, check if process is alive
+        # filelock doesn't write PID by default, but we could enhance this
+
+        if is_stale:
+            try:
+                lock_path.unlink(missing_ok=True)
+                removed_count += 1
+                logger.info(f"Removed stale lock: {lock_path} (age: {lock_age:.0f}s)")
+            except Exception as e:
+                logger.warning(f"Could not remove stale lock {lock_path}: {e}")
+
+    if removed_count > 0:
+        logger.info(f"Startup cleanup: removed {removed_count} stale ChromaDB lock(s)")
+
+    return removed_count

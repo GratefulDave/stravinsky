@@ -643,6 +643,16 @@ async def async_main():
     except Exception as e:
         logger.error(f"Failed to initialize hooks: {e}")
 
+    # Clean up stale ChromaDB locks on startup
+    try:
+        from .tools.semantic_search import cleanup_stale_chromadb_locks
+
+        removed_count = cleanup_stale_chromadb_locks()
+        if removed_count > 0:
+            logger.info(f"Cleaned up {removed_count} stale ChromaDB lock(s)")
+    except Exception as e:
+        logger.warning(f"Failed to cleanup ChromaDB locks: {e}")
+
     # Start background token refresh scheduler
     try:
         from .auth.token_refresh import background_token_refresh

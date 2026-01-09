@@ -790,11 +790,12 @@ class CodebaseVectorStore:
             chromadb = get_chromadb()
             # Acquire lock before creating client to prevent concurrent access
             try:
-                self.file_lock.acquire()
-                logger.debug(f"Acquired ChromaDB lock for {self.db_path}")
+                with self.file_lock:  # Auto-releases on exit
+                    logger.debug(f"Acquired ChromaDB lock for {self.db_path}")
+                    self._client = chromadb.PersistentClient(path=str(self.db_path))
             except Exception as e:
                 logger.warning(f"Could not acquire ChromaDB lock: {e}. Proceeding without lock.")
-            self._client = chromadb.PersistentClient(path=str(self.db_path))
+                self._client = chromadb.PersistentClient(path=str(self.db_path))
         return self._client
 
     @property

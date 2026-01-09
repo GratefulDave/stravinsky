@@ -772,6 +772,10 @@ class CodebaseVectorStore:
         self._watcher: CodebaseFileWatcher | None = None
         self._watcher_lock = threading.Lock()
 
+        # Cancellation flag for indexing operations
+        self._cancel_indexing = False
+        self._cancel_lock = threading.Lock()
+
     @property
     def file_lock(self):
         """Get or create the file lock for this database.
@@ -1149,9 +1153,32 @@ class CodebaseVectorStore:
 
         return files
 
+    def request_cancel_indexing(self) -> None:
+        """Request cancellation of ongoing indexing operation.
+
+        Sets a flag that will be checked between batches. The operation will
+        stop gracefully after completing the current batch.
+        """
+        with self._cancel_lock:
+            self._cancel_indexing = True
+            logger.info(f"Cancellation requested for {self.project_path}")
+
+    def clear_cancel_flag(self) -> None:
+        """Clear the cancellation flag."""
+        with self._cancel_lock:
+            self._cancel_indexing = False
+
+    def is_cancellation_requested(self) -> bool:
+        """Check if cancellation has been requested."""
+        with self._cancel_lock:
+            return self._cancel_indexing
+
     async def index_codebase(self, force: bool = False) -> dict:
         """
         Index the entire codebase into the vector store.
+
+        This operation can be cancelled by calling request_cancel_indexing().
+        Cancellation happens between batches, so the current batch will complete.
 
         Args:
             force: If True, reindex everything. Otherwise, only index new/changed files.
@@ -1160,6 +1187,9 @@ class CodebaseVectorStore:
             Statistics about the indexing operation.
         """
         import time
+
+        # Clear any previous cancellation requests
+        self.clear_cancel_flag()
 
         # Start timing
         start_time = time.time()
@@ -1248,6 +1278,28 @@ class CodebaseVectorStore:
             total_indexed = 0
 
             for i in range(0, len(chunks_to_add), batch_size):
+                # Check for cancellation between batches
+                if self.is_cancellation_requested():
+                    print(f"  ⚠️  Indexing cancelled after {total_indexed} chunks", file=sys.stderr)
+                    stats = {
+                        "indexed": total_indexed,
+                        "pruned": len(to_delete),
+                        "total_files": len(files),
+                        "db_path": str(self.db_path),
+                        "time_taken": round(time.time() - start_time, 1),
+                        "cancelled": True,
+                        "message": f"Cancelled after {total_indexed}/{len(chunks_to_add)} chunks",
+                    }
+                    # Notify cancellation
+                    try:
+                        if notifier:
+                            await notifier.notify_reindex_error(
+                                f"Indexing cancelled by user after {total_indexed} chunks"
+                            )
+                    except Exception as e:
+                        logger.warning(f"Failed to send cancellation notification: {e}")
+                    return stats
+
                 batch = chunks_to_add[i : i + batch_size]
 
                 documents = [c["document"] for c in batch]
@@ -1697,11 +1749,43 @@ async def index_codebase(
     if "error" in stats:
         return f"Error: {stats['error']}"
 
+    if stats.get("cancelled"):
+        return (
+            f"⚠️ Indexing cancelled\n"
+            f"Indexed {stats['indexed']} chunks from {stats['total_files']} files before cancellation\n"
+            f"{stats.get('message', '')}"
+        )
+
     return (
         f"Indexed {stats['indexed']} chunks from {stats['total_files']} files\n"
         f"Database: {stats.get('db_path', 'unknown')}\n"
         f"{stats.get('message', '')}"
     )
+
+
+def cancel_indexing(
+    project_path: str = ".",
+    provider: EmbeddingProvider = "ollama",
+) -> str:
+    """
+    Cancel an ongoing indexing operation.
+
+    The cancellation happens gracefully between batches - the current batch
+    will complete before the operation stops.
+
+    Args:
+        project_path: Path to the project root
+        provider: Embedding provider (must match the one used for indexing)
+
+    Returns:
+        Confirmation message.
+    """
+    try:
+        store = get_store(project_path, provider)
+        store.request_cancel_indexing()
+        return f"✅ Cancellation requested for {project_path}\nIndexing will stop after current batch completes."
+    except Exception as e:
+        return f"❌ Error requesting cancellation: {e}"
 
 
 async def semantic_stats(
@@ -1731,6 +1815,83 @@ async def semantic_stats(
         f"Chunks indexed: {stats['chunks_indexed']}\n"
         f"Embedding provider: {stats['embedding_provider']} ({stats['embedding_dimension']} dims)"
     )
+
+
+def delete_index(
+    project_path: str = ".",
+    provider: EmbeddingProvider | None = None,
+    delete_all: bool = False,
+) -> str:
+    """
+    Delete semantic search index for a project.
+
+    Args:
+        project_path: Path to the project root
+        provider: Embedding provider (if None and delete_all=False, deletes all providers for this project)
+        delete_all: If True, delete ALL indexes for ALL projects (ignores project_path and provider)
+
+    Returns:
+        Confirmation message with deleted paths.
+    """
+    import shutil
+
+    vectordb_base = Path.home() / ".stravinsky" / "vectordb"
+
+    if not vectordb_base.exists():
+        return "✅ No semantic search indexes found (vectordb directory doesn't exist)"
+
+    if delete_all:
+        # Delete entire vectordb directory
+        try:
+            shutil.rmtree(vectordb_base)
+            return "✅ Deleted all semantic search indexes for all projects"
+        except Exception as e:
+            return f"❌ Error deleting all indexes: {e}"
+
+    # Generate project hash
+    project_path_resolved = Path(project_path).resolve()
+    project_hash = hashlib.md5(str(project_path_resolved).encode()).hexdigest()[:12]
+
+    deleted = []
+    errors = []
+
+    if provider:
+        # Delete specific provider index for this project
+        index_path = vectordb_base / f"{project_hash}_{provider}"
+        if index_path.exists():
+            try:
+                shutil.rmtree(index_path)
+                deleted.append(str(index_path))
+            except Exception as e:
+                errors.append(f"{provider}: {e}")
+        else:
+            errors.append(f"{provider}: Index not found")
+    else:
+        # Delete all provider indexes for this project
+        providers: list[EmbeddingProvider] = ["ollama", "mxbai", "gemini", "openai", "huggingface"]
+        for prov in providers:
+            index_path = vectordb_base / f"{project_hash}_{prov}"
+            if index_path.exists():
+                try:
+                    shutil.rmtree(index_path)
+                    deleted.append(str(index_path))
+                except Exception as e:
+                    errors.append(f"{prov}: {e}")
+
+    if not deleted and not errors:
+        return f"⚠️  No indexes found for project: {project_path_resolved}\nProject hash: {project_hash}"
+
+    result = []
+    if deleted:
+        result.append(f"✅ Deleted {len(deleted)} index(es):")
+        for path in deleted:
+            result.append(f"  - {path}")
+    if errors:
+        result.append(f"\n❌ Errors ({len(errors)}):")
+        for error in errors:
+            result.append(f"  - {error}")
+
+    return "\n".join(result)
 
 
 async def semantic_health(project_path: str = ".", provider: EmbeddingProvider = "ollama") -> str:
@@ -1763,12 +1924,15 @@ async def semantic_health(project_path: str = ".", provider: EmbeddingProvider =
 # ========================
 
 
-def start_file_watcher(
+async def start_file_watcher(
     project_path: str,
     provider: EmbeddingProvider = "ollama",
     debounce_seconds: float = 2.0,
 ) -> "CodebaseFileWatcher":
     """Start watching a project directory for file changes.
+
+    If an index exists, automatically performs an incremental reindex to catch up
+    on any changes that happened while the watcher was not running.
 
     Args:
         project_path: Path to the project root
@@ -1793,6 +1957,12 @@ def start_file_watcher(
                         f"Run semantic_index(project_path='{path}', provider='{provider}') "
                         f"before starting the file watcher."
                     )
+
+                # Index exists - catch up on any missed changes
+                print(f"📋 Catching up on changes since last index...", file=sys.stderr)
+                await store.index_codebase(force=False)
+                print(f"✅ Index updated, starting file watcher", file=sys.stderr)
+
             except ValueError:
                 # Re-raise ValueError (our intentional error)
                 raise

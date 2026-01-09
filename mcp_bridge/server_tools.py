@@ -856,6 +856,56 @@ def get_tool_definitions() -> List[Tool]:
             },
         ),
         Tool(
+            name="cancel_indexing",
+            description=(
+                "Cancel an ongoing semantic indexing operation. "
+                "Cancellation happens gracefully between batches - the current batch will complete before stopping."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "project_path": {
+                        "type": "string",
+                        "description": "Path to the project root",
+                        "default": ".",
+                    },
+                    "provider": {
+                        "type": "string",
+                        "description": "Embedding provider (must match the one used for indexing)",
+                        "enum": ["ollama", "mxbai", "gemini", "openai", "huggingface"],
+                        "default": "ollama",
+                    },
+                },
+            },
+        ),
+        Tool(
+            name="delete_index",
+            description=(
+                "Delete semantic search index(es). Can delete for specific project+provider, "
+                "all providers for a project, or all indexes globally."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "project_path": {
+                        "type": "string",
+                        "description": "Path to the project root (ignored if delete_all=true)",
+                        "default": ".",
+                    },
+                    "provider": {
+                        "type": "string",
+                        "description": "Specific provider to delete (if not specified, deletes all providers for project)",
+                        "enum": ["ollama", "mxbai", "gemini", "openai", "huggingface"],
+                    },
+                    "delete_all": {
+                        "type": "boolean",
+                        "description": "If true, delete ALL indexes for ALL projects (ignores project_path and provider)",
+                        "default": False,
+                    },
+                },
+            },
+        ),
+        Tool(
             name="list_file_watchers",
             description="List all active file watchers across all projects.",
             inputSchema={

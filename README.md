@@ -15,7 +15,7 @@
 - 🔐 **OAuth Authentication** - Secure browser-based auth for Google (Gemini) and OpenAI (ChatGPT)
 - 🤖 **Multi-Model Support** - Seamlessly invoke Gemini and GPT models from Claude
 - 🎯 **Native Subagent Orchestration** - Auto-delegating orchestrator with parallel execution (zero CLI overhead)
-- 🛠️ **38 MCP Tools** - Model invocation, code search, semantic search, LSP refactoring, session management, and more
+- 🛠️ **40 MCP Tools** - Model invocation, code search, semantic search, LSP refactoring, session management, and more
 - 🧠 **9 Specialized Native Agents** - Stravinsky (orchestrator), Research Lead, Implementation Lead, Delphi (GPT-5.2 advisor), Dewey (documentation), Explore (code search), Frontend (Gemini 3 Pro High UI/UX), Code Reviewer, Debugger
 - 🔄 **Hook-Based Delegation** - PreToolUse hooks enforce delegation patterns with hard boundaries (exit code 2)
 - 📝 **LSP Integration** - Full Language Server Protocol support with persistent servers (35x speedup), code refactoring, and advanced navigation
@@ -157,7 +157,7 @@ Stravinsky uses **native Claude Code subagents** (.claude/agents/) with automati
 
 ---
 
-## Tools (38)
+## Tools (40)
 
 | Category         | Tools                                                                              |
 | ---------------- | ---------------------------------------------------------------------------------- |
@@ -165,7 +165,7 @@ Stravinsky uses **native Claude Code subagents** (.claude/agents/) with automati
 | **Environment**  | `get_project_context`, `task_spawn`, `task_status`, `task_list`                    |
 | **Agents**       | `agent_spawn`, `agent_output`, `agent_cancel`, `agent_list`, `agent_progress`, `agent_retry` |
 | **Code Search**  | `ast_grep_search`, `ast_grep_replace`, `grep_search`, `glob_files`                 |
-| **Semantic**     | `semantic_search`, `semantic_index`, `semantic_stats`                              |
+| **Semantic**     | `semantic_search`, `semantic_index`, `semantic_stats`, `cancel_indexing`, `delete_index` |
 | **LSP**          | `lsp_diagnostics`, `lsp_hover`, `lsp_goto_definition`, `lsp_find_references`, `lsp_document_symbols`, `lsp_workspace_symbols`, `lsp_prepare_rename`, `lsp_rename`, `lsp_code_actions`, `lsp_code_action_resolve`, `lsp_extract_refactor`, `lsp_servers` (12 tools) |
 | **Sessions**     | `session_list`, `session_read`, `session_search`                                   |
 | **Skills**       | `skill_list`, `skill_get`                                                          |
@@ -212,6 +212,14 @@ semantic_stats()  # View index statistics
 
 # STEP 4: Stop watching when done (optional - watcher cleans up on exit)
 stop_file_watcher(".")
+
+# OPTIONAL: Cancel ongoing indexing (for large codebases)
+cancel_indexing(project_path=".", provider="ollama")
+
+# OPTIONAL: Delete indexes
+delete_index(project_path=".", provider="ollama")  # Delete ollama index for this project
+delete_index(project_path=".")  # Delete all provider indexes for this project
+delete_index(delete_all=True)  # Delete ALL indexes for ALL projects
 ```
 
 **⚠️ Important:** You MUST run `semantic_index()` first before using semantic search or starting the FileWatcher. If you skip this step:

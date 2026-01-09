@@ -514,6 +514,23 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 "project_path": arguments.get("project_path", ".")
             }, indent=2)
 
+        elif name == "cancel_indexing":
+            from .tools.semantic_search import cancel_indexing
+
+            result_content = cancel_indexing(
+                project_path=arguments.get("project_path", "."),
+                provider=arguments.get("provider", "ollama"),
+            )
+
+        elif name == "delete_index":
+            from .tools.semantic_search import delete_index
+
+            result_content = delete_index(
+                project_path=arguments.get("project_path", "."),
+                provider=arguments.get("provider"),  # None if not specified
+                delete_all=arguments.get("delete_all", False),
+            )
+
         elif name == "list_file_watchers":
             from .tools.semantic_search import list_file_watchers
             import json

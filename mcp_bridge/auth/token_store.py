@@ -8,10 +8,13 @@ Stores OAuth tokens securely using the OS keyring:
 """
 
 import json
+import os
 import time
+from pathlib import Path
 from typing import TypedDict
 
 import keyring
+from cryptography.fernet import Fernet
 
 
 class TokenData(TypedDict, total=False):
@@ -26,13 +29,15 @@ class TokenData(TypedDict, total=False):
 
 class TokenStore:
     """
-    Secure storage for OAuth tokens using system keyring.
+    Secure storage for OAuth tokens using system keyring with encrypted file fallback.
 
     Each provider (gemini, openai) stores its tokens separately.
     Tokens are serialized as JSON for storage.
+    Falls back to encrypted file storage if keyring fails.
     """
 
     SERVICE_NAME = "stravinsky"
+    FALLBACK_DIR = Path.home() / ".stravinsky" / "tokens"
 
     def __init__(self, service_name: str | None = None):
         """Initialize the token store.
@@ -41,6 +46,63 @@ class TokenStore:
             service_name: Override the default service name for testing.
         """
         self.service_name = service_name or self.SERVICE_NAME
+        self._init_fallback_storage()
+
+    def _init_fallback_storage(self) -> None:
+        """Initialize encrypted file storage fallback directory."""
+        self.FALLBACK_DIR.mkdir(parents=True, exist_ok=True)
+
+    def _get_fallback_path(self, provider: str) -> Path:
+        """Get the path for encrypted fallback storage."""
+        return self.FALLBACK_DIR / f"{provider}.enc"
+
+    def _get_or_create_key(self) -> bytes:
+        """Get or create encryption key for fallback storage."""
+        key_file = self.FALLBACK_DIR / ".key"
+        if key_file.exists():
+            return key_file.read_bytes()
+        # Create new key and save it
+        key = Fernet.generate_key()
+        key_file.write_bytes(key)
+        key_file.chmod(0o600)  # Read/write for owner only
+        return key
+
+    def _save_encrypted(self, provider: str, data: str) -> None:
+        """Save data to encrypted file."""
+        try:
+            key = self._get_or_create_key()
+            cipher = Fernet(key)
+            encrypted = cipher.encrypt(data.encode())
+            path = self._get_fallback_path(provider)
+            path.write_bytes(encrypted)
+            path.chmod(0o600)
+        except Exception as e:
+            raise RuntimeError(f"Failed to save encrypted token: {e}")
+
+    def _load_encrypted(self, provider: str) -> str | None:
+        """Load data from encrypted file."""
+        try:
+            path = self._get_fallback_path(provider)
+            if not path.exists():
+                return None
+            key = self._get_or_create_key()
+            cipher = Fernet(key)
+            encrypted = path.read_bytes()
+            decrypted = cipher.decrypt(encrypted)
+            return decrypted.decode()
+        except Exception:
+            return None
+
+    def _delete_encrypted(self, provider: str) -> bool:
+        """Delete encrypted token file."""
+        try:
+            path = self._get_fallback_path(provider)
+            if path.exists():
+                path.unlink()
+                return True
+            return False
+        except Exception:
+            return False
 
     def _key(self, provider: str) -> str:
         """Generate the keyring key for a provider."""
@@ -56,13 +118,23 @@ class TokenStore:
         Returns:
             TokenData if found and valid, None otherwise.
         """
+        # Try keyring first
         try:
             data = keyring.get_password(self.service_name, self._key(provider))
-            if not data:
-                return None
-            return json.loads(data)
-        except (json.JSONDecodeError, keyring.errors.KeyringError):
-            return None
+            if data:
+                return json.loads(data)
+        except (json.JSONDecodeError, keyring.errors.KeyringError, Exception):
+            pass  # Fall back to encrypted file
+
+        # Fall back to encrypted file storage
+        try:
+            data = self._load_encrypted(provider)
+            if data:
+                return json.loads(data)
+        except json.JSONDecodeError:
+            pass
+
+        return None
 
     def set_token(
         self,
@@ -77,6 +149,7 @@ class TokenStore:
         Store a token for a provider.
 
         Can be called with a TokenData dict or individual parameters.
+        Falls back to encrypted file storage if keyring fails.
 
         Args:
             provider: The provider name (e.g., 'gemini', 'openai')
@@ -96,7 +169,22 @@ class TokenStore:
             if expires_at:
                 token_data["expires_at"] = expires_at
             data = json.dumps(token_data)
-        keyring.set_password(self.service_name, self._key(provider), data)
+
+        # Try keyring first
+        try:
+            keyring.set_password(self.service_name, self._key(provider), data)
+            return
+        except Exception as e:
+            # Log but don't fail - fall back to encrypted file
+            pass
+
+        # Fall back to encrypted file storage
+        try:
+            self._save_encrypted(provider, data)
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to save token to both keyring and encrypted storage: {e}"
+            )
 
     def delete_token(self, provider: str) -> bool:
         """
@@ -108,11 +196,20 @@ class TokenStore:
         Returns:
             True if deleted, False if not found.
         """
+        # Try keyring first
+        deleted_from_keyring = False
         try:
             keyring.delete_password(self.service_name, self._key(provider))
-            return True
+            deleted_from_keyring = True
         except keyring.errors.PasswordDeleteError:
-            return False
+            pass
+        except Exception:
+            pass
+
+        # Also delete from encrypted file storage
+        deleted_from_file = self._delete_encrypted(provider)
+
+        return deleted_from_keyring or deleted_from_file
 
     def has_valid_token(self, provider: str) -> bool:
         """

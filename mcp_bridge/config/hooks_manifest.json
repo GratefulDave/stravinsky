@@ -1,0 +1,138 @@
+{
+  "schema_version": "1.0.0",
+  "manifest_version": "0.3.9",
+  "description": "Stravinsky hooks for Claude Code integration",
+  "generated_date": "2026-01-08T23:53:08.836595Z",
+  "hooks": {
+    "context.py": {
+      "version": "0.3.9",
+      "source": "mcp_bridge/hooks/context.py",
+      "description": "Project context injection from local files",
+      "checksum": "2411ea9d7ef9",
+      "lines_of_code": 38,
+      "updatable": true,
+      "priority": "high",
+      "required": true
+    },
+    "context_monitor.py": {
+      "version": "0.3.9",
+      "source": "mcp_bridge/hooks/context_monitor.py",
+      "description": "Pre-emptive context optimization at 70% threshold",
+      "checksum": "7a8d0615af4f",
+      "lines_of_code": 153,
+      "updatable": true,
+      "priority": "high",
+      "required": true
+    },
+    "edit_recovery.py": {
+      "version": "0.3.9",
+      "source": "mcp_bridge/hooks/edit_recovery.py",
+      "description": "Edit/MultiEdit error recovery helper",
+      "checksum": "d4e5a96f7bfc",
+      "lines_of_code": 46,
+      "updatable": true,
+      "priority": "high",
+      "required": true
+    },
+    "notification_hook.py": {
+      "version": "0.3.9",
+      "source": "mcp_bridge/hooks/notification_hook.py",
+      "description": "Agent spawn message formatting",
+      "checksum": "184947c5a227",
+      "lines_of_code": 103,
+      "updatable": true,
+      "priority": "high",
+      "required": true
+    },
+    "parallel_execution.py": {
+      "version": "0.3.9",
+      "source": "mcp_bridge/hooks/parallel_execution.py",
+      "description": "Pre-emptive parallel execution enforcement",
+      "checksum": "9c820d3d19be",
+      "lines_of_code": 111,
+      "updatable": true,
+      "priority": "high",
+      "required": true
+    },
+    "pre_compact.py": {
+      "version": "0.3.9",
+      "source": "mcp_bridge/hooks/pre_compact.py",
+      "description": "Context preservation before compaction",
+      "checksum": "4177023bd901",
+      "lines_of_code": 123,
+      "updatable": true,
+      "priority": "high",
+      "required": true
+    },
+    "stop_hook.py": {
+      "version": "0.3.9",
+      "source": "mcp_bridge/hooks/stop_hook.py",
+      "description": "Continuation loop handler",
+      "checksum": "820aef797e2e",
+      "lines_of_code": 234,
+      "updatable": true,
+      "priority": "high",
+      "required": true
+    },
+    "stravinsky_mode.py": {
+      "version": "0.3.9",
+      "source": "mcp_bridge/hooks/stravinsky_mode.py",
+      "description": "Hard blocking of native tools",
+      "checksum": "5968a95ebcbe",
+      "lines_of_code": 146,
+      "updatable": true,
+      "priority": "high",
+      "required": true
+    },
+    "subagent_stop.py": {
+      "version": "0.3.9",
+      "source": "mcp_bridge/hooks/subagent_stop.py",
+      "description": "Subagent completion handler",
+      "checksum": "1943d8dc5355",
+      "lines_of_code": 98,
+      "updatable": true,
+      "priority": "high",
+      "required": true
+    },
+    "todo_continuation.py": {
+      "version": "0.3.9",
+      "source": "mcp_bridge/hooks/todo_continuation.py",
+      "description": "Todo continuation enforcer",
+      "checksum": "b6685355f319",
+      "lines_of_code": 90,
+      "updatable": true,
+      "priority": "high",
+      "required": true
+    },
+    "todo_delegation.py": {
+      "version": "0.3.9",
+      "source": "mcp_bridge/hooks/todo_delegation.py",
+      "description": "Parallel task spawning enforcement",
+      "checksum": "b4e004d51600",
+      "lines_of_code": 88,
+      "updatable": true,
+      "priority": "high",
+      "required": true
+    },
+    "tool_messaging.py": {
+      "version": "0.3.9",
+      "source": "mcp_bridge/hooks/tool_messaging.py",
+      "description": "User-friendly tool messaging",
+      "checksum": "04a10e76f890",
+      "lines_of_code": 263,
+      "updatable": true,
+      "priority": "high",
+      "required": true
+    },
+    "truncator.py": {
+      "version": "0.3.9",
+      "source": "mcp_bridge/hooks/truncator.py",
+      "description": "Tool response truncation at 30k chars",
+      "checksum": "87785bf2c657",
+      "lines_of_code": 23,
+      "updatable": true,
+      "priority": "high",
+      "required": true
+    }
+  }
+}

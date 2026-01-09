@@ -1,0 +1,128 @@
+{
+  "schema_version": "1.0.0",
+  "manifest_version": "0.3.9",
+  "description": "Stravinsky skills for Claude Code command integration",
+  "generated_date": "2026-01-08T23:53:08.837988Z",
+  "skills": {
+    "commit.md": {
+      "file_path": "commit.md",
+      "description": "Git Master - Intelligent atomic commit orchestration",
+      "checksum": "f09aee4cc46e",
+      "lines_of_code": 531,
+      "updatable": true,
+      "priority": "medium"
+    },
+    "delphi.md": {
+      "file_path": "delphi.md",
+      "description": "Strategic advisor for architecture and debugging",
+      "checksum": "46ce352164a5",
+      "lines_of_code": 5,
+      "updatable": true,
+      "priority": "medium"
+    },
+    "dewey.md": {
+      "file_path": "dewey.md",
+      "description": "Research librarian for documentation and examples",
+      "checksum": "de4e41fc0e08",
+      "lines_of_code": 54,
+      "updatable": true,
+      "priority": "medium"
+    },
+    "index.md": {
+      "file_path": "str/index.md",
+      "description": "Index project for semantic search",
+      "checksum": "a37c570b70a5",
+      "lines_of_code": 199,
+      "updatable": true,
+      "priority": "medium"
+    },
+    "publish.md": {
+      "file_path": "publish.md",
+      "description": "Publish to PyPI with version bump",
+      "checksum": "9e6ed392ebc4",
+      "lines_of_code": 66,
+      "updatable": true,
+      "priority": "medium"
+    },
+    "review.md": {
+      "file_path": "review.md",
+      "description": "Code review recent changes",
+      "checksum": "47274e796826",
+      "lines_of_code": 67,
+      "updatable": true,
+      "priority": "medium"
+    },
+    "search.md": {
+      "file_path": "str/search.md",
+      "description": "Stravinsky skill",
+      "checksum": "eb092d567333",
+      "lines_of_code": 205,
+      "updatable": true,
+      "priority": "medium"
+    },
+    "start_filewatch.md": {
+      "file_path": "str/start_filewatch.md",
+      "description": "Stravinsky skill",
+      "checksum": "23ca1f6a1999",
+      "lines_of_code": 136,
+      "updatable": true,
+      "priority": "medium"
+    },
+    "stats.md": {
+      "file_path": "str/stats.md",
+      "description": "Stravinsky skill",
+      "checksum": "017f4fc6d099",
+      "lines_of_code": 71,
+      "updatable": true,
+      "priority": "medium"
+    },
+    "stop_filewatch.md": {
+      "file_path": "str/stop_filewatch.md",
+      "description": "Stravinsky skill",
+      "checksum": "dbe92100d0ba",
+      "lines_of_code": 89,
+      "updatable": true,
+      "priority": "medium"
+    },
+    "cancel-loop.md": {
+      "file_path": "strav/cancel-loop.md",
+      "description": "Cancel active continuation loop",
+      "checksum": "d811ea8bb0e9",
+      "lines_of_code": 128,
+      "updatable": true,
+      "priority": "medium"
+    },
+    "loop.md": {
+      "file_path": "strav/loop.md",
+      "description": "Continuation loop for iterative execution",
+      "checksum": "defc1ae0aae4",
+      "lines_of_code": 193,
+      "updatable": true,
+      "priority": "medium"
+    },
+    "strav.md": {
+      "file_path": "strav.md",
+      "description": "Stravinsky Orchestrator - Parallel agent execution",
+      "checksum": "9c9969cf8c09",
+      "lines_of_code": 216,
+      "updatable": true,
+      "priority": "medium"
+    },
+    "verify.md": {
+      "file_path": "verify.md",
+      "description": "Post-implementation verification",
+      "checksum": "87894579d5ec",
+      "lines_of_code": 60,
+      "updatable": true,
+      "priority": "medium"
+    },
+    "version.md": {
+      "file_path": "version.md",
+      "description": "Stravinsky skill",
+      "checksum": "1cf41d5d28da",
+      "lines_of_code": 5,
+      "updatable": true,
+      "priority": "medium"
+    }
+  }
+}

@@ -1,9 +1,8 @@
-<div align="center">
-  <img src="https://raw.githubusercontent.com/GratefulDave/stravinsky/main/assets/logo.png" width="300" alt="Stravinsky Logo">
-  <h1>Stravinsky</h1>
-  <p><strong>The Avant-Garde MCP Bridge for Claude Code</strong></p>
-  <p><em>Movement • Rhythm • Precision</em></p>
-</div>
+# Stravinsky
+
+**The Avant-Garde MCP Bridge for Claude Code**
+
+*Movement • Rhythm • Precision*
 
 ---
 
@@ -155,7 +154,8 @@ Stravinsky uses **native Claude Code subagents** (.claude/agents/) with automati
 
 - **ULTRATHINK**: Engage exhaustive deep reasoning with extended thinking budget (32k tokens)
 - **ULTRAWORK**: Maximum parallel execution - spawn all async agents immediately
-````
+
+---
 
 ## Tools (38)
 

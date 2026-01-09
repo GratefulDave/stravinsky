@@ -468,7 +468,6 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         elif name == "start_file_watcher":
             from .tools.semantic_search import start_file_watcher
             import json
-            import sys
 
             try:
                 watcher = start_file_watcher(

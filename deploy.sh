@@ -180,6 +180,15 @@ else
 fi
 echo ""
 
+# Step 10: Force uvx cache clear (CRITICAL FOR @latest TO WORK)
+echo "📋 Step 10: Clearing uvx cache..."
+echo -e "${YELLOW}⚠️  CRITICAL: Forcing fresh PyPI fetch on next uvx run${NC}"
+
+python3 -c "import shutil; from pathlib import Path; cache = Path.home() / '.cache' / 'uv'; shutil.rmtree(cache, ignore_errors=True); print('✅ Cleared uvx cache')"
+
+echo -e "${GREEN}✅ Cache cleared - restart Claude Code to fetch v$VERSION_TOML${NC}"
+echo ""
+
 # Success summary
 echo "🎉 Deployment Complete!"
 echo "======================="
@@ -188,4 +197,5 @@ echo "Version:  $VERSION_TOML"
 echo "Package:  https://pypi.org/project/stravinsky/$VERSION_TOML/"
 echo "Git Tag:  $TAG_NAME"
 echo ""
-echo -e "${GREEN}Users with stravinsky@latest will get this version on next Claude restart.${NC}"
+echo -e "${GREEN}✅ uvx cache cleared - restart Claude Code to get v$VERSION_TOML${NC}"
+echo -e "${YELLOW}⚠️  Without restarting Claude Code, you'll stay on the old cached version!${NC}"

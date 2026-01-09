@@ -143,6 +143,28 @@ git tag -a "v$VERSION" -m "chore: release v$VERSION"
 git push origin main --tags
 ```
 
+### Step 5: Force uvx Cache Clear (MANDATORY)
+
+**⚠️ CRITICAL: ALWAYS clear uvx cache after deployment!**
+
+**Why this matters:**
+- `@latest` doesn't force PyPI checks if uvx has a cached version
+- Without clearing, users stay on old versions FOREVER
+- This is THE most common cause of "version deployed but not updating" issues
+
+```bash
+# Clear uvx cache to force fresh PyPI fetch on next Claude restart
+python3 -c "import shutil; from pathlib import Path; cache = Path.home() / '.cache' / 'uv'; shutil.rmtree(cache, ignore_errors=True); print('✅ Cleared uvx cache - restart Claude Code to fetch v$(grep -E "^version = " pyproject.toml | head -1 | cut -d'"' -f2)')"
+
+# Verify deployment is on PyPI
+pip index versions stravinsky 2>&1 | head -5
+```
+
+**Post-cache-clear:**
+1. Restart Claude Code (or wait for next restart)
+2. uvx will fetch the latest version from PyPI
+3. Verify with: run any stravinsky MCP tool and check version in output
+
 ## Commit Message Convention
 
 Use conventional commit format:

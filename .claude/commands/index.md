@@ -9,6 +9,13 @@ Creates a vector database for semantic code search that enables queries like:
 - "error handling in API endpoints"
 - "database connection pooling"
 
+## Related Commands
+
+- `/str:watch` - Start automatic file watching for background reindexing
+- `/str:unwatch` - Stop file watcher
+- `/str:cancel` - Cancel ongoing indexing operation
+- `/str:clean` - Delete indexes to free disk space
+
 ## Prerequisites
 
 Ensure Ollama is installed and the embedding model is available:

@@ -5,10 +5,11 @@ set -e  # Exit on error
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-echo "🚀 Stravinsky PyPI Deployment Script"
-echo "===================================="
+echo "🚀 Stravinsky Deployment Script"
+echo "================================"
 echo ""
 
 # Step 1: Verify version consistency
@@ -26,15 +27,42 @@ fi
 echo -e "${GREEN}✅ Version consistent: $VERSION_TOML${NC}"
 echo ""
 
-# Step 2: Check git status
+# Step 2: Check git status and commit if needed
 echo "📋 Step 2: Checking git status..."
-if [[ -n $(git status --porcelain) ]]; then
-  echo -e "${YELLOW}⚠️  Warning: Uncommitted changes detected${NC}"
+GIT_STATUS=$(git status --porcelain)
+
+if [[ -n "$GIT_STATUS" ]]; then
+  echo -e "${YELLOW}⚠️  Uncommitted changes detected:${NC}"
   git status --short
-  read -p "Continue anyway? (y/N) " -n 1 -r
-  echo
-  if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-    echo "Deployment cancelled."
+  echo ""
+
+  # Check if only version files are modified
+  ONLY_VERSION_FILES=true
+  while IFS= read -r line; do
+    file=$(echo "$line" | awk '{print $2}')
+    if [[ "$file" != "pyproject.toml" ]] && \
+       [[ "$file" != "mcp_bridge/__init__.py" ]] && \
+       [[ "$file" != "mcp_bridge/tools/semantic_search.py" ]]; then
+      ONLY_VERSION_FILES=false
+      break
+    fi
+  done <<< "$GIT_STATUS"
+
+  if [[ "$ONLY_VERSION_FILES" == "true" ]]; then
+    echo -e "${BLUE}Detected version bump changes. Committing...${NC}"
+    read -p "Enter commit message (or press Enter for default): " COMMIT_MSG
+
+    if [[ -z "$COMMIT_MSG" ]]; then
+      COMMIT_MSG="fix: release v$VERSION_TOML
+
+Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"
+    fi
+
+    git add pyproject.toml mcp_bridge/__init__.py mcp_bridge/tools/semantic_search.py 2>/dev/null || true
+    git commit -m "$COMMIT_MSG"
+    echo -e "${GREEN}✅ Changes committed${NC}"
+  else
+    echo -e "${RED}❌ Non-version files modified. Please commit or stash them first.${NC}"
     exit 1
   fi
 else
@@ -42,14 +70,26 @@ else
 fi
 echo ""
 
-# Step 3: Clean build artifacts
-echo "📋 Step 3: Cleaning build artifacts..."
+# Step 3: Push commits to origin
+echo "📋 Step 3: Pushing to origin..."
+CURRENT_BRANCH=$(git branch --show-current)
+
+if ! git push origin "$CURRENT_BRANCH"; then
+  echo -e "${RED}❌ Failed to push to origin${NC}"
+  exit 1
+fi
+
+echo -e "${GREEN}✅ Pushed to origin/$CURRENT_BRANCH${NC}"
+echo ""
+
+# Step 4: Clean build artifacts (only for current version)
+echo "📋 Step 4: Cleaning old build artifacts..."
 find dist -name "stravinsky-$VERSION_TOML*" -delete 2>/dev/null || true
 echo -e "${GREEN}✅ Cleaned old build for version $VERSION_TOML${NC}"
 echo ""
 
-# Step 4: Build package
-echo "📋 Step 4: Building package..."
+# Step 5: Build package
+echo "📋 Step 5: Building package..."
 if ! uv build; then
   echo -e "${RED}❌ Build failed${NC}"
   exit 1
@@ -66,8 +106,8 @@ echo -e "${GREEN}✅ Build successful${NC}"
 ls -lh dist/stravinsky-$VERSION_TOML*
 echo ""
 
-# Step 5: Load PyPI token
-echo "📋 Step 5: Loading PyPI token..."
+# Step 6: Load PyPI token
+echo "📋 Step 6: Loading PyPI token..."
 if [[ ! -f .env ]]; then
   echo -e "${RED}❌ .env file not found${NC}"
   exit 1
@@ -83,9 +123,9 @@ fi
 echo -e "${GREEN}✅ PyPI token loaded${NC}"
 echo ""
 
-# Step 6: Publish to PyPI
-echo "📋 Step 6: Publishing to PyPI..."
-echo -e "${YELLOW}Publishing only version $VERSION_TOML...${NC}"
+# Step 7: Publish to PyPI
+echo "📋 Step 7: Publishing to PyPI..."
+echo -e "${YELLOW}Publishing version $VERSION_TOML...${NC}"
 
 if ! uv publish \
   --token "$PYPI_API_TOKEN" \
@@ -104,8 +144,8 @@ fi
 echo -e "${GREEN}✅ Published to PyPI${NC}"
 echo ""
 
-# Step 7: Create git tag
-echo "📋 Step 7: Creating git tag..."
+# Step 8: Create and push git tag
+echo "📋 Step 8: Creating git tag..."
 TAG_NAME="v$VERSION_TOML"
 
 if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
@@ -124,12 +164,12 @@ fi
 if [[ -n "$TAG_NAME" ]]; then
   git tag -a "$TAG_NAME" -m "chore: release v$VERSION_TOML"
   git push origin --tags
-  echo -e "${GREEN}✅ Tagged as $TAG_NAME${NC}"
+  echo -e "${GREEN}✅ Tagged and pushed as $TAG_NAME${NC}"
 fi
 echo ""
 
-# Step 8: Verify deployment
-echo "📋 Step 8: Verifying deployment..."
+# Step 9: Verify deployment
+echo "📋 Step 9: Verifying deployment..."
 echo "Waiting 10 seconds for PyPI to update..."
 sleep 10
 
@@ -144,7 +184,8 @@ echo ""
 echo "🎉 Deployment Complete!"
 echo "======================="
 echo ""
-echo "Version: $VERSION_TOML"
-echo "Package: https://pypi.org/project/stravinsky/$VERSION_TOML/"
+echo "Version:  $VERSION_TOML"
+echo "Package:  https://pypi.org/project/stravinsky/$VERSION_TOML/"
+echo "Git Tag:  $TAG_NAME"
 echo ""
-echo "Users with stravinsky@latest will get this version on next Claude restart."
+echo -e "${GREEN}Users with stravinsky@latest will get this version on next Claude restart.${NC}"

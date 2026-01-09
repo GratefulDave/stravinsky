@@ -163,7 +163,7 @@ fi
 
 if [[ -n "$TAG_NAME" ]]; then
   git tag -a "$TAG_NAME" -m "chore: release v$VERSION_TOML"
-  git push origin --tags
+  git push origin "$TAG_NAME"
   echo -e "${GREEN}✅ Tagged and pushed as $TAG_NAME${NC}"
 fi
 echo ""

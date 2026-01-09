@@ -27,14 +27,14 @@
 
 ### Installation
 
-**CRITICAL: Always use --global with @latest for auto-updates and Python 3.13**
+**CRITICAL: Always use --scope user with @latest for auto-updates and Python 3.13**
 
 ```bash
-# CORRECT: Global installation with Python 3.13 and automatic updates
-claude mcp add --global stravinsky -- uvx --python python3.13 stravinsky@latest
+# CORRECT: User-level installation with Python 3.13 and automatic updates
+claude mcp add --scope user stravinsky -- uvx --python python3.13 stravinsky@latest
 
 # Why this matters:
-# - --global: Works across all projects (not just current directory)
+# - --scope user: Works across all projects (stored in ~/.claude.json)
 # - @latest: Auto-checks PyPI on every Claude restart (no stale cache)
 # - --python python3.13: Required due to chromadb → onnxruntime dependency (no Python 3.14+ support)
 ```
@@ -61,8 +61,9 @@ uv tool install stravinsky
 
 ```bash
 # ONLY for active development on stravinsky source code
-uv tool install --editable /path/to/stravinsky
-claude mcp add --global stravinsky -- stravinsky
+cd /path/to/stravinsky
+uv tool install --editable . --force
+claude mcp add --scope user stravinsky -- stravinsky
 ```
 
 ### Authentication

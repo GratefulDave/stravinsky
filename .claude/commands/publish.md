@@ -7,7 +7,27 @@ allowed-tools: Bash, Read, Edit
 
 Publish a new version to PyPI and upgrade local installation.
 
-## Workflow
+## ⚡ Quick Start (Recommended)
+
+**The user runs `./deploy.sh` manually** - This is a complete deployment script that handles:
+
+1. ✅ **Version consistency checks** - Verifies `pyproject.toml` and `mcp_bridge/__init__.py` match
+2. ✅ **Git commit** - Auto-commits version changes if only version files modified
+3. ✅ **Push to repo** - Pushes commits to origin/main
+4. ✅ **Clean build** - Removes old artifacts, builds only current version
+5. ✅ **Publish to PyPI** - Uploads wheel and tarball with API token
+6. ✅ **Create git tag** - Tags the release (e.g., v0.4.13)
+7. ✅ **Push tag to repo** - Pushes tag with `git push origin v0.4.X` (NOT --tags)
+8. ✅ **Deployment verification** - Waits 10s and checks PyPI for new version
+
+**Your role:**
+- Help bump the version in `pyproject.toml` and `mcp_bridge/__init__.py` if requested
+- Tell the user to run `./deploy.sh` - that's it!
+- **NEVER** run the deployment yourself - the script must run in the user's terminal for interactive prompts
+
+## Manual Workflow (Legacy)
+
+If the user prefers manual control:
 
 1. **Bump version** in pyproject.toml (patch by default, or specify: major, minor, patch)
 2. **Commit** the version bump

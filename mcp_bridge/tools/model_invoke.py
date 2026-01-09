@@ -5,6 +5,7 @@ These tools use OAuth tokens from the token store to authenticate
 API requests to external model providers.
 """
 
+import asyncio
 import logging
 import os
 import time

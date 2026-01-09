@@ -15,14 +15,22 @@ python3 -c "import shutil; from pathlib import Path; [shutil.rmtree(p) for p in 
 
 ## Version Management
 
-1. **Version must be consistent** across:
+1. **ALWAYS check PyPI first before bumping version:**
+   ```bash
+   pip index versions stravinsky 2>&1 | head -20
+   ```
+   If the version you're about to use already exists on PyPI, bump higher!
+
+2. **Version must be consistent** across:
    - `pyproject.toml` (line ~5): `version = "X.Y.Z"`
    - `mcp_bridge/__init__.py`: `__version__ = "X.Y.Z"`
 
-2. **Version bumping strategy**:
+3. **Version bumping strategy**:
    - Patch (X.Y.Z+1): Bug fixes, documentation updates
    - Minor (X.Y+1.0): New features, agent improvements, MCP tool additions
    - Major (X+1.0.0): Breaking changes to API or architecture
+
+4. **⚠️ CRITICAL**: PyPI does NOT allow re-uploading the same version. If `uv publish` fails with "File already exists", you MUST bump the version number and try again.
 
 ## CRITICAL RULES
 

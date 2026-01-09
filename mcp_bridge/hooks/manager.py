@@ -6,6 +6,14 @@ Provides interception points for tool calls and model invocations.
 import logging
 from typing import Any, Callable, Dict, List, Optional, Awaitable
 
+try:
+    from mcp_bridge.config.hook_config import is_hook_enabled
+except ImportError:
+
+    def is_hook_enabled(hook_name: str) -> bool:
+        return True
+
+
 logger = logging.getLogger(__name__)
 
 

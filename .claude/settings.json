@@ -60,6 +60,15 @@
         ]
       },
       {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/hooks/comment_checker.py"
+          }
+        ]
+      },
+      {
         "matcher": "*",
         "hooks": [
           {
@@ -103,6 +112,10 @@
           {
             "type": "command",
             "command": "python3 ~/.claude/hooks/truncator.py"
+          },
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/hooks/session_recovery.py"
           },
           {
             "type": "command",

@@ -7,7 +7,15 @@ when implementation tasks are detected. Eliminates timing ambiguity.
 
 CRITICAL: Also activates stravinsky mode marker when /stravinsky is invoked,
 enabling hard blocking of direct tools (Read, Grep, Bash) via stravinsky_mode.py.
+
+ULTRAWORK MODE (oh-my-opencode parity):
+When "ultrawork" or "ulw" is detected in prompt:
+- Injects aggressive parallelization instructions
+- Forces maximum agent concurrency
+- Enables 32k thinking budget guidance
+- All async agents fire immediately
 """
+
 import json
 import sys
 import re
@@ -16,15 +24,29 @@ from pathlib import Path
 # Marker file that enables hard blocking of direct tools
 STRAVINSKY_MODE_FILE = Path.home() / ".stravinsky_mode"
 
+# Ultrawork mode patterns for aggressive parallel execution
+ULTRAWORK_PATTERNS = [
+    r"\bultrawork\b",
+    r"\bulw\b",
+    r"<ultrawork-mode>",
+    r"\[ultrawork\]",
+]
+
+
+def detect_ultrawork_mode(prompt):
+    """Detect if ultrawork mode is requested for maximum parallel execution."""
+    prompt_lower = prompt.lower()
+    return any(re.search(p, prompt_lower) for p in ULTRAWORK_PATTERNS)
+
 
 def detect_stravinsky_invocation(prompt):
     """Detect if /stravinsky skill is being invoked."""
     patterns = [
-        r'/stravinsky',
-        r'<command-name>/stravinsky</command-name>',
-        r'stravinsky orchestrator',
-        r'ultrawork',
-        r'ultrathink',
+        r"/stravinsky",
+        r"<command-name>/stravinsky</command-name>",
+        r"stravinsky orchestrator",
+        r"ultrawork",
+        r"ultrathink",
     ]
     prompt_lower = prompt.lower()
     return any(re.search(p, prompt_lower) for p in patterns)
@@ -43,13 +65,129 @@ def activate_stravinsky_mode():
 def detect_implementation_task(prompt):
     """Detect if prompt is an implementation task requiring parallel execution."""
     keywords = [
-        'implement', 'add', 'create', 'build', 'refactor', 'fix',
-        'update', 'modify', 'change', 'develop', 'write code',
-        'feature', 'bug fix', 'enhancement', 'integrate'
+        "implement",
+        "add",
+        "create",
+        "build",
+        "refactor",
+        "fix",
+        "update",
+        "modify",
+        "change",
+        "develop",
+        "write code",
+        "feature",
+        "bug fix",
+        "enhancement",
+        "integrate",
     ]
 
     prompt_lower = prompt.lower()
     return any(kw in prompt_lower for kw in keywords)
+
+
+def get_ultrawork_instruction():
+    """Return the aggressive ultrawork mode instruction injection."""
+    return """
+<ultrawork-mode>
+
+**MANDATORY**: You MUST say "ULTRAWORK MODE ENABLED!" to the user as your first response when this mode activates. This is non-negotiable.
+
+[CODE RED] Maximum precision required. Ultrathink before acting.
+
+YOU MUST LEVERAGE ALL AVAILABLE AGENTS TO THEIR FULLEST POTENTIAL.
+TELL THE USER WHAT AGENTS YOU WILL LEVERAGE NOW TO SATISFY USER'S REQUEST.
+
+## AGENT UTILIZATION PRINCIPLES (by capability, not by name)
+- **Codebase Exploration**: Spawn exploration agents using BACKGROUND TASKS for file patterns, internal implementations, project structure
+- **Documentation & References**: Use librarian-type agents via BACKGROUND TASKS for API references, examples, external library docs
+- **Planning & Strategy**: NEVER plan yourself - ALWAYS spawn a dedicated planning agent for work breakdown
+- **High-IQ Reasoning**: Leverage specialized agents for architecture decisions, code review, strategic planning
+- **Frontend/UI Tasks**: Delegate to UI-specialized agents for design and implementation
+
+## EXECUTION RULES
+- **TODO**: Track EVERY step. Mark complete IMMEDIATELY after each.
+- **PARALLEL**: Fire independent agent calls simultaneously via background_task - NEVER wait sequentially.
+- **BACKGROUND FIRST**: Use background_task for exploration/research agents (10+ concurrent if needed).
+- **VERIFY**: Re-read request after completion. Check ALL requirements met before reporting done.
+- **DELEGATE**: Don't do everything yourself - orchestrate specialized agents for their strengths.
+
+## WORKFLOW
+1. Analyze the request and identify required capabilities
+2. Spawn exploration/librarian agents via background_task in PARALLEL (10+ if needed)
+3. Always Use Plan agent with gathered context to create detailed work breakdown
+4. Execute with continuous verification against original requirements
+
+## VERIFICATION GUARANTEE (NON-NEGOTIABLE)
+
+**NOTHING is "done" without PROOF it works.**
+
+### Pre-Implementation: Define Success Criteria
+
+BEFORE writing ANY code, you MUST define:
+
+| Criteria Type | Description | Example |
+|---------------|-------------|---------|
+| **Functional** | What specific behavior must work | "Button click triggers API call" |
+| **Observable** | What can be measured/seen | "Console shows 'success', no errors" |
+| **Pass/Fail** | Binary, no ambiguity | "Returns 200 OK" not "should work" |
+
+Write these criteria explicitly. Share with user if scope is non-trivial.
+
+## ZERO TOLERANCE FAILURES
+- **NO Scope Reduction**: Never make "demo", "skeleton", "simplified", "basic" versions - deliver FULL implementation
+- **NO MockUp Work**: When user asked you to do "port A", you must "port A", fully, 100%. No Extra feature, No reduced feature, no mock data, fully working 100% port.
+- **NO Partial Completion**: Never stop at 60-80% saying "you can extend this..." - finish 100%
+- **NO Assumed Shortcuts**: Never skip requirements you deem "optional" or "can be added later"
+- **NO Premature Stopping**: Never declare done until ALL TODOs are completed and verified
+- **NO TEST DELETION**: Never delete or skip failing tests to make the build pass. Fix the code, not the tests.
+
+THE USER ASKED FOR X. DELIVER EXACTLY X. NOT A SUBSET. NOT A DEMO. NOT A STARTING POINT.
+
+</ultrawork-mode>
+
+---
+
+"""
+
+
+def get_parallel_instruction():
+    """Return the standard parallel execution instruction."""
+    return """
+<user-prompt-submit-hook>
+[🔄 PARALLEL EXECUTION MODE ACTIVE - MCP CONTEXT]
+
+When you create a TodoWrite with 2+ pending items:
+
+✅ IMMEDIATELY in THIS SAME RESPONSE (do NOT end response after TodoWrite):
+   1. Spawn agent_spawn() for EACH independent pending TODO
+   2. Use: agent_spawn(agent_type="explore"|"dewey"|"frontend"|etc., prompt="...", description="...")
+   3. Fire ALL agent_spawn calls in ONE response block
+   4. Do NOT mark any TODO as in_progress until agents return
+
+❌ DO NOT:
+   - End your response after TodoWrite
+   - Mark TODOs in_progress before spawning agents
+   - Spawn only ONE agent (spawn ALL independent tasks)
+   - Wait for "next response" to spawn agents
+   - Use Task() tool (wrong context - use agent_spawn instead)
+
+Example pattern (all in SAME response):
+```
+TodoWrite([task1, task2, task3])
+agent_spawn(agent_type="explore", prompt="Task 1 details", description="Task 1")
+  → explore:gemini-3-flash('Task 1 details') task_id=agent_abc123
+agent_spawn(agent_type="dewey", prompt="Task 2 details", description="Task 2")
+  → dewey:gemini-3-flash('Task 2 details') task_id=agent_def456
+agent_spawn(agent_type="frontend", prompt="Task 3 details", description="Task 3")
+  → frontend:gemini-3-pro-high('Task 3 details') task_id=agent_ghi789
+# Continue response - collect results with agent_output when needed
+```
+</user-prompt-submit-hook>
+
+---
+
+"""
 
 
 def main():
@@ -66,41 +204,21 @@ def main():
     if is_stravinsky:
         activate_stravinsky_mode()
 
-    # Only inject for implementation tasks OR stravinsky invocation
-    if not detect_implementation_task(prompt) and not is_stravinsky:
+    # Check for ultrawork mode - maximum parallel execution
+    is_ultrawork = detect_ultrawork_mode(prompt)
+
+    # Only inject for implementation tasks, stravinsky invocation, or ultrawork
+    if not detect_implementation_task(prompt) and not is_stravinsky and not is_ultrawork:
         print(prompt)
         return 0
 
-    # Inject parallel execution instruction BEFORE prompt
-    instruction = """
-[🔄 PARALLEL EXECUTION MODE ACTIVE]
-
-When you create a TodoWrite with 2+ pending items:
-
-✅ IMMEDIATELY in THIS SAME RESPONSE (do NOT end response after TodoWrite):
-   1. Spawn Task() for EACH independent pending TODO
-   2. Use: Task(subagent_type="explore"|"Plan"|etc., prompt="...", description="...", run_in_background=true)
-   3. Fire ALL Task calls in ONE response block
-   4. Do NOT mark any TODO as in_progress until Task results return
-
-❌ DO NOT:
-   - End your response after TodoWrite
-   - Mark TODOs in_progress before spawning Tasks
-   - Spawn only ONE Task (spawn ALL independent tasks)
-   - Wait for "next response" to spawn Tasks
-
-Example pattern (all in SAME response):
-```
-TodoWrite([task1, task2, task3])
-Task(subagent_type="Explore", prompt="Task 1 details", description="Task 1", run_in_background=true)
-Task(subagent_type="Plan", prompt="Task 2 details", description="Task 2", run_in_background=true)
-Task(subagent_type="Explore", prompt="Task 3 details", description="Task 3", run_in_background=true)
-# Continue response - collect results with TaskOutput
-```
-
----
-
-"""
+    # Select instruction based on mode
+    if is_ultrawork:
+        # Ultrawork mode: aggressive parallelization + verification
+        instruction = get_ultrawork_instruction()
+    else:
+        # Standard parallel execution mode
+        instruction = get_parallel_instruction()
 
     modified_prompt = instruction + prompt
     print(modified_prompt)

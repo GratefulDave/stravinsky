@@ -2936,6 +2936,8 @@ class CodebaseFileWatcher:
         """
         import asyncio
 
+        from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
+
         with self._pending_lock:
             if not self._pending_files:
                 self._pending_reindex_timer = None
@@ -2945,17 +2947,29 @@ class CodebaseFileWatcher:
             self._pending_files.clear()
             self._pending_reindex_timer = None
 
-        # Run async reindex in a new event loop
+        # Run async reindex with retry logic
+        @retry(
+            stop=stop_after_attempt(3),
+            wait=wait_exponential(multiplier=1, min=2, max=10),
+            retry=retry_if_exception_type((httpx.HTTPError, ConnectionError, TimeoutError)),
+            reraise=True,
+        )
+        async def _do_reindex():
+            """Wrapper for reindex with retry logic."""
+            await self.store.index_codebase(force=False)
+
         try:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                loop.run_until_complete(self.store.index_codebase(force=False))
-                logger.debug(f"Reindexed {len(files_to_index)} changed files")
-            finally:
-                loop.close()
+            # Use asyncio.run() which properly handles event loop lifecycle
+            # This is safe from a daemon thread and won't conflict with other loops
+            asyncio.run(_do_reindex())
+            logger.info(f"✅ Reindexed {len(files_to_index)} changed files: {[f.name for f in files_to_index[:5]]}")
         except Exception as e:
-            logger.error(f"Error during file watcher reindex: {e}")
+            # Surface error to user via warning (will appear in Claude Code UI)
+            logger.warning(
+                f"⚠️ File watcher reindex failed after retries: {e}\n"
+                f"  Files affected: {[f.name for f in files_to_index[:10]]}\n"
+                f"  Manual reindex recommended: semantic_index(project_path='{self.project_path}')"
+            )
 
 
 def _create_file_change_handler_class():

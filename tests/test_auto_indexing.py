@@ -192,14 +192,24 @@ async def test_detect_new_chunks(vector_store, temp_project_dir):
     """Test detection of new chunks compared to existing index."""
     # Simulate existing index state
     file1 = temp_project_dir / "file1.py"
-    file1.write_text("def func1(): pass")
+    file1.write_text("""def func1():
+    x = 1
+    y = 2
+    z = x + y
+    return z
+""")
     
     chunks1 = vector_store._chunk_file(file1)
     existing_ids = {c["id"] for c in chunks1}
 
     # Simulate code change - add new file
     file2 = temp_project_dir / "file2.py"
-    file2.write_text("def func2(): pass")
+    file2.write_text("""def func2():
+    x = 2
+    y = 3
+    z = x + y
+    return z
+""")
     
     chunks2 = vector_store._chunk_file(file2)
     new_ids = {c["id"] for c in chunks2}
@@ -212,14 +222,24 @@ async def test_detect_new_chunks(vector_store, temp_project_dir):
 async def test_detect_modified_chunks(vector_store, temp_project_dir):
     """Test detection of modified content (different hash)."""
     test_file = temp_project_dir / "test.py"
-    
-    # Original content
-    test_file.write_text("def func(): pass")
+
+    # Original content (must be >=5 lines to avoid being skipped)
+    test_file.write_text("""def func():
+    x = 1
+    y = 2
+    z = 3
+    return x + y + z
+""")
     chunks_v1 = vector_store._chunk_file(test_file)
     ids_v1 = {c["id"] for c in chunks_v1}
 
-    # Modified content
-    test_file.write_text("def func(): return 42")
+    # Modified content (same length, different logic)
+    test_file.write_text("""def func():
+    a = 10
+    b = 20
+    c = 30
+    return a * b * c
+""")
     chunks_v2 = vector_store._chunk_file(test_file)
     ids_v2 = {c["id"] for c in chunks_v2}
 
@@ -257,12 +277,22 @@ async def test_exclude_venv_directory(vector_store, temp_project_dir):
     # Create files in excluded directory
     venv_dir = temp_project_dir / ".venv"
     venv_dir.mkdir()
-    (venv_dir / "lib.py").write_text("def unused(): pass")
+    (venv_dir / "lib.py").write_text("""def unused():
+    x = 1
+    y = 2
+    z = x + y
+    return z
+""")
 
     # Create file in included directory
     src_dir = temp_project_dir / "src"
     src_dir.mkdir()
-    (src_dir / "main.py").write_text("def main(): pass")
+    (src_dir / "main.py").write_text("""def main():
+    x = 1
+    y = 2
+    z = x + y
+    return z
+""")
 
     files = vector_store._get_files_to_index()
     # Resolve temp_project_dir to handle macOS /var → /private/var aliasing
@@ -315,9 +345,14 @@ async def test_include_code_extensions(vector_store, temp_project_dir):
 @pytest.mark.asyncio
 async def test_index_single_file(vector_store, temp_project_dir, mock_provider):
     """Test indexing a single file."""
-    # Create test file
+    # Create test file (>=5 lines to avoid being skipped)
     test_file = temp_project_dir / "test.py"
-    test_file.write_text("def hello(): return 'world'")
+    test_file.write_text("""def hello():
+    msg = 'world'
+    print(msg)
+    return msg
+# end of file
+""")
 
     # Index the codebase
     stats = await vector_store.index_codebase()
@@ -330,10 +365,15 @@ async def test_index_single_file(vector_store, temp_project_dir, mock_provider):
 @pytest.mark.asyncio
 async def test_index_multiple_files(vector_store, temp_project_dir, mock_provider):
     """Test indexing multiple files."""
-    # Create test files
+    # Create test files (>=5 lines each)
     for i in range(3):
         test_file = temp_project_dir / f"module{i}.py"
-        test_file.write_text(f"def func{i}(): pass\n")
+        test_file.write_text(f"""def func{i}():
+    x = {i}
+    y = {i + 1}
+    z = x + y
+    return z
+""")
 
     # Index
     stats = await vector_store.index_codebase()
@@ -346,12 +386,22 @@ async def test_index_multiple_files(vector_store, temp_project_dir, mock_provide
 async def test_incremental_indexing(vector_store, temp_project_dir, mock_provider):
     """Test that incremental indexing only adds new chunks."""
     # First indexing
-    (temp_project_dir / "file1.py").write_text("def func1(): pass")
+    (temp_project_dir / "file1.py").write_text("""def func1():
+    x = 1
+    y = 2
+    z = x + y
+    return z
+""")
     stats1 = await vector_store.index_codebase()
     count1 = stats1["indexed"]
 
     # Add new file
-    (temp_project_dir / "file2.py").write_text("def func2(): pass")
+    (temp_project_dir / "file2.py").write_text("""def func2():
+    x = 2
+    y = 3
+    z = x + y
+    return z
+""")
     stats2 = await vector_store.index_codebase()
     
     # Should only index new chunks
@@ -364,7 +414,12 @@ async def test_force_reindex(vector_store, temp_project_dir, mock_provider):
     """Test force reindexing with force=True."""
     # Create and index file
     test_file = temp_project_dir / "test.py"
-    test_file.write_text("def func(): pass")
+    test_file.write_text("""def func():
+    x = 1
+    y = 2
+    z = x + y
+    return z
+""")
     
     stats1 = await vector_store.index_codebase()
     original_indexed = stats1["indexed"]
@@ -386,7 +441,12 @@ async def test_delete_file_removes_chunks(vector_store, temp_project_dir, mock_p
     """Test that deleted file chunks are removed from index."""
     # Create and index file
     test_file = temp_project_dir / "test.py"
-    test_file.write_text("def func(): pass")
+    test_file.write_text("""def func():
+    x = 1
+    y = 2
+    z = x + y
+    return z
+""")
     
     await vector_store.index_codebase()
     
@@ -406,8 +466,18 @@ async def test_delete_directory_removes_chunks(vector_store, temp_project_dir, m
     # Create directory with files
     subdir = temp_project_dir / "olddir"
     subdir.mkdir()
-    (subdir / "file1.py").write_text("def func1(): pass")
-    (subdir / "file2.py").write_text("def func2(): pass")
+    (subdir / "file1.py").write_text("""def func1():
+    x = 1
+    y = 2
+    z = x + y
+    return z
+""")
+    (subdir / "file2.py").write_text("""def func2():
+    x = 2
+    y = 3
+    z = x + y
+    return z
+""")
     
     await vector_store.index_codebase()
     
@@ -444,7 +514,12 @@ async def test_embedding_service_unavailable(vector_store, mock_provider):
 async def test_retry_on_service_recovery(vector_store, temp_project_dir, mock_provider):
     """Test that indexing retries when service becomes available again."""
     test_file = temp_project_dir / "test.py"
-    test_file.write_text("def func(): pass")
+    test_file.write_text("""def func():
+    x = 1
+    y = 2
+    z = x + y
+    return z
+""")
 
     # First attempt - service unavailable
     mock_provider._available = False
@@ -506,7 +581,12 @@ async def test_many_small_files(vector_store, temp_project_dir, mock_provider):
     # Create 50 small files
     for i in range(50):
         file_path = temp_project_dir / f"file_{i}.py"
-        file_path.write_text(f"def func_{i}(): return {i}")
+        file_path.write_text(f"""def func_{i}():
+    x = {i}
+    y = {i + 1}
+    z = x + y
+    return z
+""")
 
     stats = await vector_store.index_codebase()
     
@@ -537,7 +617,12 @@ async def test_large_file(vector_store, temp_project_dir, mock_provider):
 async def test_get_stats(vector_store, temp_project_dir, mock_provider):
     """Test getting vector store statistics."""
     test_file = temp_project_dir / "test.py"
-    test_file.write_text("def func(): pass")
+    test_file.write_text("""def func():
+    x = 1
+    y = 2
+    z = x + y
+    return z
+""")
     
     await vector_store.index_codebase()
     

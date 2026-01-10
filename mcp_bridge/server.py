@@ -470,7 +470,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             import json
 
             try:
-                watcher = start_file_watcher(
+                watcher = await start_file_watcher(
                     project_path=arguments.get("project_path", "."),
                     provider=arguments.get("provider", "ollama"),
                     debounce_seconds=arguments.get("debounce_seconds", 2.0),

@@ -224,6 +224,8 @@ class AgentManager:
         # In-memory tracking for running processes
         self._processes: dict[str, subprocess.Popen] = {}
         self._notification_queue: dict[str, list[dict[str, Any]]] = {}
+        # Track background threads for cleanup
+        self._threads: dict[str, threading.Thread] = {}
 
     def _load_tasks(self) -> dict[str, Any]:
         """Load tasks from persistent storage."""
@@ -463,10 +465,12 @@ class AgentManager:
 
             finally:
                 self._processes.pop(task_id, None)
+                self._threads.pop(task_id, None)
                 self._notify_completion(task_id)
 
         # Run in background thread
         thread = threading.Thread(target=run_agent, daemon=True)
+        self._threads[task_id] = thread
         thread.start()
 
     def _notify_completion(self, task_id: str):
@@ -513,12 +517,13 @@ class AgentManager:
 
         return True
 
-    def stop_all(self, clear_history: bool = False) -> int:
+    def stop_all(self, clear_history: bool = False, wait_for_threads: bool = True) -> int:
         """
         Stop all running agents and optionally clear task history.
 
         Args:
             clear_history: If True, also remove completed/failed tasks from history
+            wait_for_threads: If True, wait for background threads to finish (prevents temp dir cleanup issues)
 
         Returns:
             Number of tasks stopped/cleared
@@ -532,11 +537,19 @@ class AgentManager:
                 self.cancel(task_id)
                 stopped_count += 1
 
+        # Wait for all background threads to finish (critical for test cleanup)
+        if wait_for_threads:
+            threads_to_wait = list(self._threads.values())
+            for thread in threads_to_wait:
+                if thread.is_alive():
+                    thread.join(timeout=5)  # Wait up to 5s per thread
+
         # Optionally clear history
         if clear_history:
             cleared = len(tasks)
             self._save_tasks({})
             self._processes.clear()
+            self._threads.clear()
             logger.info(f"[AgentManager] Cleared all {cleared} agent tasks")
             return cleared
 

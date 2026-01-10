@@ -45,6 +45,41 @@ def _summarize_prompt(prompt: str, max_length: int = 120) -> str:
 _CODEX_INSTRUCTIONS_CACHE = {}
 _CODEX_INSTRUCTIONS_RELEASE_TAG = "rust-v0.77.0"  # Update as needed
 
+# ==============================================
+# GEMINI AUTH MODE STATE (OAuth-first with 429 fallback)
+# ==============================================
+# When OAuth gets a 429 rate limit, we switch to API-only mode for the session.
+# This avoids hammering OAuth when rate-limited and uses the fallback API key.
+_GEMINI_API_ONLY_MODE = False  # Set to True after 429 from OAuth
+
+
+def _get_gemini_api_key() -> str | None:
+    """Get Gemini API key from environment (loaded from ~/.stravinsky/.env)."""
+    return os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+
+
+def _set_api_only_mode(reason: str = "429 rate limit"):
+    """Switch to API-only mode after OAuth rate limit."""
+    global _GEMINI_API_ONLY_MODE
+    if not _GEMINI_API_ONLY_MODE:
+        _GEMINI_API_ONLY_MODE = True
+        logger.warning(f"[Gemini] Switching to API-only mode: {reason}")
+        import sys
+
+        print(f"⚠️ GEMINI: OAuth rate-limited (429). Switching to API key mode.", file=sys.stderr)
+
+
+def _is_api_only_mode() -> bool:
+    """Check if we're in API-only mode (after 429)."""
+    return _GEMINI_API_ONLY_MODE
+
+
+def reset_gemini_auth_mode():
+    """Reset to OAuth-first mode. Call this to retry OAuth after cooldown."""
+    global _GEMINI_API_ONLY_MODE
+    _GEMINI_API_ONLY_MODE = False
+    logger.info("[Gemini] Reset to OAuth-first mode")
+
 
 async def _fetch_codex_instructions(model: str = "gpt-5.2-codex") -> str:
     """
@@ -223,8 +258,6 @@ async def _get_http_client() -> httpx.AsyncClient:
     if _HTTP_CLIENT is None or _HTTP_CLIENT.is_closed:
         _HTTP_CLIENT = httpx.AsyncClient(timeout=120.0)
     return _HTTP_CLIENT
-
-
 
 
 def _extract_gemini_response(data: dict) -> str:
@@ -439,14 +472,14 @@ async def _invoke_gemini_with_api_key(
         )
 
         # Extract text from response
-        if hasattr(response, 'text'):
+        if hasattr(response, "text"):
             return response.text
-        elif hasattr(response, 'candidates') and response.candidates:
+        elif hasattr(response, "candidates") and response.candidates:
             # Fallback: extract from candidates
             candidate = response.candidates[0]
-            if hasattr(candidate, 'content'):
+            if hasattr(candidate, "content"):
                 parts = candidate.content.parts
-                text_parts = [part.text for part in parts if hasattr(part, 'text')]
+                text_parts = [part.text for part in parts if hasattr(part, "text")]
                 return "".join(text_parts) if text_parts else "No response generated"
 
         return "No response generated"
@@ -529,19 +562,32 @@ async def invoke_gemini(
     # Log with agent context and prompt summary
     logger.info(f"[{agent_type}] → {model}: {prompt_summary}")
 
-    # Check for API key authentication (takes precedence over OAuth)
-    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
-
-    # USER-VISIBLE NOTIFICATION (stderr) - Shows when Gemini is invoked with auth method
+    # Get API key from environment (loaded from ~/.stravinsky/.env)
+    api_key = _get_gemini_api_key()
     import sys
+
     task_info = f" task={task_id}" if task_id else ""
     desc_info = f" | {description}" if description else ""
-    auth_method = "API" if api_key else "OAuth"
-    print(f"🔮 GEMINI ({auth_method}): {model} | agent={agent_type}{task_info}{desc_info}", file=sys.stderr)
 
-    if api_key:
-        logger.info(f"[{agent_type}] Using API key authentication (GEMINI_API_KEY)")
-        # Rate limit concurrent requests (configurable via ~/.stravinsky/config.json)
+    # ==============================================
+    # AUTH PRIORITY: OAuth first, API fallback on 429
+    # ==============================================
+    # 1. If API-only mode (after 429), use API key directly
+    # 2. Otherwise, try OAuth first
+    # 3. On 429 from OAuth, switch to API-only mode and retry
+
+    # If we're in API-only mode (after a 429), use API key directly
+    if _is_api_only_mode():
+        if not api_key:
+            raise ValueError(
+                "OAuth rate-limited (429) and no API key available. "
+                "Add GEMINI_API_KEY to ~/.stravinsky/.env"
+            )
+        print(
+            f"🔮 GEMINI (API-fallback): {model} | agent={agent_type}{task_info}{desc_info}",
+            file=sys.stderr,
+        )
+        logger.info(f"[{agent_type}] Using API key (API-only mode after 429)")
         semaphore = _get_gemini_semaphore(model)
         async with semaphore:
             return await _invoke_gemini_with_api_key(
@@ -554,7 +600,11 @@ async def invoke_gemini(
                 image_path=image_path,
             )
 
-    # Fallback to OAuth authentication (Antigravity)
+    # DEFAULT: Try OAuth first (Antigravity)
+    print(
+        f"🔮 GEMINI (OAuth): {model} | agent={agent_type}{task_info}{desc_info}",
+        file=sys.stderr,
+    )
     logger.info(f"[{agent_type}] Using OAuth authentication (Antigravity)")
     # Rate limit concurrent Gemini requests (configurable via ~/.stravinsky/config.json)
     semaphore = _get_gemini_semaphore(model)
@@ -603,12 +653,14 @@ async def invoke_gemini(
                 image_data = base64.b64encode(image_file.read_bytes()).decode("utf-8")
 
                 # Add inline image data for Gemini Vision API
-                parts.append({
-                    "inlineData": {
-                        "mimeType": mime_type,
-                        "data": image_data,
+                parts.append(
+                    {
+                        "inlineData": {
+                            "mimeType": mime_type,
+                            "data": image_data,
+                        }
                     }
-                })
+                )
                 logger.info(f"[multimodal] Added vision data: {image_path} ({mime_type})")
 
         inner_payload = {
@@ -707,6 +759,32 @@ async def invoke_gemini(
                 continue
             break
 
+        # ==============================================
+        # 429 RATE LIMIT DETECTION: Fallback to API key
+        # ==============================================
+        # If OAuth got rate-limited (429), switch to API-only mode and retry with API key
+        if response is not None and response.status_code == 429:
+            api_key = _get_gemini_api_key()
+            if api_key:
+                _set_api_only_mode("OAuth rate-limited (429)")
+                logger.info("[Gemini] Retrying with API key after OAuth 429")
+                # Retry immediately with API key
+                return await _invoke_gemini_with_api_key(
+                    api_key=api_key,
+                    prompt=prompt,
+                    model=model,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    thinking_budget=thinking_budget,
+                    image_path=image_path,
+                )
+            else:
+                # No API key available - raise clear error
+                raise ValueError(
+                    "OAuth rate-limited (429) and no API key available. "
+                    "Add GEMINI_API_KEY to ~/.stravinsky/.env"
+                )
+
         if response is None:
             # FALLBACK: Try Claude sonnet-4.5 for agents that support it
             agent_context = params.get("agent_context", {})
@@ -716,6 +794,7 @@ async def invoke_gemini(
                 logger.warning(f"[{agent_type}] Gemini failed, falling back to Claude sonnet-4.5")
                 try:
                     import subprocess
+
                     fallback_result = subprocess.run(
                         ["claude", "-p", prompt, "--model", "sonnet", "--output-format", "text"],
                         capture_output=True,
@@ -885,6 +964,7 @@ async def _invoke_gemini_agentic_with_api_key(
     """
     # USER-VISIBLE NOTIFICATION (stderr) - Shows agentic mode with API key
     import sys
+
     print(f"🔮 GEMINI (API/Agentic): {model} | max_turns={max_turns}", file=sys.stderr)
 
     try:
@@ -1027,10 +1107,30 @@ async def invoke_gemini_agentic(
     Returns:
         Final text response from the model
     """
-    # Check for API key authentication (takes precedence over OAuth)
-    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
-    if api_key:
-        logger.info("[AgenticGemini] Using API key authentication (GEMINI_API_KEY)")
+    import sys
+
+    # Get API key from environment (loaded from ~/.stravinsky/.env)
+    api_key = _get_gemini_api_key()
+
+    # ==============================================
+    # AUTH PRIORITY: OAuth first, API fallback on 429
+    # ==============================================
+    # 1. If API-only mode (after 429), use API key directly
+    # 2. Otherwise, try OAuth first
+    # 3. On 429 from OAuth, switch to API-only mode and retry
+
+    # If we're in API-only mode (after a 429), use API key directly
+    if _is_api_only_mode():
+        if not api_key:
+            raise ValueError(
+                "OAuth rate-limited (429) and no API key available. "
+                "Add GEMINI_API_KEY to ~/.stravinsky/.env"
+            )
+        print(
+            f"🔮 GEMINI (API-fallback/Agentic): {model} | max_turns={max_turns}",
+            file=sys.stderr,
+        )
+        logger.info("[AgenticGemini] Using API key (API-only mode after 429)")
         return await _invoke_gemini_agentic_with_api_key(
             api_key=api_key,
             prompt=prompt,
@@ -1039,11 +1139,12 @@ async def invoke_gemini_agentic(
             timeout=timeout,
         )
 
-    # Fallback to OAuth authentication (Antigravity)
+    # DEFAULT: Try OAuth first (Antigravity)
     logger.info("[AgenticGemini] Using OAuth authentication (Antigravity)")
 
     # USER-VISIBLE NOTIFICATION (stderr) - Shows agentic mode with OAuth
     import sys
+
     print(f"🔮 GEMINI (OAuth/Agentic): {model} | max_turns={max_turns}", file=sys.stderr)
 
     access_token = await _ensure_valid_token(token_store, "gemini")
@@ -1131,6 +1232,30 @@ async def invoke_gemini_agentic(
                 last_error = e
                 logger.warning(f"[AgenticGemini] Endpoint {endpoint} failed: {e}, trying next")
                 continue
+
+        # ==============================================
+        # 429 RATE LIMIT DETECTION: Fallback to API key
+        # ==============================================
+        # If OAuth got rate-limited (429), switch to API-only mode and retry
+        if response is not None and response.status_code == 429:
+            api_key = _get_gemini_api_key()
+            if api_key:
+                _set_api_only_mode("OAuth rate-limited (429) in agentic mode")
+                logger.info("[AgenticGemini] Retrying with API key after OAuth 429")
+                # Retry entire agentic call with API key
+                return await _invoke_gemini_agentic_with_api_key(
+                    api_key=api_key,
+                    prompt=prompt,
+                    model=model,
+                    max_turns=max_turns,
+                    timeout=timeout,
+                )
+            else:
+                # No API key available - raise clear error
+                raise ValueError(
+                    "OAuth rate-limited (429) and no API key available. "
+                    "Add GEMINI_API_KEY to ~/.stravinsky/.env"
+                )
 
         if response is None:
             raise ValueError(f"All Antigravity endpoints failed: {last_error}")
@@ -1251,6 +1376,7 @@ async def invoke_openai(
 
     # USER-VISIBLE NOTIFICATION (stderr) - Shows when OpenAI is invoked
     import sys
+
     task_info = f" task={task_id}" if task_id else ""
     desc_info = f" | {description}" if description else ""
     print(f"🧠 OPENAI: {model} | agent={agent_type}{task_info}{desc_info}", file=sys.stderr)
@@ -1311,14 +1437,15 @@ async def invoke_openai(
     logger.info(f"[invoke_openai] Instructions length: {len(instructions)}")
 
     try:
-        async with httpx.AsyncClient() as client, client.stream(
-            "POST", api_url, headers=headers, json=payload, timeout=120.0
-        ) as response:
+        async with (
+            httpx.AsyncClient() as client,
+            client.stream(
+                "POST", api_url, headers=headers, json=payload, timeout=120.0
+            ) as response,
+        ):
             logger.info(f"[invoke_openai] Response status: {response.status_code}")
             if response.status_code == 401:
-                raise ValueError(
-                    "OpenAI authentication failed. Run: stravinsky-auth login openai"
-                )
+                raise ValueError("OpenAI authentication failed. Run: stravinsky-auth login openai")
 
             if response.status_code >= 400:
                 error_body = await response.aread()

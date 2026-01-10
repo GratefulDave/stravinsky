@@ -50,30 +50,51 @@ for tool in model_invoke semantic_search agent_manager code_search; do
     echo "  ✅ ${tool}.py exists"
 done
 
-# Check 5: Run pytest if tests exist (skip collection errors)
+# Check 5: MCP server startup test (CRITICAL - catches runtime errors)
 echo ""
-echo "✓ Check 5: Test suite"
+echo "✓ Check 5: MCP server startup test"
+# Test that server can start and handle basic protocol
+# Use timeout to prevent hanging
+if ! timeout 5 bash -c 'echo "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{}}" | stravinsky 2>&1 | grep -q "jsonrpc"'; then
+    echo "❌ FAILED: MCP server failed to start or respond"
+    echo "  This is the exact failure mode that broke 0.4.30!"
+    exit 1
+fi
+echo "  ✅ MCP server starts and responds to protocol"
+
+# Check 6: Run pytest if tests exist (BLOCKING - tests MUST pass)
+echo ""
+echo "✓ Check 6: Test suite"
 if [ -d "tests" ] && [ -n "$(find tests -name 'test_*.py' -o -name '*_test.py')" ]; then
-    # Run tests, but allow collection errors (broken test files don't block deploy)
-    uv run pytest tests/ --ignore=tests/test_hooks.py --ignore=tests/test_new_hooks.py -v 2>&1 | tail -20 || {
-        echo "  ⚠️  Some tests failed (not blocking deployment)"
-    }
+    # Run tests, ignore known broken test files, but BLOCK on failures
+    if ! uv run pytest tests/ \
+        --ignore=tests/test_hooks.py \
+        --ignore=tests/test_new_hooks.py \
+        -x \
+        --tb=short \
+        -q 2>&1 | tee /tmp/pytest_output.txt | tail -30; then
+        echo ""
+        echo "❌ FAILED: Tests must pass before deployment"
+        echo "  Fix failing tests or remove them if obsolete"
+        exit 1
+    fi
+    echo "  ✅ All tests passed"
 else
     echo "  ⚠️  No tests found (tests/ directory empty or missing)"
 fi
 
-# Check 6: Ruff linting
+# Check 7: Ruff linting
 echo ""
-echo "✓ Check 6: Ruff linting"
+echo "✓ Check 7: Ruff linting"
 if ruff check mcp_bridge/ --quiet 2>&1 | grep -q "error\|warning"; then
     echo "  ⚠️  Linting warnings found (not blocking deployment)"
 else
     echo "  ✅ No linting errors"
 fi
 
-# Check 7: Git status clean
+# Check 8: Git status clean
 echo ""
-echo "✓ Check 7: Git status"
+echo "✓ Check 8: Git status"
 if [ -n "$(git status --porcelain)" ]; then
     echo "❌ FAILED: Uncommitted changes detected"
     git status --short

@@ -120,6 +120,17 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 thinking_budget=arguments.get("thinking_budget", 0),
             )
 
+        elif name == "invoke_gemini_agentic":
+            from .tools.model_invoke import invoke_gemini_agentic
+
+            result_content = await invoke_gemini_agentic(
+                token_store=token_store,
+                prompt=arguments["prompt"],
+                model=arguments.get("model", "gemini-3-flash"),
+                max_turns=arguments.get("max_turns", 10),
+                timeout=arguments.get("timeout", 120),
+            )
+
         elif name == "invoke_openai":
             from .tools.model_invoke import invoke_openai
 

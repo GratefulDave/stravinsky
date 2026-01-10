@@ -2820,6 +2820,26 @@ class DedicatedIndexingWorker:
         """Worker thread entry point - runs persistent event loop."""
         import asyncio
         import queue
+        import traceback
+        from datetime import datetime
+        from pathlib import Path
+
+        # Setup error log file
+        log_dir = Path.home() / ".stravinsky" / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        log_file = log_dir / "file_watcher.log"
+
+        def log_error(msg: str, exc: Exception | None = None):
+            """Write error to log file with timestamp and full traceback."""
+            timestamp = datetime.now().isoformat()
+            with open(log_file, "a") as f:
+                f.write(f"\n{'='*80}\n")
+                f.write(f"[{timestamp}] {msg}\n")
+                if exc:
+                    f.write(f"Exception: {type(exc).__name__}: {exc}\n")
+                    f.write(traceback.format_exc())
+                f.write(f"{'='*80}\n")
+            logger.error(f"{msg} (logged to {log_file})")
 
         # Create persistent event loop for this worker thread
         self._loop = asyncio.new_event_loop()
@@ -2837,7 +2857,9 @@ class DedicatedIndexingWorker:
                 except queue.Empty:
                     continue  # No work, check shutdown flag
                 except Exception as e:
-                    logger.warning(f"⚠️ Indexing worker failed: {e}\n  Manual reindex: semantic_index('{self.store.project_path}')")
+                    log_error(f"⚠️ Indexing worker failed for {self.store.project_path}", e)
+        except Exception as e:
+            log_error(f"⚠️ Worker thread crashed for {self.store.project_path}", e)
         finally:
             # Clean shutdown
             self._loop.close()

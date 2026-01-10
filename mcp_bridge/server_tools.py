@@ -79,6 +79,58 @@ def get_tool_definitions() -> List[Tool]:
             },
         ),
         Tool(
+            name="invoke_gemini_agentic",
+            description=(
+                "Invoke Gemini with function calling for agentic tasks. "
+                "Implements a multi-turn agentic loop: sends prompt with tool definitions, "
+                "executes tool calls, and iterates until final response or max_turns reached. "
+                "Supports both API key (GEMINI_API_KEY) and OAuth authentication."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "prompt": {
+                        "type": "string",
+                        "description": "The task prompt for the agentic loop",
+                    },
+                    "model": {
+                        "type": "string",
+                        "description": "Gemini model to use (default: gemini-3-flash)",
+                        "default": "gemini-3-flash",
+                    },
+                    "max_turns": {
+                        "type": "integer",
+                        "description": "Maximum number of tool-use turns (default: 10)",
+                        "default": 10,
+                    },
+                    "timeout": {
+                        "type": "integer",
+                        "description": "Request timeout in seconds (default: 120)",
+                        "default": 120,
+                    },
+                    "agent_context": {
+                        "type": "object",
+                        "description": "Optional agent metadata for logging (agent_type, task_id, description)",
+                        "properties": {
+                            "agent_type": {
+                                "type": "string",
+                                "description": "Type of agent (explore, delphi, frontend, etc.)",
+                            },
+                            "task_id": {
+                                "type": "string",
+                                "description": "Background task ID if running as agent",
+                            },
+                            "description": {
+                                "type": "string",
+                                "description": "Short description of what the agent is doing",
+                            },
+                        },
+                    },
+                },
+                "required": ["prompt"],
+            },
+        ),
+        Tool(
             name="invoke_openai",
             description=(
                 "Invoke an OpenAI model with the given prompt. "

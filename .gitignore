@@ -47,3 +47,4 @@ pygls/
 # Temporary hook files
 .claude/hooks/send_event.py
 .claude/hooks/utils/
+.claude/settings.local.json

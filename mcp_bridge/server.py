@@ -27,6 +27,24 @@ from mcp.types import (
 
 from . import __version__
 
+# --- LOAD .env FILES (GEMINI_API_KEY, etc.) ---
+# Load from current working directory and user home directory
+try:
+    from dotenv import load_dotenv
+    from pathlib import Path
+
+    # Load from ~/.env (user-global)
+    home_env = Path.home() / ".env"
+    if home_env.exists():
+        load_dotenv(home_env, override=False)
+
+    # Load from CWD/.env (project-local, takes precedence)
+    cwd_env = Path.cwd() / ".env"
+    if cwd_env.exists():
+        load_dotenv(cwd_env, override=True)
+except ImportError:
+    pass  # python-dotenv not installed, skip
+
 # --- CRITICAL: PROTOCOL HYGIENE ---
 
 # Configure logging to stderr explicitly to avoid protocol corruption

@@ -8,7 +8,7 @@ Based on oh-my-opencode's todo-continuation-enforcer pattern.
 """
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -30,11 +30,11 @@ Use TodoWrite to check your current task status and continue with the next pendi
 """
 
 # Track sessions to prevent duplicate injections
-_idle_sessions: Dict[str, bool] = {}
-_last_activity: Dict[str, float] = {}
+_idle_sessions: dict[str, bool] = {}
+_last_activity: dict[str, float] = {}
 
 
-async def session_idle_hook(params: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+async def session_idle_hook(params: dict[str, Any]) -> dict[str, Any] | None:
     """
     Pre-model-invoke hook that detects idle sessions with incomplete todos.
 

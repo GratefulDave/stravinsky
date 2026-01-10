@@ -7,7 +7,7 @@ and injects corresponding mode activation tags.
 
 import logging
 import re
-from typing import Any, Dict, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -123,7 +123,7 @@ KEYWORD_PATTERNS = {
 }
 
 
-async def keyword_detector_hook(params: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+async def keyword_detector_hook(params: dict[str, Any]) -> dict[str, Any] | None:
     """
     Pre-model invoke hook that detects keywords and injects mode tags.
     """

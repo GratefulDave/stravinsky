@@ -11,8 +11,6 @@ Example: spawned delphi:gpt-5.2-medium('Debug xyz code')
 
 import json
 import sys
-from typing import Optional, Dict, Any
-
 
 # Agent display model mappings
 AGENT_DISPLAY_MODELS = {
@@ -29,7 +27,7 @@ AGENT_DISPLAY_MODELS = {
 }
 
 
-def extract_agent_info(message: str) -> Optional[Dict[str, str]]:
+def extract_agent_info(message: str) -> dict[str, str] | None:
     """
     Extract agent spawn information from notification message.
 
@@ -44,7 +42,7 @@ def extract_agent_info(message: str) -> Optional[Dict[str, str]]:
     agent_type = None
     description = ""
 
-    for agent in AGENT_DISPLAY_MODELS.keys():
+    for agent in AGENT_DISPLAY_MODELS:
         if agent == "_default":
             continue
         if agent in message_lower:

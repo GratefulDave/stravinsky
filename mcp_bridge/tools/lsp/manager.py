@@ -13,24 +13,18 @@ Architecture:
 """
 
 import asyncio
-import json
 import logging
-import os
-import shlex
-import signal
 import threading
 import time
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
-from pygls.client import JsonRPCClient
 from lsprotocol.types import (
-    InitializeParams,
-    InitializedParams,
     ClientCapabilities,
-    WorkspaceFolder,
+    InitializedParams,
+    InitializeParams,
 )
+from pygls.client import JsonRPCClient
 
 logger = logging.getLogger(__name__)
 
@@ -48,10 +42,10 @@ class LSPServer:
 
     name: str
     command: list[str]
-    client: Optional[JsonRPCClient] = None
+    client: JsonRPCClient | None = None
     initialized: bool = False
-    process: Optional[asyncio.subprocess.Process] = None
-    pid: Optional[int] = None  # Track subprocess PID for explicit cleanup
+    process: asyncio.subprocess.Process | None = None
+    pid: int | None = None  # Track subprocess PID for explicit cleanup
     last_used: float = field(default_factory=time.time)  # Timestamp of last usage
     created_at: float = field(default_factory=time.time)  # Timestamp of server creation
 
@@ -82,7 +76,7 @@ class LSPManager:
         self._servers: dict[str, LSPServer] = {}
         self._lock = asyncio.Lock()
         self._restart_attempts: dict[str, int] = {}
-        self._health_monitor_task: Optional[asyncio.Task] = None
+        self._health_monitor_task: asyncio.Task | None = None
 
         # Register available LSP servers
         self._register_servers()
@@ -94,7 +88,7 @@ class LSPManager:
             name="typescript", command=["typescript-language-server", "--stdio"]
         )
 
-    async def get_server(self, language: str) -> Optional[JsonRPCClient]:
+    async def get_server(self, language: str) -> JsonRPCClient | None:
         """
         Get or start a persistent LSP server for the given language.
 
@@ -195,7 +189,7 @@ class LSPManager:
 
                 logger.info(f"{server.name} LSP server initialized: {response}")
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 raise ConnectionError(f"{server.name} LSP server initialization timed out")
 
             # Store client reference (GC protection)
@@ -281,7 +275,7 @@ class LSPManager:
             )
             logger.debug(f"{server.name} LSP server health check passed")
             return True
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning(f"{server.name} LSP server health check timed out")
             return False
         except Exception as e:
@@ -307,7 +301,7 @@ class LSPManager:
                 await asyncio.wait_for(
                     server.client.protocol.send_request_async("shutdown", None), timeout=5.0
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 logger.warning(f"{name} LSP server shutdown request timed out")
 
             # Send exit notification
@@ -325,7 +319,7 @@ class LSPManager:
                         server.process.terminate()
                         try:
                             await asyncio.wait_for(server.process.wait(), timeout=2.0)
-                        except asyncio.TimeoutError:
+                        except TimeoutError:
                             server.process.kill()
                             await asyncio.wait_for(server.process.wait(), timeout=1.0)
                 except Exception as e:
@@ -433,7 +427,7 @@ class LSPManager:
 
 
 # Singleton accessor
-_manager_instance: Optional[LSPManager] = None
+_manager_instance: LSPManager | None = None
 _manager_lock = threading.Lock()
 
 

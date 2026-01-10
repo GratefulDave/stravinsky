@@ -9,7 +9,7 @@ Based on oh-my-opencode's parallel execution enforcement pattern.
 
 import logging
 import re
-from typing import Any, Dict, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -41,10 +41,10 @@ RULES:
 """
 
 # Track if enforcement was already triggered this session
-_enforcement_triggered: Dict[str, bool] = {}
+_enforcement_triggered: dict[str, bool] = {}
 
 
-async def parallel_enforcer_hook(params: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+async def parallel_enforcer_hook(params: dict[str, Any]) -> dict[str, Any] | None:
     """
     Post-tool-call hook that triggers after TodoWrite.
 
@@ -106,9 +106,9 @@ def reset_enforcement(session_id: str = "default"):
 
 async def parallel_enforcer_post_tool_hook(
     tool_name: str,
-    arguments: Dict[str, Any],
+    arguments: dict[str, Any],
     output: str
-) -> Optional[str]:
+) -> str | None:
     """
     Post-tool-call hook interface for HookManager.
 

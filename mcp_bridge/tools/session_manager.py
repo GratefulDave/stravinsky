@@ -6,10 +6,8 @@ Sessions are stored in ~/.claude/projects/ as JSONL files.
 """
 
 import json
-import os
 from datetime import datetime
 from pathlib import Path
-from typing import Any
 
 
 def get_sessions_directory() -> Path:

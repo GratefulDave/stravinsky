@@ -11,7 +11,7 @@ import logging
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
 from urllib.parse import unquote, urlparse
 
 # Use lsprotocol for types
@@ -26,6 +26,7 @@ try:
         HoverParams,
         Location,
         Position,
+        PrepareRenameParams,
         Range,
         ReferenceContext,
         ReferenceParams,
@@ -34,7 +35,6 @@ try:
         TextDocumentItem,
         TextDocumentPositionParams,
         WorkspaceSymbolParams,
-        PrepareRenameParams,
     )
 except ImportError:
     # Fallback/Mock for environment without lsprotocol
@@ -68,7 +68,7 @@ def _get_language_for_file(file_path: str) -> str:
 
 async def _get_client_and_params(
     file_path: str, needs_open: bool = True
-) -> Tuple[Optional[Any], Optional[str], str]:
+) -> tuple[Any | None, str | None, str]:
     """
     Get LSP client and prepare file for operations.
 
@@ -173,7 +173,7 @@ for c in completions[:1]:
             return f"No hover info at line {line}, character {character}"
 
         elif lang in ("typescript", "javascript", "typescriptreact", "javascriptreact"):
-            return f"TypeScript hover requires running language server. Use Claude Code's native hover."
+            return "TypeScript hover requires running language server. Use Claude Code's native hover."
 
         else:
             return f"Hover not available for language: {lang}"
@@ -267,8 +267,8 @@ for d in definitions:
         else:
             return f"Goto definition not available for language: {lang}"
 
-    except FileNotFoundError as e:
-        return f"Tool not found: Install jedi: pip install jedi"
+    except FileNotFoundError:
+        return "Tool not found: Install jedi: pip install jedi"
     except subprocess.TimeoutExpired:
         return "Definition lookup timed out"
     except Exception as e:
@@ -722,7 +722,7 @@ for path, changed in refactoring.get_changed_files().items():
         return f"Error: {str(e)}"
 
 
-def _apply_workspace_edit(changes: Dict[str, List[Any]]):
+def _apply_workspace_edit(changes: dict[str, list[Any]]):
     """Apply LSP changes to files."""
     for file_uri, edits in changes.items():
         parsed = urlparse(file_uri)

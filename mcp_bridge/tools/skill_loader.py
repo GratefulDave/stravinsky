@@ -8,7 +8,6 @@ Discovers and lists available skills (slash commands) from:
 Skills are markdown files with frontmatter defining the command behavior.
 """
 
-import os
 import re
 from pathlib import Path
 from typing import Any

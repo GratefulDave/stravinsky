@@ -4,7 +4,8 @@ Provides interception points for tool calls and model invocations.
 """
 
 import logging
-from typing import Any, Callable, Dict, List, Optional, Awaitable
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 try:
     from mcp_bridge.config.hook_config import is_hook_enabled
@@ -32,21 +33,21 @@ class HookManager:
     _instance = None
 
     def __init__(self):
-        self.pre_tool_call_hooks: List[
-            Callable[[str, Dict[str, Any]], Awaitable[Optional[Dict[str, Any]]]]
+        self.pre_tool_call_hooks: list[
+            Callable[[str, dict[str, Any]], Awaitable[dict[str, Any] | None]]
         ] = []
-        self.post_tool_call_hooks: List[
-            Callable[[str, Dict[str, Any], str], Awaitable[Optional[str]]]
+        self.post_tool_call_hooks: list[
+            Callable[[str, dict[str, Any], str], Awaitable[str | None]]
         ] = []
-        self.pre_model_invoke_hooks: List[
-            Callable[[Dict[str, Any]], Awaitable[Optional[Dict[str, Any]]]]
+        self.pre_model_invoke_hooks: list[
+            Callable[[dict[str, Any]], Awaitable[dict[str, Any] | None]]
         ] = []
         # New hook types based on oh-my-opencode patterns
-        self.session_idle_hooks: List[
-            Callable[[Dict[str, Any]], Awaitable[Optional[Dict[str, Any]]]]
+        self.session_idle_hooks: list[
+            Callable[[dict[str, Any]], Awaitable[dict[str, Any] | None]]
         ] = []
-        self.pre_compact_hooks: List[
-            Callable[[Dict[str, Any]], Awaitable[Optional[Dict[str, Any]]]]
+        self.pre_compact_hooks: list[
+            Callable[[dict[str, Any]], Awaitable[dict[str, Any] | None]]
         ] = []
 
     @classmethod
@@ -56,38 +57,38 @@ class HookManager:
         return cls._instance
 
     def register_pre_tool_call(
-        self, hook: Callable[[str, Dict[str, Any]], Awaitable[Optional[Dict[str, Any]]]]
+        self, hook: Callable[[str, dict[str, Any]], Awaitable[dict[str, Any] | None]]
     ):
         """Run before a tool is called. Can modify arguments or return early result."""
         self.pre_tool_call_hooks.append(hook)
 
     def register_post_tool_call(
-        self, hook: Callable[[str, Dict[str, Any], str], Awaitable[Optional[str]]]
+        self, hook: Callable[[str, dict[str, Any], str], Awaitable[str | None]]
     ):
         """Run after a tool call. Can modify or recover from tool output/error."""
         self.post_tool_call_hooks.append(hook)
 
     def register_pre_model_invoke(
-        self, hook: Callable[[Dict[str, Any]], Awaitable[Optional[Dict[str, Any]]]]
+        self, hook: Callable[[dict[str, Any]], Awaitable[dict[str, Any] | None]]
     ):
         """Run before model invocation. Can modify prompt or parameters."""
         self.pre_model_invoke_hooks.append(hook)
 
     def register_session_idle(
-        self, hook: Callable[[Dict[str, Any]], Awaitable[Optional[Dict[str, Any]]]]
+        self, hook: Callable[[dict[str, Any]], Awaitable[dict[str, Any] | None]]
     ):
         """Run when session becomes idle. Can inject continuation prompts."""
         self.session_idle_hooks.append(hook)
 
     def register_pre_compact(
-        self, hook: Callable[[Dict[str, Any]], Awaitable[Optional[Dict[str, Any]]]]
+        self, hook: Callable[[dict[str, Any]], Awaitable[dict[str, Any] | None]]
     ):
         """Run before context compaction. Can preserve critical context."""
         self.pre_compact_hooks.append(hook)
 
     async def execute_pre_tool_call(
-        self, tool_name: str, arguments: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        self, tool_name: str, arguments: dict[str, Any]
+    ) -> dict[str, Any]:
         """Executes all pre-tool call hooks."""
         current_args = arguments
         for hook in self.pre_tool_call_hooks:
@@ -100,7 +101,7 @@ class HookManager:
         return current_args
 
     async def execute_post_tool_call(
-        self, tool_name: str, arguments: Dict[str, Any], output: str
+        self, tool_name: str, arguments: dict[str, Any], output: str
     ) -> str:
         """Executes all post-tool call hooks."""
         current_output = output
@@ -113,7 +114,7 @@ class HookManager:
                 logger.error(f"[HookManager] Error in post_tool_call hook {hook.__name__}: {e}")
         return current_output
 
-    async def execute_pre_model_invoke(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    async def execute_pre_model_invoke(self, params: dict[str, Any]) -> dict[str, Any]:
         """Executes all pre-model invoke hooks."""
         current_params = params
         for hook in self.pre_model_invoke_hooks:
@@ -125,7 +126,7 @@ class HookManager:
                 logger.error(f"[HookManager] Error in pre_model_invoke hook {hook.__name__}: {e}")
         return current_params
 
-    async def execute_session_idle(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    async def execute_session_idle(self, params: dict[str, Any]) -> dict[str, Any]:
         """Executes all session idle hooks (Stop hook pattern)."""
         current_params = params
         for hook in self.session_idle_hooks:
@@ -137,7 +138,7 @@ class HookManager:
                 logger.error(f"[HookManager] Error in session_idle hook {hook.__name__}: {e}")
         return current_params
 
-    async def execute_pre_compact(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    async def execute_pre_compact(self, params: dict[str, Any]) -> dict[str, Any]:
         """Executes all pre-compact hooks (context preservation)."""
         current_params = params
         for hook in self.pre_compact_hooks:

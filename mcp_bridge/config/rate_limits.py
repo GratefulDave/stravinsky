@@ -17,14 +17,11 @@ Configuration file: ~/.stravinsky/config.json
 }
 """
 
-import asyncio
 import json
-import threading
-from pathlib import Path
-from typing import Dict, Optional
-from collections import defaultdict
-from datetime import datetime
 import logging
+import threading
+from collections import defaultdict
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -56,13 +53,13 @@ class RateLimiter:
     """
 
     def __init__(self):
-        self._semaphores: Dict[str, threading.Semaphore] = {}
+        self._semaphores: dict[str, threading.Semaphore] = {}
         self._lock = threading.Lock()
         self._limits = self._load_limits()
-        self._active_counts: Dict[str, int] = defaultdict(int)
-        self._queue_counts: Dict[str, int] = defaultdict(int)
+        self._active_counts: dict[str, int] = defaultdict(int)
+        self._queue_counts: dict[str, int] = defaultdict(int)
 
-    def _load_limits(self) -> Dict[str, int]:
+    def _load_limits(self) -> dict[str, int]:
         """Load rate limits from config file or use defaults."""
         limits = DEFAULT_RATE_LIMITS.copy()
 
@@ -73,7 +70,7 @@ class RateLimiter:
                     if "rate_limits" in config:
                         limits.update(config["rate_limits"])
                         logger.info(f"[RateLimiter] Loaded custom limits from {CONFIG_FILE}")
-            except (json.JSONDecodeError, IOError) as e:
+            except (OSError, json.JSONDecodeError) as e:
                 logger.warning(f"[RateLimiter] Failed to load config: {e}")
 
         return limits
@@ -150,7 +147,7 @@ class RateLimiter:
         semaphore.release()
         logger.debug(f"[RateLimiter] Released slot for {normalized}")
 
-    def get_status(self) -> Dict[str, Dict[str, int]]:
+    def get_status(self) -> dict[str, dict[str, int]]:
         """Get current rate limiter status."""
         with self._lock:
             return {
@@ -162,7 +159,7 @@ class RateLimiter:
                 for model in set(list(self._active_counts.keys()) + list(self._queue_counts.keys()))
             }
 
-    def update_limits(self, new_limits: Dict[str, int]):
+    def update_limits(self, new_limits: dict[str, int]):
         """
         Update rate limits dynamically.
 
@@ -196,7 +193,7 @@ class RateLimitContext:
 
 
 # Global rate limiter instance
-_rate_limiter: Optional[RateLimiter] = None
+_rate_limiter: RateLimiter | None = None
 _rate_limiter_lock = threading.Lock()
 
 

@@ -5,10 +5,8 @@ Provides batteries-included defaults with user-configurable overrides.
 Users can disable specific hooks via ~/.stravinsky/disable_hooks.txt
 """
 
-import os
-from pathlib import Path
-from typing import Set, Optional
 import logging
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +18,7 @@ DISABLE_HOOKS_PATHS = [
 ]
 
 
-def get_disabled_hooks() -> Set[str]:
+def get_disabled_hooks() -> set[str]:
     """
     Load disabled hooks from config files.
 
@@ -74,7 +72,7 @@ def get_hook_config_path() -> Path:
     return config_dir
 
 
-def create_sample_disable_hooks() -> Optional[Path]:
+def create_sample_disable_hooks() -> Path | None:
     """
     Create a sample disable_hooks.txt file with documentation.
 

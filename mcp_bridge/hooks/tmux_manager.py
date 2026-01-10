@@ -5,19 +5,18 @@ Manages persistent tmux sessions and cleanup.
 """
 
 import logging
-import re
 import shlex
 import subprocess
-from typing import Any, Dict, List, Optional, Set
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 # Track tmux sessions created by Stravinsky
-_tracked_sessions: Set[str] = set()
+_tracked_sessions: set[str] = set()
 SESSION_PREFIX = "stravinsky-"
 
 
-def parse_tmux_command(command: str) -> Optional[str]:
+def parse_tmux_command(command: str) -> str | None:
     """
     Parse tmux command to extract session name.
 
@@ -65,8 +64,8 @@ def normalize_session_name(name: str) -> str:
 
 
 async def tmux_manager_hook(
-    tool_name: str, tool_input: Dict[str, Any], tool_output: Optional[str] = None
-) -> Optional[str]:
+    tool_name: str, tool_input: dict[str, Any], tool_output: str | None = None
+) -> str | None:
     """
     Post-tool-call hook that tracks tmux sessions.
 
@@ -100,7 +99,7 @@ async def tmux_manager_hook(
     return tool_output
 
 
-def cleanup_tmux_sessions() -> List[str]:
+def cleanup_tmux_sessions() -> list[str]:
     """
     Kill all tracked tmux sessions.
 
@@ -134,7 +133,7 @@ def cleanup_tmux_sessions() -> List[str]:
     return killed
 
 
-def get_tracked_sessions() -> Set[str]:
+def get_tracked_sessions() -> set[str]:
     """
     Get set of currently tracked tmux sessions.
     """

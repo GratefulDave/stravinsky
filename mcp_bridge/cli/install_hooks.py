@@ -17,12 +17,8 @@ Hooks provide enhanced Claude Code behavior including:
 """
 
 import json
-import os
-import shutil
 import sys
 from pathlib import Path
-from typing import Dict, List, Any
-
 
 # Hook file contents - these will be written to ~/.claude/hooks/
 HOOKS = {
@@ -1151,7 +1147,7 @@ def install_hooks():
         hook_path.chmod(0o755)  # Make executable
 
     # Merge hook registrations into settings.json
-    print(f"\\n⚙️  Updating settings.json...")
+    print("\\n⚙️  Updating settings.json...")
 
     # Load existing settings or create new
     if settings_file.exists():
@@ -1174,14 +1170,14 @@ def install_hooks():
     with settings_file.open("w") as f:
         json.dump(settings, f, indent=2)
 
-    print(f"\\n✅ Installation complete!")
+    print("\\n✅ Installation complete!")
     print("=" * 60)
-    print(f"\\n📋 Installed hooks:")
-    for filename in HOOKS.keys():
+    print("\\n📋 Installed hooks:")
+    for filename in HOOKS:
         print(f"  • {filename}")
 
-    print(f"\\n🔧 Hook types registered:")
-    for hook_type in HOOK_REGISTRATIONS.keys():
+    print("\\n🔧 Hook types registered:")
+    for hook_type in HOOK_REGISTRATIONS:
         print(f"  • {hook_type}")
 
     print(f"\\n📁 Installation directory: {hooks_dir}")

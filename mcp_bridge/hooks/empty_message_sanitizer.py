@@ -10,7 +10,7 @@ Cleans up empty/malformed messages:
 
 import logging
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -181,7 +181,7 @@ def sanitize_message_blocks(prompt: str) -> tuple[str, int]:
     return prompt, sanitized_count
 
 
-async def empty_message_sanitizer_hook(params: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+async def empty_message_sanitizer_hook(params: dict[str, Any]) -> dict[str, Any] | None:
     """
     Pre-model invoke hook that sanitizes empty and malformed message content.
 

@@ -6,12 +6,12 @@ API requests to external model providers.
 """
 
 import asyncio
+import base64
+import json as json_module
 import logging
 import os
 import time
 import uuid
-import base64
-import json as json_module
 
 from mcp_bridge.config.rate_limits import get_rate_limiter
 
@@ -110,20 +110,21 @@ def resolve_gemini_model(model: str) -> str:
 import httpx
 from tenacity import (
     retry,
+    retry_if_exception,
     stop_after_attempt,
     wait_exponential,
-    retry_if_exception,
 )
 
-from ..auth.token_store import TokenStore
+from ..auth.oauth import (
+    ANTIGRAVITY_DEFAULT_PROJECT_ID,
+    ANTIGRAVITY_ENDPOINTS,
+    ANTIGRAVITY_HEADERS,
+)
 from ..auth.oauth import (
     refresh_access_token as gemini_refresh,
-    ANTIGRAVITY_HEADERS,
-    ANTIGRAVITY_ENDPOINTS,
-    ANTIGRAVITY_DEFAULT_PROJECT_ID,
-    ANTIGRAVITY_API_VERSION,
 )
 from ..auth.openai_oauth import refresh_access_token as openai_refresh
+from ..auth.token_store import TokenStore
 from ..hooks.manager import get_hook_manager
 
 # ========================
@@ -679,7 +680,7 @@ async def invoke_gemini(
                         error_text = response.text.lower()
                         if "thinking" in error_text or "signature" in error_text:
                             logger.warning(
-                                f"[Gemini] Thinking error detected, clearing session cache and retrying"
+                                "[Gemini] Thinking error detected, clearing session cache and retrying"
                             )
                             clear_session_cache()
                             # Update session ID for retry
@@ -803,7 +804,6 @@ AGENT_TOOLS = [
 
 def _execute_tool(name: str, args: dict) -> str:
     """Execute a tool and return the result."""
-    import os
     import subprocess
     from pathlib import Path
 
@@ -1256,14 +1256,14 @@ async def invoke_openai(
     print(f"🧠 OPENAI: {model} | agent={agent_type}{task_info}{desc_info}", file=sys.stderr)
 
     access_token = await _ensure_valid_token(token_store, "openai")
-    logger.info(f"[invoke_openai] Got access token")
+    logger.info("[invoke_openai] Got access token")
 
     # ChatGPT Backend API - Uses Codex Responses endpoint
     # Replicates opencode-openai-codex-auth plugin behavior
     api_url = "https://chatgpt.com/backend-api/codex/responses"
 
     # Extract account ID from JWT token
-    logger.info(f"[invoke_openai] Extracting account ID from JWT")
+    logger.info("[invoke_openai] Extracting account ID from JWT")
     try:
         parts = access_token.split(".")
         payload_b64 = parts[1]
@@ -1311,41 +1311,40 @@ async def invoke_openai(
     logger.info(f"[invoke_openai] Instructions length: {len(instructions)}")
 
     try:
-        async with httpx.AsyncClient() as client:
-            async with client.stream(
-                "POST", api_url, headers=headers, json=payload, timeout=120.0
-            ) as response:
-                logger.info(f"[invoke_openai] Response status: {response.status_code}")
-                if response.status_code == 401:
-                    raise ValueError(
-                        "OpenAI authentication failed. Run: stravinsky-auth login openai"
-                    )
+        async with httpx.AsyncClient() as client, client.stream(
+            "POST", api_url, headers=headers, json=payload, timeout=120.0
+        ) as response:
+            logger.info(f"[invoke_openai] Response status: {response.status_code}")
+            if response.status_code == 401:
+                raise ValueError(
+                    "OpenAI authentication failed. Run: stravinsky-auth login openai"
+                )
 
-                if response.status_code >= 400:
-                    error_body = await response.aread()
-                    error_text = error_body.decode("utf-8")
-                    logger.error(f"OpenAI API error {response.status_code}: {error_text}")
-                    logger.error(f"Request payload was: {payload}")
-                    logger.error(f"Request headers were: {headers}")
-                    raise ValueError(f"OpenAI API error {response.status_code}: {error_text}")
+            if response.status_code >= 400:
+                error_body = await response.aread()
+                error_text = error_body.decode("utf-8")
+                logger.error(f"OpenAI API error {response.status_code}: {error_text}")
+                logger.error(f"Request payload was: {payload}")
+                logger.error(f"Request headers were: {headers}")
+                raise ValueError(f"OpenAI API error {response.status_code}: {error_text}")
 
-                # Parse SSE stream for text deltas
-                async for line in response.aiter_lines():
-                    if line.startswith("data: "):
-                        data_json = line[6:]  # Remove "data: " prefix
-                        try:
-                            data = json_module.loads(data_json)
-                            event_type = data.get("type")
+            # Parse SSE stream for text deltas
+            async for line in response.aiter_lines():
+                if line.startswith("data: "):
+                    data_json = line[6:]  # Remove "data: " prefix
+                    try:
+                        data = json_module.loads(data_json)
+                        event_type = data.get("type")
 
-                            # Extract text deltas from SSE stream
-                            if event_type == "response.output_text.delta":
-                                delta = data.get("delta", "")
-                                text_chunks.append(delta)
+                        # Extract text deltas from SSE stream
+                        if event_type == "response.output_text.delta":
+                            delta = data.get("delta", "")
+                            text_chunks.append(delta)
 
-                        except json_module.JSONDecodeError:
-                            pass  # Skip malformed JSON
-                        except Exception as e:
-                            logger.warning(f"Error processing SSE event: {e}")
+                    except json_module.JSONDecodeError:
+                        pass  # Skip malformed JSON
+                    except Exception as e:
+                        logger.warning(f"Error processing SSE event: {e}")
 
         # Return collected text
         result = "".join(text_chunks)

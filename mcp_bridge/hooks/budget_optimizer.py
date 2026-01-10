@@ -3,14 +3,14 @@ Thinking budget optimizer hook.
 Analyzes prompt complexity and adjusts thinking_budget for models that support it.
 """
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 REASONING_KEYWORDS = [
     "architect", "design", "refactor", "debug", "complex", "optimize", 
     "summarize", "analyze", "explain", "why", "review", "strangler"
 ]
 
-async def budget_optimizer_hook(params: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+async def budget_optimizer_hook(params: dict[str, Any]) -> dict[str, Any] | None:
     """
     Adjusts the thinking_budget based on presence of reasoning-heavy keywords.
     """

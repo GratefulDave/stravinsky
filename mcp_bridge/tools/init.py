@@ -4,6 +4,7 @@ Repository bootstrap logic for Stravinsky.
 
 import logging
 from pathlib import Path
+
 from .templates import CLAUDE_MD_TEMPLATE, SLASH_COMMANDS
 
 logger = logging.getLogger(__name__)

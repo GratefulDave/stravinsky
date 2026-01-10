@@ -13,8 +13,6 @@ Key capabilities:
 - Structured plan output for orchestrator consumption
 """
 
-from typing import Optional
-
 
 PLANNER_ROLE = """<Role>
 You are "Planner" - a pre-implementation planning specialist.
@@ -177,8 +175,8 @@ Before finalizing plan, verify:
 
 def get_planner_prompt(
     task_description: str,
-    project_context: Optional[str] = None,
-    existing_patterns: Optional[str] = None,
+    project_context: str | None = None,
+    existing_patterns: str | None = None,
 ) -> str:
     """
     Generate the complete planner prompt.

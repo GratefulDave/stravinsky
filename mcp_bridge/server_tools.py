@@ -1,8 +1,8 @@
-from mcp.types import Tool, Prompt
-from typing import List
+
+from mcp.types import Prompt, Tool
 
 
-def get_tool_definitions() -> List[Tool]:
+def get_tool_definitions() -> list[Tool]:
     """Return all Tool definitions for the Stravinsky MCP server."""
     return [
         Tool(
@@ -1108,7 +1108,7 @@ def get_tool_definitions() -> List[Tool]:
     ]
 
 
-def get_prompt_definitions() -> List[Prompt]:
+def get_prompt_definitions() -> list[Prompt]:
     """Return all Prompt definitions for the Stravinsky MCP server."""
     return [
         Prompt(

@@ -7,15 +7,15 @@ Provides OS-level desktop notifications when sessions are idle.
 import logging
 import platform
 import subprocess
-from typing import Any, Dict, Optional, Set
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 # Track which sessions have been notified (avoid duplicates)
-_notified_sessions: Set[str] = set()
+_notified_sessions: set[str] = set()
 
 
-def get_notification_command(title: str, message: str, sound: bool = True) -> Optional[list]:
+def get_notification_command(title: str, message: str, sound: bool = True) -> list | None:
     """
     Get platform-specific notification command.
 
@@ -69,7 +69,7 @@ async def session_notifier_hook(
     session_id: str,
     has_pending_todos: bool,
     idle_seconds: float,
-    params: Dict[str, Any]
+    params: dict[str, Any]
 ) -> None:
     """
     Session idle hook that sends desktop notification.

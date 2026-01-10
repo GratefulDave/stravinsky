@@ -10,8 +10,8 @@ enabling hard blocking of direct tools (Read, Grep, Bash) via stravinsky_mode.py
 """
 
 import json
-import sys
 import re
+import sys
 from pathlib import Path
 
 # Marker file that enables hard blocking of direct tools
@@ -36,7 +36,7 @@ def activate_stravinsky_mode():
         config = {"active": True, "reason": "invoked via /stravinsky skill"}
         STRAVINSKY_MODE_FILE.write_text(json.dumps(config))
         return True
-    except IOError:
+    except OSError:
         return False
 
 

@@ -5,20 +5,18 @@ Spawns background agents using Claude Code CLI with full tool access.
 This replaces the simple model-only invocation with true agentic execution.
 """
 
-import asyncio
 import json
+import logging
 import os
 import shutil
-import subprocess
 import signal
+import subprocess
+import threading
 import time
-import uuid
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
-import threading
-import logging
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -171,14 +169,14 @@ class AgentTask:
     description: str
     status: str  # pending, running, completed, failed, cancelled
     created_at: str
-    parent_session_id: Optional[str] = None
-    started_at: Optional[str] = None
-    completed_at: Optional[str] = None
-    result: Optional[str] = None
-    error: Optional[str] = None
-    pid: Optional[int] = None
+    parent_session_id: str | None = None
+    started_at: str | None = None
+    completed_at: str | None = None
+    result: str | None = None
+    error: str | None = None
+    pid: int | None = None
     timeout: int = 300  # Default 5 minutes
-    progress: Optional[Dict[str, Any]] = None  # tool calls, last update
+    progress: dict[str, Any] | None = None  # tool calls, last update
 
 
 @dataclass
@@ -186,9 +184,9 @@ class AgentProgress:
     """Progress tracking for a running agent."""
 
     tool_calls: int = 0
-    last_tool: Optional[str] = None
-    last_message: Optional[str] = None
-    last_update: Optional[str] = None
+    last_tool: str | None = None
+    last_message: str | None = None
+    last_update: str | None = None
 
 
 class AgentManager:
@@ -205,7 +203,7 @@ class AgentManager:
     # Dynamic CLI path - find claude in PATH, fallback to common locations
     CLAUDE_CLI = shutil.which("claude") or "/opt/homebrew/bin/claude"
 
-    def __init__(self, base_dir: Optional[str] = None):
+    def __init__(self, base_dir: str | None = None):
         # Initialize lock FIRST - used by _save_tasks and _load_tasks
         self._lock = threading.RLock()
 
@@ -224,25 +222,24 @@ class AgentManager:
             self._save_tasks({})
 
         # In-memory tracking for running processes
-        self._processes: Dict[str, subprocess.Popen] = {}
-        self._notification_queue: Dict[str, List[Dict[str, Any]]] = {}
+        self._processes: dict[str, subprocess.Popen] = {}
+        self._notification_queue: dict[str, list[dict[str, Any]]] = {}
 
-    def _load_tasks(self) -> Dict[str, Any]:
+    def _load_tasks(self) -> dict[str, Any]:
         """Load tasks from persistent storage."""
         with self._lock:
             try:
                 if not self.state_file.exists():
                     return {}
-                with open(self.state_file, "r") as f:
+                with open(self.state_file) as f:
                     return json.load(f)
             except (json.JSONDecodeError, FileNotFoundError):
                 return {}
 
-    def _save_tasks(self, tasks: Dict[str, Any]):
+    def _save_tasks(self, tasks: dict[str, Any]):
         """Save tasks to persistent storage."""
-        with self._lock:
-            with open(self.state_file, "w") as f:
-                json.dump(tasks, f, indent=2)
+        with self._lock, open(self.state_file, "w") as f:
+            json.dump(tasks, f, indent=2)
 
     def _update_task(self, task_id: str, **kwargs):
         """Update a task's fields."""
@@ -252,12 +249,12 @@ class AgentManager:
                 tasks[task_id].update(kwargs)
                 self._save_tasks(tasks)
 
-    def get_task(self, task_id: str) -> Optional[Dict[str, Any]]:
+    def get_task(self, task_id: str) -> dict[str, Any] | None:
         """Get a task by ID."""
         tasks = self._load_tasks()
         return tasks.get(task_id)
 
-    def list_tasks(self, parent_session_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    def list_tasks(self, parent_session_id: str | None = None) -> list[dict[str, Any]]:
         """List all tasks, optionally filtered by parent session."""
         tasks = self._load_tasks()
         task_list = list(tasks.values())
@@ -273,8 +270,8 @@ class AgentManager:
         prompt: str,
         agent_type: str = "explore",
         description: str = "",
-        parent_session_id: Optional[str] = None,
-        system_prompt: Optional[str] = None,
+        parent_session_id: str | None = None,
+        system_prompt: str | None = None,
         model: str = "gemini-3-flash",
         thinking_budget: int = 0,
         timeout: int = 300,
@@ -328,7 +325,7 @@ class AgentManager:
         token_store: Any,
         prompt: str,
         agent_type: str,
-        system_prompt: Optional[str] = None,
+        system_prompt: str | None = None,
         model: str = "gemini-3-flash",
         thinking_budget: int = 0,
         timeout: int = 300,
@@ -486,7 +483,7 @@ class AgentManager:
             self._notification_queue[parent_id].append(task)
             logger.info(f"[AgentManager] Queued notification for {parent_id}: task {task_id}")
 
-    def get_pending_notifications(self, session_id: str) -> List[Dict[str, Any]]:
+    def get_pending_notifications(self, session_id: str) -> list[dict[str, Any]]:
         """Get and clear pending notifications for a session."""
         notifications = self._notification_queue.pop(session_id, [])
         return notifications
@@ -715,7 +712,7 @@ Use `agent_output` with block=true to wait for completion."""
 
 
 # Global manager instance
-_manager: Optional[AgentManager] = None
+_manager: AgentManager | None = None
 _manager_lock = threading.Lock()
 
 
@@ -944,7 +941,7 @@ Use invoke_gemini with model="gemini-3-flash" for ALL synthesis work.
 """,
     }
 
-    system_prompt = system_prompts.get(agent_type, None)
+    system_prompt = system_prompts.get(agent_type)
 
     # Model routing (MANDATORY - enforced in system prompts):
     # - explore, dewey, document_writer, multimodal → invoke_gemini(gemini-3-flash)
@@ -1006,8 +1003,8 @@ async def agent_output(task_id: str, block: bool = False) -> str:
 
 async def agent_retry(
     task_id: str,
-    new_prompt: Optional[str] = None,
-    new_timeout: Optional[int] = None,
+    new_prompt: str | None = None,
+    new_timeout: int | None = None,
 ) -> str:
     """
     Retry a failed or timed-out background agent.

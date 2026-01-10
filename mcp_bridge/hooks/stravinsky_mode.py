@@ -65,7 +65,7 @@ def read_stravinsky_mode_config() -> dict:
         return {}
     try:
         return json.loads(STRAVINSKY_MODE_FILE.read_text())
-    except (json.JSONDecodeError, IOError):
+    except (OSError, json.JSONDecodeError):
         return {"active": True}
 
 

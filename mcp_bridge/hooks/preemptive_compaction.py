@@ -9,8 +9,7 @@ Proactively compresses context BEFORE hitting limits by:
 """
 
 import logging
-import re
-from typing import Any, Dict, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -170,7 +169,7 @@ async def summarize_with_gemini(token_store: Any, content: str) -> str:
         _in_summarization = False
 
 
-async def preemptive_compaction_hook(params: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+async def preemptive_compaction_hook(params: dict[str, Any]) -> dict[str, Any] | None:
     """
     Pre-model invoke hook that proactively compresses context before hitting limits.
 

@@ -6,13 +6,11 @@ Logs all checks to ~/.stravinsky/update.log for debugging and monitoring.
 Non-blocking background update checks on server startup.
 """
 
-import asyncio
 import logging
 import subprocess
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Optional
 
 # Get the logger for this module
 logger = logging.getLogger(__name__)
@@ -21,7 +19,7 @@ logger = logging.getLogger(__name__)
 from mcp_bridge import __version__
 
 
-def _get_stravinsky_home() -> Optional[Path]:
+def _get_stravinsky_home() -> Path | None:
     """Get or create ~/.stravinsky directory."""
     home_dir = Path.home() / ".stravinsky"
     try:
@@ -32,7 +30,7 @@ def _get_stravinsky_home() -> Optional[Path]:
         return None
 
 
-def _get_last_check_time() -> Optional[datetime]:
+def _get_last_check_time() -> datetime | None:
     """
     Read the last update check time from ~/.stravinsky/update.log.
 
@@ -49,7 +47,7 @@ def _get_last_check_time() -> Optional[datetime]:
             return None
 
         # Read the last line (most recent check)
-        with open(update_log, "r") as f:
+        with open(update_log) as f:
             lines = f.readlines()
             if not lines:
                 return None
@@ -72,7 +70,7 @@ def _get_last_check_time() -> Optional[datetime]:
         return None
 
 
-def _should_check(last_check_time: Optional[datetime]) -> bool:
+def _should_check(last_check_time: datetime | None) -> bool:
     """
     Determine if enough time has passed since the last check.
 
@@ -92,7 +90,7 @@ def _should_check(last_check_time: Optional[datetime]) -> bool:
     return time_since_last_check >= timedelta(hours=24)
 
 
-def _get_pypi_version() -> Optional[str]:
+def _get_pypi_version() -> str | None:
     """
     Fetch the latest version of stravinsky from PyPI.
 
@@ -173,7 +171,7 @@ def _compare_versions(current: str, latest: str) -> bool:
         return False
 
 
-def _log_check(current: str, latest: Optional[str], status: str) -> None:
+def _log_check(current: str, latest: str | None, status: str) -> None:
     """
     Log the update check to ~/.stravinsky/update.log.
 

@@ -9,18 +9,15 @@ Port from: https://github.com/numman-ali/opencode-openai-codex-auth/blob/main/li
 
 import base64
 import hashlib
-import json
 import secrets
 import threading
 import webbrowser
 from dataclasses import dataclass
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any
 from urllib.parse import parse_qs, urlencode, urlparse
-import time
 
 import httpx
-
 
 # OAuth constants (from openai/codex via opencode-openai-codex-auth)
 CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
@@ -303,8 +300,8 @@ def perform_oauth_flow(timeout: int = 300) -> TokenResult:
     try:
         auth_url, verifier, state = build_auth_url(redirect_uri)
         
-        print(f"\n🔐 Opening browser for OpenAI authentication...")
-        print(f"\nIf browser doesn't open, visit:")
+        print("\n🔐 Opening browser for OpenAI authentication...")
+        print("\nIf browser doesn't open, visit:")
         print(f"{auth_url}\n")
         
         webbrowser.open(auth_url)
@@ -329,7 +326,7 @@ def perform_oauth_flow(timeout: int = 300) -> TokenResult:
         print("📝 Exchanging code for tokens...")
         tokens = exchange_code(result["code"], verifier, redirect_uri)
         
-        print(f"✓ Successfully authenticated with OpenAI")
+        print("✓ Successfully authenticated with OpenAI")
         
         return tokens
         

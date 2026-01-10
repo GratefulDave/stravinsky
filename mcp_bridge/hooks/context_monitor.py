@@ -7,7 +7,7 @@ At 85%, suggests compaction before hitting hard limits.
 """
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ CONTEXT_THRESHOLD_WARNING = 0.85
 ESTIMATED_MAX_TOKENS = 200000
 
 
-async def context_monitor_hook(params: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+async def context_monitor_hook(params: dict[str, Any]) -> dict[str, Any] | None:
     """
     Pre-model invoke hook that monitors context window usage.
     """

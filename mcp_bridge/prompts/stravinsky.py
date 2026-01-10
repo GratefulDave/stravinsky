@@ -12,7 +12,6 @@ Key naming conventions (Stravinsky equivalents):
 - agent_spawn (not call-omo-agent) - spawn background agents
 """
 
-from typing import Optional
 
 # Core role definition
 STRAVINSKY_ROLE_SECTION = """<Role>

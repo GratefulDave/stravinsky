@@ -11,7 +11,7 @@ Detects and auto-processes slash commands in user input:
 import logging
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 SLASH_COMMAND_PATTERN = re.compile(r'(?:^|(?<=\s))\/([a-zA-Z][a-zA-Z0-9_-]*)\b', re.MULTILINE)
 
 
-def extract_slash_commands(text: str) -> List[str]:
+def extract_slash_commands(text: str) -> list[str]:
     """
     Extract all slash command names from text.
 
@@ -40,7 +40,7 @@ def extract_slash_commands(text: str) -> List[str]:
     return unique
 
 
-def load_skill_content(command_name: str, project_path: Optional[str] = None) -> Optional[Tuple[str, str]]:
+def load_skill_content(command_name: str, project_path: str | None = None) -> tuple[str, str] | None:
     """
     Load skill content by command name.
 
@@ -92,7 +92,7 @@ def load_skill_content(command_name: str, project_path: Optional[str] = None) ->
         return None
 
 
-def get_project_path_from_prompt(prompt: str) -> Optional[str]:
+def get_project_path_from_prompt(prompt: str) -> str | None:
     """
     Try to extract project path from prompt context.
     Looks for common patterns that indicate the working directory.
@@ -126,7 +126,7 @@ SKILL_NOT_FOUND_WARNING = """
 """
 
 
-async def auto_slash_command_hook(params: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+async def auto_slash_command_hook(params: dict[str, Any]) -> dict[str, Any] | None:
     """
     Pre-model invoke hook that detects slash commands and injects skill content.
 

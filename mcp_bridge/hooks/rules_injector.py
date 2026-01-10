@@ -35,7 +35,7 @@ import re
 from dataclasses import dataclass
 from fnmatch import fnmatch
 from pathlib import Path
-from typing import Any, Dict, Optional, Set
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -44,8 +44,8 @@ MAX_RULES_TOKENS = 4000  # Reserve max 4k tokens for rules
 TOKEN_ESTIMATE_RATIO = 4  # ~4 chars per token (conservative)
 
 # Session-scoped caches
-_rules_injection_cache: Dict[str, Set[str]] = {}
-_session_rules_cache: Dict[str, list] = {}
+_rules_injection_cache: dict[str, set[str]] = {}
+_session_rules_cache: dict[str, list] = {}
 
 
 @dataclass(frozen=True)
@@ -128,7 +128,7 @@ def parse_frontmatter(content: str) -> tuple[dict[str, Any], str]:
     return metadata, body
 
 
-def discover_rules(project_path: Optional[str] = None) -> list[RuleFile]:
+def discover_rules(project_path: str | None = None) -> list[RuleFile]:
     """
     Discover all rule files from .claude/rules/ directories.
 
@@ -212,7 +212,7 @@ def discover_rules(project_path: Optional[str] = None) -> list[RuleFile]:
     return rules
 
 
-def extract_file_paths_from_context(params: Dict[str, Any]) -> Set[str]:
+def extract_file_paths_from_context(params: dict[str, Any]) -> set[str]:
     """
     Extract file paths from prompt context.
 
@@ -248,7 +248,7 @@ def extract_file_paths_from_context(params: Dict[str, Any]) -> Set[str]:
     return paths
 
 
-def match_rules_to_files(rules: list[RuleFile], file_paths: Set[str], project_path: str) -> list[RuleFile]:
+def match_rules_to_files(rules: list[RuleFile], file_paths: set[str], project_path: str) -> list[RuleFile]:
     """
     Match discovered rules to active file paths using glob patterns.
 
@@ -282,15 +282,7 @@ def match_rules_to_files(rules: list[RuleFile], file_paths: Set[str], project_pa
                 matched_this_pattern = False
 
                 # Match absolute path
-                if fnmatch(str(path), glob_pattern):
-                    matched_this_pattern = True
-
-                # Match relative path
-                elif relative_path and fnmatch(relative_path, glob_pattern):
-                    matched_this_pattern = True
-
-                # Match filename only (for patterns like "*.py")
-                elif fnmatch(path.name, glob_pattern):
+                if fnmatch(str(path), glob_pattern) or relative_path and fnmatch(relative_path, glob_pattern) or fnmatch(path.name, glob_pattern):
                     matched_this_pattern = True
 
                 if matched_this_pattern:
@@ -383,13 +375,13 @@ def format_rules_injection(rules: list[RuleFile]) -> str:
     return header + "\n".join(rules_blocks)
 
 
-def get_session_cache_key(session_id: str, file_paths: Set[str]) -> str:
+def get_session_cache_key(session_id: str, file_paths: set[str]) -> str:
     """Generate cache key for session + file combination."""
     sorted_paths = "|".join(sorted(file_paths))
     return f"{session_id}:{sorted_paths}"
 
 
-def is_already_injected(session_id: str, file_paths: Set[str], rule_names: list[str]) -> bool:
+def is_already_injected(session_id: str, file_paths: set[str], rule_names: list[str]) -> bool:
     """
     Check if rules have already been injected for this session + file combination.
 
@@ -434,7 +426,7 @@ def get_cached_rules(session_id: str, project_path: str) -> list[RuleFile]:
     return _session_rules_cache[cache_key]
 
 
-def get_project_path_from_prompt(prompt: str) -> Optional[str]:
+def get_project_path_from_prompt(prompt: str) -> str | None:
     """Extract project path from prompt if available."""
     # Look for common working directory indicators
     patterns = [
@@ -452,7 +444,7 @@ def get_project_path_from_prompt(prompt: str) -> Optional[str]:
     return str(Path.cwd())
 
 
-async def rules_injector_hook(params: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+async def rules_injector_hook(params: dict[str, Any]) -> dict[str, Any] | None:
     """
     Pre-model-invoke hook for automatic rules injection.
 

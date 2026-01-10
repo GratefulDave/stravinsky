@@ -8,7 +8,6 @@ Stores OAuth tokens securely using the OS keyring:
 """
 
 import json
-import os
 import time
 from pathlib import Path
 from typing import TypedDict

@@ -1,12 +1,5 @@
 # Agent prompts module
-from . import stravinsky
-from . import delphi
-from . import dewey
-from . import explore
-from . import frontend
-from . import document_writer
-from . import multimodal
-from . import planner
+from . import delphi, dewey, document_writer, explore, frontend, multimodal, planner, stravinsky
 
 __all__ = [
     "stravinsky",

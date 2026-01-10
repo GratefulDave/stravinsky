@@ -3,7 +3,7 @@ Preemptive context compaction hook.
 Monitors context size and injects optimization reminders.
 """
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 THRESHOLD_CHARS = 100000 # Roughly 25k-30k tokens for typical LLM text
 
@@ -17,7 +17,7 @@ COMPACTION_REMINDER = """
 > 4. Keep your next responses concise and focused only on the current sub-task.
 """
 
-async def context_compaction_hook(params: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+async def context_compaction_hook(params: dict[str, Any]) -> dict[str, Any] | None:
     """
     Checks prompt length and injects a compaction reminder if it's too large.
     """

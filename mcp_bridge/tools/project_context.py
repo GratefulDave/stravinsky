@@ -10,12 +10,11 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional
 
 from ..auth.token_store import TokenStore
 
 
-async def get_project_context(project_path: Optional[str] = None) -> str:
+async def get_project_context(project_path: str | None = None) -> str:
     """
     Summarize project environment: Git status, local rules, and pending todos.
     

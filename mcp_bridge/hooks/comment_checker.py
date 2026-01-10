@@ -6,8 +6,7 @@ Code should be self-documenting; excessive comments indicate AI slop.
 """
 
 import logging
-import re
-from typing import Any, Dict, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -53,8 +52,8 @@ CODE_EXTENSIONS = {
 
 
 async def comment_checker_hook(
-    tool_name: str, arguments: Dict[str, Any], output: str
-) -> Optional[str]:
+    tool_name: str, arguments: dict[str, Any], output: str
+) -> str | None:
     """
     Post-tool call hook that checks for excessive comments in code edits.
     """

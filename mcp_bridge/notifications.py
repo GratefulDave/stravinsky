@@ -14,7 +14,6 @@ import logging
 import platform
 import subprocess
 from pathlib import Path
-from typing import Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +34,7 @@ class NotificationManager:
         title: str, 
         message: str, 
         sound: bool = True
-    ) -> Optional[list]:
+    ) -> list | None:
         """Get platform-specific notification command."""
         if self.system == "Darwin":  # macOS
             script = f'display notification "{message}" with title "{title}"'
@@ -113,7 +112,7 @@ $toast = New-Object Windows.UI.Notifications.ToastNotification $xml
         message = f"Indexing {path}..."
         return self._send_notification_sync(title, message, sound=True)
     
-    async def notify_reindex_complete(self, stats: Dict) -> bool:
+    async def notify_reindex_complete(self, stats: dict) -> bool:
         """Notify that codebase reindexing is complete."""
         indexed = stats.get("indexed", 0)
         pruned = stats.get("pruned", 0)
@@ -134,7 +133,7 @@ $toast = New-Object Windows.UI.Notifications.ToastNotification $xml
 
 
 # Global singleton instance
-_notification_manager: Optional[NotificationManager] = None
+_notification_manager: NotificationManager | None = None
 
 
 def get_notification_manager() -> NotificationManager:

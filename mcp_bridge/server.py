@@ -7,22 +7,21 @@ Optimized for extremely fast startup and protocol compliance:
 - Robust crash logging to stderr and /tmp.
 """
 
-import sys
-import os
 import asyncio
 import logging
+import os
+import sys
 import time
 from typing import Any
 
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import (
-    Tool,
-    TextContent,
-    Resource,
+    GetPromptResult,
     Prompt,
     PromptMessage,
-    GetPromptResult,
+    TextContent,
+    Tool,
 )
 
 from . import __version__
@@ -38,8 +37,9 @@ logger = logging.getLogger(__name__)
 # --- LOAD .env FILES (GEMINI_API_KEY, etc.) ---
 # Load from ~/.stravinsky/.env (dedicated config location)
 try:
-    from dotenv import load_dotenv
     from pathlib import Path
+
+    from dotenv import load_dotenv
 
     # Load from ~/.env (user-global, lowest priority)
     home_env = Path.home() / ".env"
@@ -496,8 +496,9 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             )
 
         elif name == "start_file_watcher":
-            from .tools.semantic_search import start_file_watcher
             import json
+
+            from .tools.semantic_search import start_file_watcher
 
             try:
                 watcher = await start_file_watcher(
@@ -531,8 +532,9 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 traceback.print_exc(file=sys.stderr)
 
         elif name == "stop_file_watcher":
-            from .tools.semantic_search import stop_file_watcher
             import json
+
+            from .tools.semantic_search import stop_file_watcher
 
             stopped = stop_file_watcher(
                 project_path=arguments.get("project_path", "."),
@@ -561,8 +563,9 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             )
 
         elif name == "list_file_watchers":
-            from .tools.semantic_search import list_file_watchers
             import json
+
+            from .tools.semantic_search import list_file_watchers
 
             result_content = json.dumps(list_file_watchers(), indent=2)
 
@@ -650,7 +653,7 @@ async def list_prompts() -> list[Prompt]:
 @server.get_prompt()
 async def get_prompt(name: str, arguments: dict[str, str] | None) -> GetPromptResult:
     """Get a specific prompt content (lazy loaded)."""
-    from .prompts import stravinsky, delphi, dewey, explore, frontend, document_writer, multimodal
+    from .prompts import delphi, dewey, document_writer, explore, frontend, multimodal, stravinsky
 
     prompts_map = {
         "stravinsky": ("Stravinsky orchestrator system prompt", stravinsky.get_stravinsky_prompt),
@@ -715,7 +718,7 @@ async def async_main():
                 write_stream,
                 server.create_initialization_options(),
             )
-    except Exception as e:
+    except Exception:
         logger.critical("Server process crashed in async_main", exc_info=True)
         sys.exit(1)
     finally:
@@ -729,9 +732,9 @@ async def async_main():
 def main():
     """Synchronous entry point with CLI arg handling."""
     import argparse
-    import sys
-    from .tools.agent_manager import get_manager
+
     from .auth.token_store import TokenStore
+    from .tools.agent_manager import get_manager
 
     parser = argparse.ArgumentParser(
         description="Stravinsky MCP Bridge - Multi-model AI orchestration for Claude Code. "

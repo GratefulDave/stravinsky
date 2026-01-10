@@ -16,8 +16,6 @@ Exit codes:
 import json
 import sys
 from pathlib import Path
-from typing import Optional, Tuple
-
 
 STRAVINSKY_MODE_FILE = Path.home() / ".stravinsky_mode"
 
@@ -27,7 +25,7 @@ def is_stravinsky_mode() -> bool:
     return STRAVINSKY_MODE_FILE.exists()
 
 
-def extract_subagent_info(hook_input: dict) -> Tuple[str, str, str]:
+def extract_subagent_info(hook_input: dict) -> tuple[str, str, str]:
     """
     Extract subagent information from hook input.
 

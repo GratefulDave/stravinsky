@@ -2303,9 +2303,9 @@ async def start_file_watcher(
                     )
 
                 # Index exists - catch up on any missed changes
-                print(f"📋 Catching up on changes since last index...", file=sys.stderr)
+                print("📋 Catching up on changes since last index...", file=sys.stderr)
                 await store.index_codebase(force=False)
-                print(f"✅ Index updated, starting file watcher", file=sys.stderr)
+                print("✅ Index updated, starting file watcher", file=sys.stderr)
 
             except ValueError:
                 # Re-raise ValueError (our intentional error)
@@ -2901,6 +2901,7 @@ class DedicatedIndexingWorker:
     async def _do_reindex(self) -> None:
         """Execute reindex with retry logic for ALL error types."""
         import sqlite3
+
         from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
         @retry(
@@ -2945,7 +2946,7 @@ class DedicatedIndexingWorker:
         if self._thread is not None and self._thread.is_alive():
             self._thread.join(timeout=10)  # Wait up to 10 seconds
             if self._thread.is_alive():
-                self._log_error(f"⚠️ Worker thread failed to stop within timeout")
+                self._log_error("⚠️ Worker thread failed to stop within timeout")
             self._thread = None
         logger.info("Indexing worker shut down")
 

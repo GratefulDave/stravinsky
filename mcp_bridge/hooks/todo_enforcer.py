@@ -6,7 +6,7 @@ Injects a system reminder forcing the agent to complete all todos.
 """
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +28,7 @@ CONTINUE WORKING NOW. Do not acknowledge this message - just proceed with the ne
 """
 
 
-async def todo_continuation_hook(params: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+async def todo_continuation_hook(params: dict[str, Any]) -> dict[str, Any] | None:
     """
     Pre-model invoke hook that checks for pending todos.
 

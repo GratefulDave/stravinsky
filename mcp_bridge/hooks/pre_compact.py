@@ -13,10 +13,9 @@ Cannot block compaction (exit 2 only shows error).
 
 import json
 import sys
-from pathlib import Path
 from datetime import datetime
-from typing import List, Dict, Any
-
+from pathlib import Path
+from typing import Any
 
 STRAVINSKY_MODE_FILE = Path.home() / ".stravinsky_mode"
 STATE_DIR = Path.home() / ".claude" / "state"
@@ -43,18 +42,18 @@ def ensure_state_dir():
     STATE_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def get_stravinsky_mode_state() -> Dict[str, Any]:
+def get_stravinsky_mode_state() -> dict[str, Any]:
     """Read stravinsky mode state."""
     if not STRAVINSKY_MODE_FILE.exists():
         return {"active": False}
     try:
         content = STRAVINSKY_MODE_FILE.read_text().strip()
         return json.loads(content) if content else {"active": True}
-    except (json.JSONDecodeError, IOError):
+    except (OSError, json.JSONDecodeError):
         return {"active": True}
 
 
-def extract_preserved_context(prompt: str) -> List[str]:
+def extract_preserved_context(prompt: str) -> list[str]:
     """Extract context matching preservation patterns."""
     preserved = []
     lines = prompt.split("\n")
@@ -70,7 +69,7 @@ def extract_preserved_context(prompt: str) -> List[str]:
     return preserved[:15]  # Max 15 items
 
 
-def log_compaction(preserved: List[str], stravinsky_active: bool):
+def log_compaction(preserved: list[str], stravinsky_active: bool):
     """Log compaction event for audit."""
     ensure_state_dir()
 
@@ -84,7 +83,7 @@ def log_compaction(preserved: List[str], stravinsky_active: bool):
     try:
         with COMPACTION_LOG.open("a") as f:
             f.write(json.dumps(entry) + "\n")
-    except IOError:
+    except OSError:
         pass
 
 

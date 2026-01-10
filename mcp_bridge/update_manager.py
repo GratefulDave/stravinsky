@@ -17,19 +17,19 @@ import json
 import logging
 import shutil
 import sys
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any
-from dataclasses import dataclass, asdict
+from typing import Any
 
 
 @dataclass
 class MergeConflict:
     """Represents a merge conflict for a file."""
     file_path: str
-    base_version: Optional[str]
-    user_version: Optional[str]
-    new_version: Optional[str]
+    base_version: str | None
+    user_version: str | None
+    new_version: str | None
     conflict_type: str
 
 
@@ -38,13 +38,13 @@ class UpdateManifest:
     """Manifest tracking file versions and update status."""
     version: str
     timestamp: str
-    files: Dict[str, str]
+    files: dict[str, str]
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
     @staticmethod
-    def from_dict(data: Dict[str, Any]) -> 'UpdateManifest':
+    def from_dict(data: dict[str, Any]) -> 'UpdateManifest':
         return UpdateManifest(
             version=data.get('version', ''),
             timestamp=data.get('timestamp', ''),
@@ -102,7 +102,7 @@ class UpdateManager:
         except Exception:
             return "unknown"
 
-    def _load_manifest(self, manifest_type: str) -> Optional[UpdateManifest]:
+    def _load_manifest(self, manifest_type: str) -> UpdateManifest | None:
         """Load manifest file (base, user, new)."""
         manifest_path = self.manifest_dir / f"{manifest_type}_manifest.json"
 
@@ -132,7 +132,7 @@ class UpdateManager:
             self.logger.error(f"Failed to save manifest: {e}")
             return False
 
-    def _create_backup(self, source_dir: Path, backup_name: str) -> Optional[Path]:
+    def _create_backup(self, source_dir: Path, backup_name: str) -> Path | None:
         """Create timestamped backup of directory."""
         if self.dry_run:
             return None
@@ -151,7 +151,7 @@ class UpdateManager:
             self.logger.error(f"Failed to create backup: {e}")
             return None
 
-    def _read_file_safely(self, path: Path) -> Optional[str]:
+    def _read_file_safely(self, path: Path) -> str | None:
         """Read file with error handling."""
         try:
             if not path.exists():
@@ -179,11 +179,11 @@ class UpdateManager:
 
     def _detect_conflicts(
         self,
-        base: Optional[str],
-        user: Optional[str],
-        new: Optional[str],
+        base: str | None,
+        user: str | None,
+        new: str | None,
         file_path: str
-    ) -> Optional[MergeConflict]:
+    ) -> MergeConflict | None:
         """Detect merge conflicts using 3-way merge logic."""
         if new == base:
             return None
@@ -210,18 +210,16 @@ class UpdateManager:
 
     def _merge_3way(
         self,
-        base: Optional[str],
-        user: Optional[str],
-        new: Optional[str],
+        base: str | None,
+        user: str | None,
+        new: str | None,
         file_path: str
-    ) -> Tuple[str, bool]:
+    ) -> tuple[str, bool]:
         """Perform 3-way merge on file content."""
         if base is None:
             if user is None:
                 return new or "", False
-            elif new is None:
-                return user, False
-            elif user == new:
+            elif new is None or user == new:
                 return user, False
             else:
                 return self._format_conflict_markers(user, new), True
@@ -247,7 +245,7 @@ class UpdateManager:
 
         return user, False
 
-    def _line_based_merge(self, base: str, user: str, new: str) -> Tuple[str, bool]:
+    def _line_based_merge(self, base: str, user: str, new: str) -> tuple[str, bool]:
         """Perform line-based merge for text conflicts."""
         base_lines = base.splitlines(keepends=True)
         user_lines = user.splitlines(keepends=True)
@@ -262,9 +260,7 @@ class UpdateManager:
                     merged.append(u)
                 elif u == b and n != b:
                     merged.append(n)
-                elif n == b and u != b:
-                    merged.append(u)
-                elif u == n:
+                elif n == b and u != b or u == n:
                     merged.append(u)
                 else:
                     merged.append(f"<<<<<<< {u}======= {n}>>>>>>> ")
@@ -279,7 +275,7 @@ class UpdateManager:
 
         return "".join(merged), has_conflict
 
-    def _format_conflict_markers(self, user: Optional[str], new: Optional[str]) -> str:
+    def _format_conflict_markers(self, user: str | None, new: str | None) -> str:
         """Format conflict markers for display."""
         lines = ["<<<<<<< USER VERSION\n"]
         if user:
@@ -294,7 +290,7 @@ class UpdateManager:
         lines.append(">>>>>>> NEW VERSION\n")
         return "".join(lines)
 
-    def _preserve_statusline(self, settings_file: Path) -> Optional[Dict[str, Any]]:
+    def _preserve_statusline(self, settings_file: Path) -> dict[str, Any] | None:
         """Read and preserve statusline from settings.json."""
         try:
             if not settings_file.exists():
@@ -310,10 +306,10 @@ class UpdateManager:
 
     def _merge_settings_json(
         self,
-        base: Optional[Dict[str, Any]],
-        user: Optional[Dict[str, Any]],
-        new: Optional[Dict[str, Any]]
-    ) -> Tuple[Dict[str, Any], List[MergeConflict]]:
+        base: dict[str, Any] | None,
+        user: dict[str, Any] | None,
+        new: dict[str, Any] | None
+    ) -> tuple[dict[str, Any], list[MergeConflict]]:
         """Merge settings.json with special handling for hooks and statusline."""
         conflicts = []
 
@@ -369,9 +365,9 @@ class UpdateManager:
 
     def update_hooks(
         self,
-        new_hooks: Dict[str, str],
+        new_hooks: dict[str, str],
         stravinsky_version: str
-    ) -> Tuple[bool, List[MergeConflict]]:
+    ) -> tuple[bool, list[MergeConflict]]:
         """Update hooks with 3-way merge and conflict detection."""
         self.logger.info(f"Starting hooks update to version {stravinsky_version}")
 
@@ -430,7 +426,7 @@ class UpdateManager:
         self.logger.info(f"Hooks update completed ({len(updated_files)} files updated)")
         return True, conflicts
 
-    def update_settings_json(self, new_settings: Dict[str, Any]) -> Tuple[bool, List[MergeConflict]]:
+    def update_settings_json(self, new_settings: dict[str, Any]) -> tuple[bool, list[MergeConflict]]:
         """Update settings.json with hook merging and statusline preservation."""
         self.logger.info("Starting settings.json update")
 
@@ -495,7 +491,7 @@ class UpdateManager:
 
         return success
 
-    def verify_integrity(self) -> Tuple[bool, List[str]]:
+    def verify_integrity(self) -> tuple[bool, list[str]]:
         """Verify integrity of installed hooks and settings."""
         issues = []
         hooks_dir = self.global_claude_dir / "hooks"
@@ -524,7 +520,7 @@ class UpdateManager:
 
         return len(issues) == 0, issues
 
-    def list_backups(self) -> List[Dict[str, Any]]:
+    def list_backups(self) -> list[dict[str, Any]]:
         """List all available backups."""
         backups = []
 

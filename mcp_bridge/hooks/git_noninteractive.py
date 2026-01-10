@@ -7,7 +7,7 @@ Prevents git interactive command hangs by prepending environment variables.
 import logging
 import re
 import shlex
-from typing import Any, Dict, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -41,8 +41,8 @@ def escape_shell_arg(arg: str) -> str:
 
 
 async def git_noninteractive_hook(
-    tool_name: str, arguments: Dict[str, Any]
-) -> Optional[Dict[str, Any]]:
+    tool_name: str, arguments: dict[str, Any]
+) -> dict[str, Any] | None:
     """
     Pre-tool-call hook that prepends non-interactive env vars to git commands.
 
@@ -79,7 +79,7 @@ async def git_noninteractive_hook(
         )
         modified_command = f"{env_prefix} {command}"
 
-        logger.info(f"[GitNonInteractive] Prepending non-interactive env vars to git command")
+        logger.info("[GitNonInteractive] Prepending non-interactive env vars to git command")
 
         # Return modified arguments
         modified_args = arguments.copy()

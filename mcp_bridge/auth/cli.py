@@ -17,13 +17,16 @@ import argparse
 import sys
 import time
 
-from .token_store import TokenStore
 from ..tools.init import bootstrap_repo
-from .oauth import perform_oauth_flow as gemini_oauth, refresh_access_token as gemini_refresh
+from .oauth import perform_oauth_flow as gemini_oauth
+from .oauth import refresh_access_token as gemini_refresh
 from .openai_oauth import (
     perform_oauth_flow as openai_oauth,
+)
+from .openai_oauth import (
     refresh_access_token as openai_refresh,
 )
+from .token_store import TokenStore
 
 
 def cmd_login(provider: str, token_store: TokenStore) -> int:
@@ -34,7 +37,7 @@ def cmd_login(provider: str, token_store: TokenStore) -> int:
     For OpenAI: Uses OpenAI OAuth (ChatGPT Plus/Pro subscription)
     """
     if provider == "gemini":
-        print(f"Starting Google OAuth for Gemini...")
+        print("Starting Google OAuth for Gemini...")
 
         try:
             result = gemini_oauth()
@@ -57,7 +60,7 @@ def cmd_login(provider: str, token_store: TokenStore) -> int:
             return 1
 
     elif provider == "openai":
-        print(f"Starting OpenAI OAuth for ChatGPT Plus/Pro...")
+        print("Starting OpenAI OAuth for ChatGPT Plus/Pro...")
         print("Note: Requires ChatGPT Plus/Pro subscription and port 1455 available")
 
         try:
@@ -72,7 +75,7 @@ def cmd_login(provider: str, token_store: TokenStore) -> int:
                 expires_at=expires_at,
             )
 
-            print(f"\n✓ Successfully authenticated with OpenAI")
+            print("\n✓ Successfully authenticated with OpenAI")
             print(f"  Token expires in: {result.expires_in // 60} minutes")
             return 0
 
@@ -116,7 +119,7 @@ def cmd_status(token_store: TokenStore) -> int:
                     minutes = (remaining % 3600) // 60
                     print(f"    Expires in: {hours}h {minutes}m")
                 else:
-                    print(f"    Token expired")
+                    print("    Token expired")
 
     print()
     return 0

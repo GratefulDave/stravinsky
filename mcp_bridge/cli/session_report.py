@@ -8,8 +8,6 @@ Optionally uses Gemini for session summarization.
 
 import argparse
 import json
-import os
-import re
 import sys
 from collections import Counter
 from datetime import datetime
@@ -22,7 +20,6 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 from rich.text import Text
 from rich.tree import Tree
-
 
 console = Console()
 

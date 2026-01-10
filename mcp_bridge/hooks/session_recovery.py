@@ -10,8 +10,7 @@ Detects and recovers from corrupted sessions:
 
 import logging
 import re
-import json
-from typing import Any, Dict, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +79,7 @@ Recommended Actions:
 """
 
 
-def detect_corruption(output: str) -> Optional[str]:
+def detect_corruption(output: str) -> str | None:
     """
     Detect if the output shows signs of corruption.
 
@@ -135,9 +134,9 @@ def get_recovery_hint(tool_name: str, issue: str) -> str:
 
 async def session_recovery_hook(
     tool_name: str,
-    arguments: Dict[str, Any],
+    arguments: dict[str, Any],
     output: str
-) -> Optional[str]:
+) -> str | None:
     """
     Post-tool call hook that detects corrupted results and injects recovery information.
 

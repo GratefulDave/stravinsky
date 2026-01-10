@@ -6,7 +6,7 @@ suggests using background agents for more comprehensive results.
 """
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -28,8 +28,8 @@ SEARCH_TOOLS = {"grep", "glob", "rg", "find", "Grep", "Glob", "grep_search", "gl
 
 
 async def agent_reminder_hook(
-    tool_name: str, arguments: Dict[str, Any], output: str
-) -> Optional[str]:
+    tool_name: str, arguments: dict[str, Any], output: str
+) -> str | None:
     """
     Post-tool call hook that suggests background agents after direct search tool usage.
     """
@@ -51,7 +51,7 @@ async def agent_reminder_hook(
     return None
 
 
-def _extract_search_context(arguments: Dict[str, Any]) -> str:
+def _extract_search_context(arguments: dict[str, Any]) -> str:
     """Extract search context from tool arguments."""
     for key in ("pattern", "query", "search", "name", "path"):
         if key in arguments:

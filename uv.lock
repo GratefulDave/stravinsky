@@ -2171,7 +2171,7 @@ wheels = [
 
 [[package]]
 name = "stravinsky"
-version = "0.4.24"
+version = "0.4.31"
 source = { editable = "." }
 dependencies = [
     { name = "aiofiles" },

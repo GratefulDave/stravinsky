@@ -5,17 +5,13 @@ Provides mechanisms to spawn, monitor, and manage async sub-agents.
 Tasks are persisted to .stravinsky/tasks.json.
 """
 
-import asyncio
 import json
-import os
 import subprocess
 import sys
-import time
-import uuid
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 @dataclass
@@ -25,15 +21,15 @@ class BackgroundTask:
     model: str
     status: str  # pending, running, completed, failed
     created_at: str
-    started_at: Optional[str] = None
-    completed_at: Optional[str] = None
-    result: Optional[str] = None
-    error: Optional[str] = None
-    pid: Optional[int] = None
+    started_at: str | None = None
+    completed_at: str | None = None
+    result: str | None = None
+    error: str | None = None
+    pid: int | None = None
 
 
 class BackgroundManager:
-    def __init__(self, base_dir: Optional[str] = None):
+    def __init__(self, base_dir: str | None = None):
         if base_dir:
             self.base_dir = Path(base_dir)
         else:
@@ -49,14 +45,14 @@ class BackgroundManager:
         if not self.state_file.exists():
             self._save_tasks({})
 
-    def _load_tasks(self) -> Dict[str, Any]:
+    def _load_tasks(self) -> dict[str, Any]:
         try:
-            with open(self.state_file, "r") as f:
+            with open(self.state_file) as f:
                 return json.load(f)
         except (json.JSONDecodeError, FileNotFoundError):
             return {}
 
-    def _save_tasks(self, tasks: Dict[str, Any]):
+    def _save_tasks(self, tasks: dict[str, Any]):
         with open(self.state_file, "w") as f:
             json.dump(tasks, f, indent=2)
 
@@ -82,11 +78,11 @@ class BackgroundManager:
             tasks[task_id].update(kwargs)
             self._save_tasks(tasks)
 
-    def get_task(self, task_id: str) -> Optional[Dict[str, Any]]:
+    def get_task(self, task_id: str) -> dict[str, Any] | None:
         tasks = self._load_tasks()
         return tasks.get(task_id)
 
-    def list_tasks(self) -> List[Dict[str, Any]]:
+    def list_tasks(self) -> list[dict[str, Any]]:
         tasks = self._load_tasks()
         return list(tasks.values())
 

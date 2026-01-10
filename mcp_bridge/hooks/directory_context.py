@@ -3,11 +3,11 @@ Directory context injector hook.
 Automatically finds and injects local AGENTS.md or README.md content based on the current context.
 """
 
-import os
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
-async def directory_context_hook(params: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+
+async def directory_context_hook(params: dict[str, Any]) -> dict[str, Any] | None:
     """
     Search for AGENTS.md or README.md in the current working directory and inject them.
     """

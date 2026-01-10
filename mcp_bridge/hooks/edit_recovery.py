@@ -1,7 +1,8 @@
-import os
-import sys
 import json
+import os
 import re
+import sys
+
 
 def main():
     # Claude Code PostToolUse inputs via Environment Variables

@@ -6,7 +6,7 @@ Detects and warns about empty or failed Task tool execution results.
 
 import logging
 import re
-from typing import Any, Dict, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +38,7 @@ Recommended actions:
 
 
 async def task_validator_hook(
-    tool_name: str, tool_input: Dict[str, Any], tool_response: str
+    tool_name: str, tool_input: dict[str, Any], tool_response: str
 ) -> str:
     """
     Post-tool-call hook that validates Task tool responses.

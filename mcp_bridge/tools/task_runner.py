@@ -6,12 +6,10 @@ capture output, and update status in tasks.json.
 """
 
 import argparse
+import asyncio
 import json
 import logging
 import os
-import sys
-import asyncio
-import subprocess
 from datetime import datetime
 from pathlib import Path
 
@@ -27,7 +25,7 @@ async def run_task(task_id: str, base_dir: str):
 
     # Load task details
     try:
-        with open(tasks_file, "r") as f:
+        with open(tasks_file) as f:
             tasks = json.load(f)
         task = tasks.get(task_id)
     except Exception as e:
@@ -83,7 +81,7 @@ async def run_task(task_id: str, base_dir: str):
             f.write(result)
 
         # Update status
-        with open(tasks_file, "r") as f:
+        with open(tasks_file) as f:
             tasks = json.load(f)
 
         if task_id in tasks:
@@ -104,7 +102,7 @@ async def run_task(task_id: str, base_dir: str):
 
         # Update status with error
         try:
-            with open(tasks_file, "r") as f:
+            with open(tasks_file) as f:
                 tasks = json.load(f)
             if task_id in tasks:
                 tasks[task_id].update(

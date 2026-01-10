@@ -6,7 +6,6 @@ to language servers. Claude Code has native LSP support, so these serve as
 supplementary utilities for advanced operations.
 """
 
-import asyncio
 import json
 import subprocess
 from pathlib import Path
@@ -234,7 +233,7 @@ async def grep_search(pattern: str, directory: str = ".", file_pattern: str = ""
         lines = output.strip().split("\n")
         if len(lines) > 50:
             lines = lines[:50]
-            lines.append(f"... and more (showing first 50 matches)")
+            lines.append("... and more (showing first 50 matches)")
         
         return "\n".join(lines)
         

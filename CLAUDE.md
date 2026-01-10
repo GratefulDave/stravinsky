@@ -261,10 +261,10 @@ For ANY task with 2+ independent steps:
 2.  Fire all agents simultaneously, don't wait
 3.  Monitor with agent_progress, collect with agent_output
 
-### ULTRATHINK / ULTRAWORK
+### ULTRATHINK / IRONSTAR
 
 - **ULTRATHINK**: Engage exhaustive deep reasoning, multi-dimensional analysis
-- **ULTRAWORK**: Maximum parallel execution - spawn agents aggressively for every subtask
+- **IRONSTAR**: Maximum parallel execution - spawn agents aggressively for every subtask
 
 ---
 

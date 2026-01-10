@@ -541,23 +541,32 @@ async def test_retry_on_service_recovery(vector_store, temp_project_dir, mock_pr
 @pytest.mark.asyncio
 async def test_search_finds_indexed_content(vector_store, temp_project_dir, mock_provider):
     """Test that semantic search finds indexed content."""
-    # Create and index file with distinctive content
+    # Create and index file with distinctive content (must be >=5 lines)
     test_file = temp_project_dir / "auth.py"
     test_file.write_text(
         """def authenticate_user(username, password):
     \"\"\"Authenticate user against database.\"\"\"
+    # Validate credentials
+    if not username or not password:
+        return False
     return check_credentials(username, password)
 """
     )
-    
-    await vector_store.index_codebase()
-    
+
+    stats = await vector_store.index_codebase()
+    assert stats["indexed"] > 0, f"Expected chunks to be indexed, got: {stats}"
+
     # Search for authentication-related content
     results = await vector_store.search("authentication")
-    
+
     # Should find the auth.py file
-    assert len(results) > 0
-    assert any("auth.py" in r.get("file", "") for r in results)
+    assert len(results) > 0, "Expected search results"
+    assert "error" not in results[0], f"Search failed: {results[0]}"
+
+    # Check if any result contains "auth.py" in the file path
+    files_found = [r.get("file", "") for r in results]
+    assert any("auth.py" in f for f in files_found), \
+        f"Expected 'auth.py' in results, got files: {files_found}"
 
 
 @pytest.mark.asyncio

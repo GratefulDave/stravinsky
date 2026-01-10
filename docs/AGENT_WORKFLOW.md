@@ -188,14 +188,14 @@ flowchart LR
 │    Examples:                                                      │
 │    - "/stravinsky implement authentication"                      │
 │    - "Add dark mode to the app"                                  │
-│    - "ultrawork - refactor the codebase"                         │
+│    - "ironstar - refactor the codebase"                          │
 └─────────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────────┐
 │ 2. UserPromptSubmit HOOKS (Run in Parallel)                      │
 ├─────────────────────────────────────────────────────────────────┤
 │ Hook 1: parallel_execution.py                                    │
-│   - Detects: /stravinsky, ultrawork, ultrathink, implementation  │
+│   - Detects: /stravinsky, ironstar, ultrathink, implementation  │
 │   - Action 1: CREATE ~/.stravinsky_mode marker file             │
 │   - Action 2: INJECT parallel execution instructions to prompt   │
 │   - Output: Modified prompt with [🔄 PARALLEL EXECUTION MODE]   │
@@ -249,7 +249,7 @@ flowchart LR
 │    - Phase 3: Relentless completion                              │
 │    - MANDATORY tool usage (MUST use Task, NOT Read/Grep)        │
 │    - 7-section delegation template                               │
-│    - ULTRAWORK/IRONSTAR mode                                     │
+│    - IRONSTAR mode                                               │
 │                                                                   │
 │    Key Constraints from Prompt:                                  │
 │    ❌ NEVER use Read/Grep/Bash directly                         │
@@ -594,7 +594,7 @@ BLOCKING (Wait for results) - Expensive or critical:
 ```python
 # ACTIVATION (parallel_execution.py)
 if detect_stravinsky_invocation(user_prompt):
-    # Patterns: /stravinsky, ultrawork, ultrathink, etc.
+    # Patterns: /stravinsky, ironstar, ultrathink, etc.
     create_file("~/.stravinsky_mode", content='{"active": true}')
     inject_parallel_instructions()
 

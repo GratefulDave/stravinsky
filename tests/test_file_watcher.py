@@ -217,9 +217,18 @@ class TestCodebaseFileWatcher:
 class TestModuleLevel:
     """Tests for module-level watcher management."""
 
-    def test_start_file_watcher(self, temp_project):
-        """Test starting a file watcher through module function."""
-        watcher = start_file_watcher(str(temp_project), provider="ollama")
+    @pytest.mark.asyncio
+    async def test_start_file_watcher(self, temp_project):
+        """Test starting a file watcher through module function.
+
+        Should automatically create index if it doesn't exist.
+        """
+        # Create a test file (must be >=5 lines for indexing)
+        test_file = temp_project / "test.py"
+        test_file.write_text("def test():\n    x = 1\n    y = 2\n    z = x + y\n    return z\n")
+
+        # Start watcher - should auto-create index if needed
+        watcher = await start_file_watcher(str(temp_project), provider="ollama")
         assert watcher is not None
         assert watcher.is_running()
 
@@ -227,9 +236,14 @@ class TestModuleLevel:
         assert stop_file_watcher(str(temp_project))
         assert not watcher.is_running()
 
-    def test_get_file_watcher(self, temp_project):
+    @pytest.mark.asyncio
+    async def test_get_file_watcher(self, temp_project):
         """Test getting an active file watcher."""
-        watcher = start_file_watcher(str(temp_project), provider="ollama")
+        # Create a test file (must be >=5 lines)
+        test_file = temp_project / "test.py"
+        test_file.write_text("def test():\n    x = 1\n    y = 2\n    z = x + y\n    return z\n")
+
+        watcher = await start_file_watcher(str(temp_project), provider="ollama")
 
         # Should be able to retrieve it
         retrieved = get_file_watcher(str(temp_project))
@@ -243,10 +257,15 @@ class TestModuleLevel:
         retrieved = get_file_watcher(str(temp_project))
         assert retrieved is None
 
-    def test_list_file_watchers(self, temp_project):
+    @pytest.mark.asyncio
+    async def test_list_file_watchers(self, temp_project):
         """Test listing active file watchers."""
+        # Create a test file (must be >=5 lines)
+        test_file = temp_project / "test.py"
+        test_file.write_text("def test():\n    x = 1\n    y = 2\n    z = x + y\n    return z\n")
+
         # Start a watcher
-        watcher = start_file_watcher(str(temp_project), provider="ollama")
+        watcher = await start_file_watcher(str(temp_project), provider="ollama")
 
         # Should appear in list
         watchers = list_file_watchers()

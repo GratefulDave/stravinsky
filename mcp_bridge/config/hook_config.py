@@ -155,7 +155,7 @@ HOOK_DEFAULTS = {
     },
     "parallel_execution": {
         "type": "PostToolUse",
-        "description": "Injects parallel execution and ULTRAWORK mode",
+        "description": "Injects parallel execution and IRONSTAR mode",
         "default_enabled": True,
         "exit_on_block": 0,
     },

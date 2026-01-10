@@ -2291,32 +2291,27 @@ async def start_file_watcher(
         if path not in _watchers:
             store = get_store(project_path, provider)
 
-            # Check if index exists - CRITICAL: Must have index before watching
+            # Check if index exists - create if missing, update if stale
             try:
                 stats = store.get_stats()
                 chunks_indexed = stats.get("chunks_indexed", 0)
+
                 if chunks_indexed == 0:
-                    raise ValueError(
-                        f"No semantic index found for '{path}'. "
-                        f"Run semantic_index(project_path='{path}', provider='{provider}') "
-                        f"before starting the file watcher."
-                    )
+                    # No index exists - create initial index
+                    print("📋 No index found, creating initial index...", file=sys.stderr)
+                    await store.index_codebase(force=False)
+                    print("✅ Initial index created, starting file watcher", file=sys.stderr)
+                else:
+                    # Index exists - catch up on any missed changes since watcher was off
+                    print("📋 Catching up on changes since last index...", file=sys.stderr)
+                    await store.index_codebase(force=False)
+                    print("✅ Index updated, starting file watcher", file=sys.stderr)
 
-                # Index exists - catch up on any missed changes
-                print("📋 Catching up on changes since last index...", file=sys.stderr)
-                await store.index_codebase(force=False)
-                print("✅ Index updated, starting file watcher", file=sys.stderr)
-
-            except ValueError:
-                # Re-raise ValueError (our intentional error)
-                raise
             except Exception as e:
-                # Collection doesn't exist or other error
-                raise ValueError(
-                    f"No semantic index found for '{path}'. "
-                    f"Run semantic_index(project_path='{path}', provider='{provider}') "
-                    f"before starting the file watcher."
-                ) from e
+                # Failed to index - log and create watcher anyway (it will index on file changes)
+                logger.warning(f"Failed to index before starting watcher: {e}")
+                print(f"⚠️  Warning: Could not index project: {e}", file=sys.stderr)
+                print("🔄 Starting watcher anyway - will index on first file change", file=sys.stderr)
 
             watcher = store.start_watching(debounce_seconds=debounce_seconds)
             _watchers[path] = watcher

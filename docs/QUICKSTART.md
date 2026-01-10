@@ -102,10 +102,10 @@ api = agent_output(explore_api)
 tests = agent_output(explore_tests)
 ```
 
-### ULTRAWORK / ULTRATHINK
+### IRONSTAR / ULTRATHINK
 
 For complex tasks, use special modes:
-- **ULTRAWORK**: Maximum parallel execution - spawn agents for every subtask
+- **IRONSTAR**: Maximum parallel execution - spawn agents for every subtask
 - **ULTRATHINK**: Extended reasoning with high thinking_budget for complex problems
 
 ### Slash Commands

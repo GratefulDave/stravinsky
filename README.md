@@ -178,25 +178,26 @@ Stravinsky uses **native Claude Code subagents** (.claude/agents/) with automati
 - **Blocking**: debugger (2+ failures), frontend (ALL visual), delphi (3+ failures or architecture)
 - **Never Work Alone**: Orchestrator blocks Read/Grep/Bash via PreToolUse hooks
 
-### ULTRATHINK / ULTRAWORK
+### ULTRATHINK / IRONSTAR
 
 - **ULTRATHINK**: Engage exhaustive deep reasoning with extended thinking budget (32k tokens)
-- **ULTRAWORK**: Maximum parallel execution - spawn all async agents immediately
+- **IRONSTAR**: Maximum parallel execution - spawn all async agents immediately
 
 ---
 
-## Tools (40)
+## Tools (47)
 
 | Category         | Tools                                                                              |
 | ---------------- | ---------------------------------------------------------------------------------- |
-| **Model Invoke** | `invoke_gemini`, `invoke_openai`, `get_system_health`                              |
-| **Environment**  | `get_project_context`, `task_spawn`, `task_status`, `task_list`                    |
-| **Agents**       | `agent_spawn`, `agent_output`, `agent_cancel`, `agent_list`, `agent_progress`, `agent_retry` |
-| **Code Search**  | `ast_grep_search`, `ast_grep_replace`, `grep_search`, `glob_files`                 |
-| **Semantic**     | `semantic_search`, `semantic_index`, `semantic_stats`, `cancel_indexing`, `delete_index` |
+| **Model Invoke** | `invoke_gemini`, `invoke_gemini_agentic`, `invoke_openai` (3 tools)                |
+| **Environment**  | `get_project_context`, `get_system_health`, `stravinsky_version`, `system_restart`, `semantic_health`, `lsp_health` (6 tools) |
+| **Background Tasks** | `task_spawn`, `task_status`, `task_list` (3 tools)                             |
+| **Agents**       | `agent_spawn`, `agent_output`, `agent_cancel`, `agent_list`, `agent_progress`, `agent_retry` (6 tools) |
+| **Code Search**  | `ast_grep_search`, `ast_grep_replace`, `grep_search`, `glob_files` (4 tools)       |
+| **Semantic**     | `semantic_search`, `hybrid_search`, `semantic_index`, `semantic_stats`, `start_file_watcher`, `stop_file_watcher`, `cancel_indexing`, `delete_index`, `list_file_watchers`, `multi_query_search`, `decomposed_search`, `enhanced_search` (12 tools) |
 | **LSP**          | `lsp_diagnostics`, `lsp_hover`, `lsp_goto_definition`, `lsp_find_references`, `lsp_document_symbols`, `lsp_workspace_symbols`, `lsp_prepare_rename`, `lsp_rename`, `lsp_code_actions`, `lsp_code_action_resolve`, `lsp_extract_refactor`, `lsp_servers` (12 tools) |
-| **Sessions**     | `session_list`, `session_read`, `session_search`                                   |
-| **Skills**       | `skill_list`, `skill_get`                                                          |
+| **Sessions**     | `session_list`, `session_read`, `session_search` (3 tools)                         |
+| **Skills**       | `skill_list`, `skill_get` (2 tools)                                                |
 
 ### LSP Performance & Refactoring
 

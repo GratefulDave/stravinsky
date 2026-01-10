@@ -13,15 +13,23 @@ Visit [Google AI Studio](https://aistudio.google.com/app/apikey) and create a fr
 
 ### Step 2: Add to Environment
 
-Add your API key to `.env` file in your project root:
+**IMPORTANT:** The environment variable must be named **`GEMINI_API_KEY`** (NOT `GEMINI_API_TOKEN`).
+
+Add your API key to `~/.stravinsky/.env` (user-global config):
 
 ```bash
-# Option 1: Use GEMINI_API_KEY
+# ~/.stravinsky/.env
+# CRITICAL: Variable name is GEMINI_API_KEY (it's a KEY, not a TOKEN)
 GEMINI_API_KEY=AIzaSyXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
-# Option 2: Use GOOGLE_API_KEY (same effect)
+# Or use GOOGLE_API_KEY (same effect)
 GOOGLE_API_KEY=AIzaSyXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 ```
+
+**File locations checked (in priority order):**
+1. `~/.stravinsky/.env` (RECOMMENDED - global for all projects)
+2. `~/.env` (fallback - global for user)
+3. Project-local `.env` (if using dotenv in your project)
 
 ### Step 3: Use Stravinsky
 
@@ -165,27 +173,55 @@ uv pip install google-genai
 google-genai>=0.2.0
 ```
 
+### Error: "GEMINI_API_TOKEN is not a valid variable"
+
+**CRITICAL:** The variable name is `GEMINI_API_KEY` (KEY, not TOKEN).
+
+❌ WRONG variable names:
+- `GEMINI_API_TOKEN` - doesn't exist
+- `GOOGLE_API_TOKEN` - doesn't exist
+- `GEMINI_TOKEN` - doesn't exist
+
+✅ CORRECT variable names:
+- `GEMINI_API_KEY` - recommended
+- `GOOGLE_API_KEY` - alias for GEMINI_API_KEY
+
+**Don't confuse with other tokens:**
+
+| Variable | Purpose | Notes |
+|----------|---------|-------|
+| `GEMINI_API_KEY` | Gemini auth | It's a KEY (doesn't have "token" in name) |
+| `PYPI_API_TOKEN` | PyPI publishing | This IS a token |
+| `OPENAI_API_KEY` | OpenAI auth | Also a KEY |
+
 ### Error: "API key request failed"
 
 **Possible causes:**
 
-1. **Invalid API key** - Double-check your key from Google AI Studio
-2. **API key not set** - Verify `GEMINI_API_KEY` is in `.env` and loaded
-3. **Quota exceeded** - Check your usage at Google AI Studio
-4. **Model not available** - Some models require special access
+1. **Wrong variable name** - Must be `GEMINI_API_KEY`, not `GEMINI_API_TOKEN`
+2. **Wrong file location** - Should be in `~/.stravinsky/.env`, not project `.env`
+3. **Invalid API key** - Double-check your key from Google AI Studio
+4. **API key not loaded** - Restart Claude Code after adding to `.env`
+5. **Quota exceeded** - Check your usage at Google AI Studio
+6. **Model not available** - Some models require special access
 
 **Solution:**
 
 ```bash
-# Verify environment variable is set
-echo $GEMINI_API_KEY
+# Step 1: Check file exists
+cat ~/.stravinsky/.env
+# Should show: GEMINI_API_KEY=AIza...
 
-# If empty, check your .env file
-cat .env | grep GEMINI_API_KEY
+# Step 2: Verify variable name is correct (not GEMINI_API_TOKEN!)
+grep "GEMINI_API_KEY" ~/.stravinsky/.env
 
-# Try loading .env manually
-source .env
-echo $GEMINI_API_KEY
+# Step 3: Fix if wrong variable name
+sed -i '' 's/GEMINI_API_TOKEN/GEMINI_API_KEY/g' ~/.stravinsky/.env
+
+# Step 4: Verify it's loaded
+python3 -c "import os; from pathlib import Path; from dotenv import load_dotenv; load_dotenv(Path.home() / '.stravinsky' / '.env'); print('GEMINI_API_KEY:', os.getenv('GEMINI_API_KEY')[:20] + '...' if os.getenv('GEMINI_API_KEY') else 'NOT FOUND')"
+
+# Step 5: Restart Claude Code completely
 ```
 
 ### Still Using OAuth When API Key is Set?

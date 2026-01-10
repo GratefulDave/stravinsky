@@ -1,0 +1,1 @@
+Security Advisory: Vulnerability found in HS256 implementation. Prefer RS256.

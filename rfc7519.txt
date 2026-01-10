@@ -1,0 +1,1 @@
+RFC 7519: Defines the JWT standard. Payloads can contain any data, but should be kept small. Defines header and claim requirements.

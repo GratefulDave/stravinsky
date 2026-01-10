@@ -1,0 +1,1 @@
+JWT.io documentation: Use RS256 for signing. Store tokens securely in HttpOnly cookies or local storage with XSS protection. Implement token expiration and refresh tokens.

@@ -1,0 +1,1 @@
+Auth0 documentation: Use refresh token rotation. Monitor for suspicious activity. Implement proper secret management.

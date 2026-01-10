@@ -1,0 +1,1 @@
+OWASP guidelines: Protect against XSS and CSRF. Validate JWT signatures. Use short expiration times. Consider token revocation.

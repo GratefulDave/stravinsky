@@ -2786,10 +2786,10 @@ async def enhanced_search(
 
 
 class DedicatedIndexingWorker:
-    """Single-threaded async worker for all indexing operations.
+    """Single-threaded worker for all indexing operations.
 
     Prevents concurrent indexing by serializing all operations through a queue.
-    Runs a persistent event loop to avoid creating/destroying loops repeatedly.
+    Uses asyncio.run() for each operation to avoid event loop reuse issues.
     """
 
     def __init__(self, store: "CodebaseVectorStore"):
@@ -2802,83 +2802,92 @@ class DedicatedIndexingWorker:
 
         self.store = store
         self._queue: queue.Queue = queue.Queue(maxsize=1)  # Max 1 pending request (debouncing)
-        self._loop = None
         self._thread: threading.Thread | None = None
         self._shutdown = threading.Event()
+        self._log_file = Path.home() / ".stravinsky" / "logs" / "file_watcher.log"
+        self._log_file.parent.mkdir(parents=True, exist_ok=True)
 
     def start(self) -> None:
-        """Start the worker thread with persistent event loop."""
+        """Start the worker thread."""
         if self._thread is not None and self._thread.is_alive():
             logger.warning("Indexing worker already running")
             return
 
-        self._thread = threading.Thread(target=self._run_worker, daemon=True, name="IndexingWorker")
+        self._shutdown.clear()
+        self._thread = threading.Thread(target=self._run_worker, daemon=False, name="IndexingWorker")
         self._thread.start()
-        logger.debug(f"Started indexing worker for {self.store.project_path}")
+        logger.info(f"Started indexing worker for {self.store.project_path}")
 
-    def _run_worker(self) -> None:
-        """Worker thread entry point - runs persistent event loop."""
-        import asyncio
-        import queue
+    def _log_error(self, msg: str, exc: Exception | None = None):
+        """Write error to log file with timestamp and full traceback."""
         import traceback
         from datetime import datetime
-        from pathlib import Path
 
-        # Setup error log file
-        log_dir = Path.home() / ".stravinsky" / "logs"
-        log_dir.mkdir(parents=True, exist_ok=True)
-        log_file = log_dir / "file_watcher.log"
-
-        def log_error(msg: str, exc: Exception | None = None):
-            """Write error to log file with timestamp and full traceback."""
-            timestamp = datetime.now().isoformat()
-            with open(log_file, "a") as f:
+        timestamp = datetime.now().isoformat()
+        try:
+            with open(self._log_file, "a") as f:
                 f.write(f"\n{'='*80}\n")
                 f.write(f"[{timestamp}] {msg}\n")
                 if exc:
                     f.write(f"Exception: {type(exc).__name__}: {exc}\n")
                     f.write(traceback.format_exc())
                 f.write(f"{'='*80}\n")
-            logger.error(f"{msg} (logged to {log_file})")
+        except Exception as log_exc:
+            logger.error(f"Failed to write to log file: {log_exc}")
+        logger.error(f"{msg} (logged to {self._log_file})")
 
-        # Create persistent event loop for this worker thread
-        self._loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(self._loop)
+    def _run_worker(self) -> None:
+        """Worker thread entry point - processes queue with asyncio.run() per operation."""
+        import queue
+
+        self._log_error(f"🟢 File watcher started for {self.store.project_path}")
 
         try:
             while not self._shutdown.is_set():
                 try:
                     # Wait for reindex request (blocking with timeout)
                     self._queue.get(timeout=0.5)
+                    self._queue.task_done()
 
-                    # Run indexing on persistent loop
-                    self._loop.run_until_complete(self._do_reindex())
+                    # Use asyncio.run() for each operation (creates fresh loop)
+                    # This avoids "event loop already running" errors
+                    try:
+                        asyncio.run(self._do_reindex())
+                        self._log_error(f"✅ Reindex completed for {self.store.project_path}")
+                    except Exception as e:
+                        self._log_error(f"⚠️ Reindex failed for {self.store.project_path}", e)
 
                 except queue.Empty:
                     continue  # No work, check shutdown flag
                 except Exception as e:
-                    log_error(f"⚠️ Indexing worker failed for {self.store.project_path}", e)
+                    self._log_error(f"⚠️ Queue processing error for {self.store.project_path}", e)
+
         except Exception as e:
-            log_error(f"⚠️ Worker thread crashed for {self.store.project_path}", e)
+            self._log_error(f"⚠️ Worker thread crashed for {self.store.project_path}", e)
         finally:
-            # Clean shutdown
-            self._loop.close()
+            self._log_error(f"🔴 File watcher stopped for {self.store.project_path}")
 
     async def _do_reindex(self) -> None:
-        """Execute reindex with retry logic."""
+        """Execute reindex with retry logic for ALL error types."""
+        import sqlite3
         from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
         @retry(
             stop=stop_after_attempt(3),
             wait=wait_exponential(multiplier=1, min=2, max=10),
-            retry=retry_if_exception_type((httpx.HTTPError, ConnectionError, TimeoutError)),
+            retry=retry_if_exception_type((
+                httpx.HTTPError,
+                ConnectionError,
+                TimeoutError,
+                sqlite3.OperationalError,  # Database locked
+                OSError,  # File system errors
+            )),
             reraise=True,
         )
         async def _indexed():
             await self.store.index_codebase(force=False)
 
         await _indexed()
-        logger.info("✅ Worker reindexed codebase for %s", self.store.project_path)
 
     def request_reindex(self, files: list[Path]) -> None:
         """Request reindex from any thread (thread-safe).
@@ -2898,11 +2907,16 @@ class DedicatedIndexingWorker:
 
     def shutdown(self) -> None:
         """Graceful shutdown of worker thread."""
+        if self._shutdown.is_set():
+            return  # Already shutting down
+
         self._shutdown.set()
-        if self._thread is not None:
-            self._thread.join(timeout=5)
+        if self._thread is not None and self._thread.is_alive():
+            self._thread.join(timeout=10)  # Wait up to 10 seconds
+            if self._thread.is_alive():
+                self._log_error(f"⚠️ Worker thread failed to stop within timeout")
             self._thread = None
-        logger.debug("Indexing worker shut down")
+        logger.info("Indexing worker shut down")
 
 
 class CodebaseFileWatcher:

@@ -51,12 +51,13 @@ def main():
     # Check if stravinsky mode is active
     stravinsky_active = is_stravinsky_mode()
 
-    # CRITICAL: Output urgent reminder for parallel Task spawning
+    # CRITICAL: Output urgent reminder for parallel agent spawning
+    # Use agent_spawn for /strav (MCP skill), Task for native subagents
     mode_warning = ""
     if stravinsky_active:
         mode_warning = """
 ⚠️ STRAVINSKY MODE ACTIVE - Direct tools (Read, Grep, Bash) are BLOCKED.
-   You MUST use Task(subagent_type="explore", ...) for ALL file operations.
+   You MUST use agent_spawn(agent_type="explore", ...) for ALL file operations.
 """
 
     error_message = f"""
@@ -64,19 +65,22 @@ def main():
 
 TodoWrite created {pending_count} pending items.
 {mode_warning}
-You MUST spawn Task agents for ALL independent TODOs in THIS SAME RESPONSE.
+You MUST spawn agents for ALL independent TODOs in THIS SAME RESPONSE.
 
 Required pattern (IMMEDIATELY after this message):
-Task(subagent_type="explore", prompt="TODO 1...", description="TODO 1", run_in_background=true)
-Task(subagent_type="explore", prompt="TODO 2...", description="TODO 2", run_in_background=true)
+agent_spawn(agent_type="explore", prompt="TODO 1...", description="TODO 1")
+  → explore:gemini-3-flash('TODO 1...') task_id=agent_abc123
+agent_spawn(agent_type="dewey", prompt="TODO 2...", description="TODO 2")
+  → dewey:gemini-3-flash('TODO 2...') task_id=agent_def456
 ...
 
 DO NOT:
-- End your response without spawning Tasks
-- Mark TODOs in_progress before spawning Tasks
+- End your response without spawning agents
+- Mark TODOs in_progress before spawning agents
 - Use Read/Grep/Bash directly (BLOCKED in stravinsky mode)
+- Use Task() tool (wrong for /strav - use agent_spawn)
 
-Your NEXT action MUST be multiple Task() calls, one for each independent TODO.
+Your NEXT action MUST be multiple agent_spawn() calls, one for each independent TODO.
 """
     print(error_message)
 

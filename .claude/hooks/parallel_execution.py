@@ -160,7 +160,7 @@ def get_parallel_instruction():
     """Return the standard parallel execution instruction."""
     return """
 <user-prompt-submit-hook>
-[🔄 PARALLEL EXECUTION MODE ACTIVE - MCP CONTEXT]
+[🔄 PARALLEL EXECUTION MODE ACTIVE]
 
 When you create a TodoWrite with 2+ pending items:
 
@@ -175,9 +175,18 @@ When you create a TodoWrite with 2+ pending items:
    - Mark TODOs in_progress before spawning agents
    - Spawn only ONE agent (spawn ALL independent tasks)
    - Wait for "next response" to spawn agents
-   - Use Task() tool (wrong context - use agent_spawn instead)
+   - Use Task() tool (wrong for /strav - use agent_spawn)
+   - Use Read/Grep/Bash for exploratory work (use explore agents)
 
-Example pattern (all in SAME response):
+**Exploratory queries (NO TodoWrite needed):**
+For "Find X", "Explain where Y", "Search for Z" → SKIP TodoWrite, spawn agents immediately:
+```
+agent_spawn(agent_type="explore", prompt="Find X...", description="Find X")
+agent_spawn(agent_type="explore", prompt="Find Y...", description="Find Y")
+# Continue response - collect with agent_output
+```
+
+**Implementation tasks (TodoWrite + agents):**
 ```
 TodoWrite([task1, task2, task3])
 agent_spawn(agent_type="explore", prompt="Task 1 details", description="Task 1")

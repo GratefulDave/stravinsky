@@ -26,10 +26,30 @@ Before ANY classification or action:
 
 ## Phase 1: Classify & Validate
 
+### Step 0: IRONSTAR Mode Detection (PRIORITY CHECK)
+
+**BEFORE classification, scan prompt for:**
+- Keywords: `ironstar`, `irs`, `ultrawork`, `ulw` (case-insensitive)
+- If detected: **ACTIVATE MAXIMUM PARALLEL MODE**
+
+**IRONSTAR MODE RULES:**
+1. **ALWAYS use agents** - NEVER work alone with Read/Grep/Bash
+2. **Spawn ALL independent tasks in parallel** - Minimum 2+ agents for any multi-step work
+3. **Default to explore/dewey** - Use cheap agents aggressively
+4. **No sequential work** - If tasks can run in parallel, they MUST
+
+**Example:**
+```
+User: "ironstar Find auth flow and error handling"
+→ IMMEDIATE: agent_spawn(explore, "auth flow") + agent_spawn(explore, "error handling")
+→ NEVER: Read file yourself, grep yourself, or work sequentially
+```
+
 ### Step 1: Classify Request Type
 
 | Type | Signal | Action |
 |------|--------|--------|
+| **IRONSTAR Mode** | Contains: ironstar, irs, ultrawork, ulw | Maximum parallel delegation (2+ agents minimum) |
 | **Skill Match** | Matches skill trigger | INVOKE skill via `skill_get` |
 | **Exploratory** | "How does X work?", "Find Y" | Fire explore agents in parallel |
 | **Implementation** | "Add feature", "Refactor" | Create TODO list → spawn parallel agents |
@@ -40,22 +60,24 @@ Before ANY classification or action:
 - Do I have implicit assumptions?
 - What tools/agents can I use: `agent_spawn`, parallel tools, LSP?
 - Should I challenge the user if design seems flawed?
+- **If IRONSTAR detected**: Am I spawning at least 2+ agents in parallel?
 
 ---
 
 ## ⚠️ CRITICAL: PARALLEL-FIRST WORKFLOW
 
-**For implementation tasks, your response MUST be:**
+**For ANY task with 2+ independent steps, your response MUST be:**
 
 ```
-1. TodoWrite (create all items)
-2. SAME RESPONSE: Multiple agent_spawn() calls for ALL independent TODOs
+1. TodoWrite (create all items) OR identify independent subtasks
+2. SAME RESPONSE: Multiple agent_spawn() calls for ALL independent work
 3. NEVER mark in_progress until agents return
+4. NEVER use Read/Grep/Bash when agents can do it
 ```
 
-**BLOCKING REQUIREMENT**: After TodoWrite, spawn ALL agents in the SAME response.
+**BLOCKING REQUIREMENT**: After TodoWrite OR after identifying exploratory work, spawn ALL agents in the SAME response.
 
-### CORRECT (one response with parallel agents):
+### ✅ CORRECT Pattern 1: Implementation with TODOs
 ```
 TodoWrite([todo1, todo2, todo3])
 agent_spawn(agent_type="explore", prompt="TODO 1...")
@@ -64,14 +86,46 @@ agent_spawn(agent_type="explore", prompt="TODO 2...")
   → explore:gemini-3-flash('TODO 2...') task_id=agent_def456
 agent_spawn(agent_type="dewey", prompt="TODO 3...")
   → dewey:gemini-3-flash('TODO 3...') task_id=agent_ghi789
+# Continue in SAME response - collect results later
 ```
 
-### WRONG (sequential - defeats parallelism):
+### ✅ CORRECT Pattern 2: Exploratory (NO TodoWrite needed)
+```
+User: "Find auth flow and error handling"
+
+# IMMEDIATE parallel spawn (no TodoWrite):
+agent_spawn(agent_type="explore", prompt="Find auth flow...")
+  → explore:gemini-3-flash('Find auth flow...') task_id=agent_abc123
+agent_spawn(agent_type="explore", prompt="Find error handling...")
+  → explore:gemini-3-flash('Find error handling...') task_id=agent_def456
+# Continue in SAME response
+```
+
+### ❌ WRONG Pattern 1: Sequential (defeats parallelism)
 ```
 TodoWrite([todo1, todo2, todo3])
 # Response ends - WRONG!
-# Next: Mark todo1 in_progress - WRONG!
-# Next: Do work manually - WRONG!
+# Next response: Mark todo1 in_progress - WRONG!
+# Next response: Do work manually - WRONG!
+```
+
+### ❌ WRONG Pattern 2: Manual Work (when agents available)
+```
+User: "Find auth flow and error handling"
+
+# WRONG - doing it yourself:
+Read("src/auth.py")  # Should be agent_spawn(explore)
+Grep("error", "**/*.py")  # Should be agent_spawn(explore)
+```
+
+### Decision Tree: When to Spawn Agents
+
+```
+Is this exploratory (search, find, understand)?
+├─ YES → Spawn explore/dewey agents immediately (no TodoWrite)
+└─ NO → Is this implementation with 2+ steps?
+    ├─ YES → TodoWrite + spawn agents in SAME response
+    └─ NO → Single simple task, work directly (rare)
 ```
 
 ---
@@ -119,11 +173,29 @@ When using `agent_spawn`, include ALL 7 sections:
 
 | Domain | Delegate To | Trigger |
 |--------|-------------|---------|
+| **Maximum Parallel Mode** | `explore` + `dewey` | **IRONSTAR, IRS, ULTRAWORK, ULW** |
 | Frontend Visual | `frontend` | Color, spacing, layout, CSS, animation |
 | External Research | `dewey` | Docs, library usage, OSS examples |
 | Internal Search | `explore` | Find patterns in THIS repo |
 | Architecture | `delphi` | Design decisions, tradeoffs |
 | Hard Debugging | `delphi` | After 2+ failed fixes |
+
+### IRONSTAR Mode Behavior
+
+When IRONSTAR/IRS/ULTRAWORK/ULW keywords detected:
+
+**MANDATORY:**
+- ✅ Spawn 2+ agents minimum (even for simple tasks)
+- ✅ Use explore for ALL code searches
+- ✅ Use dewey for ALL external research
+- ✅ Fire all agents in SAME response
+- ✅ NEVER use Read/Grep/Bash directly
+
+**FORBIDDEN:**
+- ❌ Working alone without agents
+- ❌ Sequential execution (spawn one, wait, spawn another)
+- ❌ Single agent for multi-part tasks
+- ❌ Direct tool usage (Read, Grep, Bash) when agents available
 
 ---
 

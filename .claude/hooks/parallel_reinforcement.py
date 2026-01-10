@@ -62,12 +62,14 @@ def main():
 You have 2+ pending TODOs. When proceeding:
 
 ✅ SPAWN agents for ALL independent tasks in PARALLEL
-✅ Use call_omo_agent(subagent_type="explore"|"librarian", run_in_background=true)
-✅ Fire ALL agent calls in ONE response block
-✅ Collect results with background_output after spawning
+✅ Use agent_spawn(agent_type="explore"|"dewey"|"frontend", prompt="...", description="...")
+✅ Fire ALL agent_spawn calls in ONE response block
+✅ Collect results with agent_output(task_id, block=true) after spawning
 
 ❌ DO NOT work sequentially on one task at a time
 ❌ DO NOT mark TODOs in_progress before spawning agents
+❌ DO NOT use Task() tool (wrong for /strav - use agent_spawn)
+❌ DO NOT use Read/Grep/Bash (use explore agents)
 
 PARALLEL FIRST, then synthesize results.
 </user-prompt-submit-hook>

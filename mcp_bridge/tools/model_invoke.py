@@ -13,6 +13,8 @@ import uuid
 import base64
 import json as json_module
 
+from mcp_bridge.config.rate_limits import get_rate_limiter
+
 logger = logging.getLogger(__name__)
 
 
@@ -135,8 +137,52 @@ _SESSION_CACHE: dict[str, str] = {}
 # Pooled HTTP client for connection reuse
 _HTTP_CLIENT: httpx.AsyncClient | None = None
 
-# Rate limiting: Max 5 concurrent Gemini requests to prevent burst rate limits
-_GEMINI_SEMAPHORE: asyncio.Semaphore | None = None
+# Per-model semaphores for async rate limiting (uses config from ~/.stravinsky/config.json)
+_GEMINI_SEMAPHORES: dict[str, asyncio.Semaphore] = {}
+
+
+def _get_gemini_rate_limit(model: str) -> int:
+    """
+    Get configured rate limit for a Gemini model.
+
+    Reads from ~/.stravinsky/config.json if available, otherwise uses defaults.
+
+    Args:
+        model: Gemini model name (e.g., "gemini-3-flash", "gemini-3-pro-high")
+
+    Returns:
+        Configured concurrency limit for this model
+    """
+    rate_limiter = get_rate_limiter()
+    # Normalize model name to match config keys
+    normalized = rate_limiter._normalize_model(model)
+    return rate_limiter._limits.get(normalized, rate_limiter._limits.get("_default", 5))
+
+
+def _get_gemini_semaphore(model: str) -> asyncio.Semaphore:
+    """
+    Get or create async semaphore for Gemini model rate limiting.
+
+    Creates one semaphore per model type with limits from config.
+    Limits can be customized in ~/.stravinsky/config.json:
+    {
+        "rate_limits": {
+            "gemini-3-flash": 15,
+            "gemini-3-pro-high": 8
+        }
+    }
+
+    Args:
+        model: Gemini model name
+
+    Returns:
+        asyncio.Semaphore with configured limit for this model
+    """
+    if model not in _GEMINI_SEMAPHORES:
+        limit = _get_gemini_rate_limit(model)
+        _GEMINI_SEMAPHORES[model] = asyncio.Semaphore(limit)
+        logger.info(f"[RateLimit] Created semaphore for {model} with limit {limit}")
+    return _GEMINI_SEMAPHORES[model]
 
 
 def _get_session_id(conversation_key: str | None = None) -> str:
@@ -178,17 +224,6 @@ async def _get_http_client() -> httpx.AsyncClient:
     return _HTTP_CLIENT
 
 
-def _get_gemini_semaphore() -> asyncio.Semaphore:
-    """
-    Get or create semaphore for Gemini API rate limiting.
-
-    Limits concurrent Gemini requests to prevent burst rate limits (429 errors).
-    Max 5 concurrent requests balances throughput with API quota constraints.
-    """
-    global _GEMINI_SEMAPHORE
-    if _GEMINI_SEMAPHORE is None:
-        _GEMINI_SEMAPHORE = asyncio.Semaphore(5)
-    return _GEMINI_SEMAPHORE
 
 
 def _extract_gemini_response(data: dict) -> str:
@@ -503,20 +538,23 @@ async def invoke_gemini(
     api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
     if api_key:
         logger.info(f"[{agent_type}] Using API key authentication (GEMINI_API_KEY)")
-        return await _invoke_gemini_with_api_key(
-            api_key=api_key,
-            prompt=prompt,
-            model=model,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            thinking_budget=thinking_budget,
-            image_path=image_path,
-        )
+        # Rate limit concurrent requests (configurable via ~/.stravinsky/config.json)
+        semaphore = _get_gemini_semaphore(model)
+        async with semaphore:
+            return await _invoke_gemini_with_api_key(
+                api_key=api_key,
+                prompt=prompt,
+                model=model,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                thinking_budget=thinking_budget,
+                image_path=image_path,
+            )
 
     # Fallback to OAuth authentication (Antigravity)
     logger.info(f"[{agent_type}] Using OAuth authentication (Antigravity)")
-    # Acquire semaphore to limit concurrent Gemini requests (prevents 429 rate limits)
-    semaphore = _get_gemini_semaphore()
+    # Rate limit concurrent Gemini requests (configurable via ~/.stravinsky/config.json)
+    semaphore = _get_gemini_semaphore(model)
     async with semaphore:
         access_token = await _ensure_valid_token(token_store, "gemini")
 

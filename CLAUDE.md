@@ -6,6 +6,28 @@
 
 ### Authentication
 
+Stravinsky supports **two authentication methods** for Gemini (API key takes precedence):
+
+#### Option 1: API Key (Recommended for Development)
+
+**Simplest setup** - add `GEMINI_API_KEY` to your `.env` file:
+
+```bash
+# Add to .env file in project root
+GEMINI_API_KEY=your_api_key_here
+
+# Or use GOOGLE_API_KEY (same effect)
+GOOGLE_API_KEY=your_api_key_here
+```
+
+**Get your API key:** Visit [Google AI Studio](https://aistudio.google.com/app/apikey)
+
+**When to use:** Development, testing, or when you don't need OAuth scopes.
+
+#### Option 2: OAuth (Production/Advanced)
+
+**Full OAuth flow** with automatic token refresh:
+
 ```bash
 # Login
 stravinsky-auth login gemini
@@ -17,6 +39,8 @@ stravinsky-auth status
 # Logout
 stravinsky-auth logout gemini
 ```
+
+**When to use:** Production apps, OAuth scopes, or user-based access control.
 
 ## Setup in Claude Code
 

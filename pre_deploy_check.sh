@@ -8,6 +8,15 @@ echo "🔍 Pre-Deployment Safety Checks"
 echo "================================"
 echo ""
 
+# Step 0: Install dev dependencies (required for tests)
+echo "✓ Step 0: Installing dev dependencies"
+uv pip install -e ".[dev]" --quiet || {
+    echo "❌ FAILED: Could not install dev dependencies"
+    exit 1
+}
+echo "  ✅ Dev dependencies installed"
+echo ""
+
 # Check 1: Python import test (use uv to ensure deps are available)
 echo "✓ Check 1: Basic import test"
 uv run python -c "import mcp_bridge.server" || {
@@ -67,15 +76,22 @@ echo ""
 echo "✓ Check 6: Test suite"
 if [ -d "tests" ] && [ -n "$(find tests -name 'test_*.py' -o -name '*_test.py')" ]; then
     # Run tests, ignore known broken test files, but BLOCK on failures
-    if ! uv run pytest tests/ \
+    # Use PIPEFAIL to catch pytest failures even with pipes
+    set +e  # Temporarily disable exit on error
+    (set -o pipefail; uv run pytest tests/ \
         --ignore=tests/test_hooks.py \
         --ignore=tests/test_new_hooks.py \
         -x \
         --tb=short \
-        -q 2>&1 | tee /tmp/pytest_output.txt | tail -30; then
+        -q 2>&1 | tee /tmp/pytest_output.txt | tail -30)
+    TEST_EXIT=$?
+    set -e  # Re-enable exit on error
+
+    if [ $TEST_EXIT -ne 0 ]; then
         echo ""
         echo "❌ FAILED: Tests must pass before deployment"
         echo "  Fix failing tests or remove them if obsolete"
+        echo "  See /tmp/pytest_output.txt for full output"
         exit 1
     fi
     echo "  ✅ All tests passed"

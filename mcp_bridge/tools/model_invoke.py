@@ -911,17 +911,20 @@ async def _invoke_gemini_agentic_with_api_key(
     client = genai.Client(api_key=api_key)
 
     # Convert AGENT_TOOLS to google-genai format
-    # google-genai expects tools as a list of FunctionDeclaration objects
-    tools = []
+    # google-genai expects tools as a list of Tool objects containing function_declarations
+    function_declarations = []
     for tool_group in AGENT_TOOLS:
         for func_decl in tool_group.get("functionDeclarations", []):
-            tools.append(
+            function_declarations.append(
                 types.FunctionDeclaration(
                     name=func_decl["name"],
                     description=func_decl["description"],
                     parameters=func_decl["parameters"],
                 )
             )
+
+    # Wrap function declarations in a Tool object
+    tools = [types.Tool(function_declarations=function_declarations)]
 
     # Initialize conversation with user message
     contents = [types.Content(role="user", parts=[types.Part(text=prompt)])]

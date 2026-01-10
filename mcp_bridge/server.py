@@ -27,6 +27,14 @@ from mcp.types import (
 
 from . import __version__
 
+# --- CRITICAL: PROTOCOL HYGIENE ---
+
+# Configure logging to stderr explicitly to avoid protocol corruption
+logging.basicConfig(
+    level=logging.INFO, format="%(levelname)s:%(name)s:%(message)s", stream=sys.stderr
+)
+logger = logging.getLogger(__name__)
+
 # --- LOAD .env FILES (GEMINI_API_KEY, etc.) ---
 # Load from ~/.stravinsky/.env (dedicated config location)
 try:
@@ -45,14 +53,6 @@ try:
         logger.info(f"[Config] Loaded environment from {stravinsky_env}")
 except ImportError:
     pass  # python-dotenv not installed, skip
-
-# --- CRITICAL: PROTOCOL HYGIENE ---
-
-# Configure logging to stderr explicitly to avoid protocol corruption
-logging.basicConfig(
-    level=logging.INFO, format="%(levelname)s:%(name)s:%(message)s", stream=sys.stderr
-)
-logger = logging.getLogger(__name__)
 
 
 # Pre-async crash logger

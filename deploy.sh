@@ -12,6 +12,20 @@ echo "🚀 Stravinsky Deployment Script"
 echo "================================"
 echo ""
 
+# Step 0: Run pre-deployment safety checks
+echo "📋 Step 0: Running pre-deployment safety checks..."
+if [ -f "./pre_deploy_check.sh" ]; then
+    ./pre_deploy_check.sh || {
+        echo -e "${RED}❌ Pre-deployment checks failed!${NC}"
+        echo "   Fix errors before deploying"
+        exit 1
+    }
+    echo ""
+else
+    echo -e "${YELLOW}⚠️  Warning: pre_deploy_check.sh not found, skipping safety checks${NC}"
+    echo ""
+fi
+
 # Step 1: Verify version consistency
 echo "📋 Step 1: Checking version consistency..."
 VERSION_TOML=$(grep -E "^version = " pyproject.toml | head -1 | cut -d'"' -f2)

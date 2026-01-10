@@ -988,8 +988,39 @@ class CodebaseVectorStore:
         "temp",
     }
 
+    @staticmethod
+    def _normalize_project_path(path: str) -> Path:
+        """
+        Normalize project path to git root if available.
+
+        This ensures one index per repo regardless of invocation directory.
+        If not a git repo, returns resolved absolute path.
+        """
+        import subprocess
+
+        resolved = Path(path).resolve()
+
+        # Try to find git root
+        try:
+            result = subprocess.run(
+                ["git", "-C", str(resolved), "rev-parse", "--show-toplevel"],
+                capture_output=True,
+                text=True,
+                timeout=2,
+                check=False,
+            )
+            if result.returncode == 0:
+                git_root = Path(result.stdout.strip())
+                logger.debug(f"Normalized {resolved} → {git_root} (git root)")
+                return git_root
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            pass
+
+        # Not a git repo or git not available, use resolved path
+        return resolved
+
     def __init__(self, project_path: str, provider: EmbeddingProvider = "ollama"):
-        self.project_path = Path(project_path).resolve()
+        self.project_path = self._normalize_project_path(project_path)
         self.project_hash = hashlib.md5(str(self.project_path).encode()).hexdigest()[:12]
 
         # Initialize embedding provider

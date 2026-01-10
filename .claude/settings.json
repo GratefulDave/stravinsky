@@ -92,6 +92,10 @@
           },
           {
             "type": "command",
+            "command": "python3 ~/.claude/hooks/parallel_reinforcement.py"
+          },
+          {
+            "type": "command",
             "command": "python3 ~/.claude/hooks/context.py"
           },
           {

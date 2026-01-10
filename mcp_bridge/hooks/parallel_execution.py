@@ -8,6 +8,7 @@ when implementation tasks are detected. Eliminates timing ambiguity.
 CRITICAL: Also activates stravinsky mode marker when /stravinsky is invoked,
 enabling hard blocking of direct tools (Read, Grep, Bash) via stravinsky_mode.py.
 """
+
 import json
 import sys
 import re
@@ -20,11 +21,10 @@ STRAVINSKY_MODE_FILE = Path.home() / ".stravinsky_mode"
 def detect_stravinsky_invocation(prompt):
     """Detect if /stravinsky skill is being invoked."""
     patterns = [
-        r'/stravinsky',
-        r'<command-name>/stravinsky</command-name>',
-        r'stravinsky orchestrator',
-        r'ultrawork',
-        r'ultrathink',
+        r"/stravinsky",
+        r"<command-name>/stravinsky</command-name>",
+        r"stravinsky orchestrator",
+        r"\bironstar\b",
     ]
     prompt_lower = prompt.lower()
     return any(re.search(p, prompt_lower) for p in patterns)
@@ -43,9 +43,21 @@ def activate_stravinsky_mode():
 def detect_implementation_task(prompt):
     """Detect if prompt is an implementation task requiring parallel execution."""
     keywords = [
-        'implement', 'add', 'create', 'build', 'refactor', 'fix',
-        'update', 'modify', 'change', 'develop', 'write code',
-        'feature', 'bug fix', 'enhancement', 'integrate'
+        "implement",
+        "add",
+        "create",
+        "build",
+        "refactor",
+        "fix",
+        "update",
+        "modify",
+        "change",
+        "develop",
+        "write code",
+        "feature",
+        "bug fix",
+        "enhancement",
+        "integrate",
     ]
 
     prompt_lower = prompt.lower()

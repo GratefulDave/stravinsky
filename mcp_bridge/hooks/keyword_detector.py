@@ -116,8 +116,6 @@ Use delphi agent for strategic consultation on architecture, debugging, and comp
 KEYWORD_PATTERNS = {
     r"\bironstar\b": IRONSTAR_MODE,
     r"\birs\b": IRONSTAR_MODE,
-    r"\bultrawork\b": IRONSTAR_MODE,
-    r"\bulw\b": IRONSTAR_MODE,
     r"\bultrathink\b": ULTRATHINK_MODE,
     r"\bsearch\b": SEARCH_MODE,
     r"\banalyze\b": ANALYZE_MODE,

@@ -26,7 +26,7 @@ from typing import Dict, List, Any
 
 # Hook file contents - these will be written to ~/.claude/hooks/
 HOOKS = {
-    "truncator.py": '''import os
+    "truncator.py": """import os
 import sys
 import json
 
@@ -49,8 +49,7 @@ def main():
 
 if __name__ == "__main__":
     main()
-''',
-
+""",
     "edit_recovery.py": '''#!/usr/bin/env python3
 """Edit error recovery hook - detects edit failures and forces file reading."""
 import json
@@ -94,8 +93,7 @@ def main():
 if __name__ == "__main__":
     sys.exit(main())
 ''',
-
-    "context.py": '''import os
+    "context.py": """import os
 import sys
 import json
 from pathlib import Path
@@ -133,8 +131,7 @@ def main():
 
 if __name__ == "__main__":
     main()
-''',
-
+""",
     "parallel_execution.py": '''#!/usr/bin/env python3
 """
 UserPromptSubmit hook: Pre-emptive parallel execution enforcement.
@@ -157,11 +154,10 @@ STRAVINSKY_MODE_FILE = Path.home() / ".stravinsky_mode"
 def detect_stravinsky_invocation(prompt):
     """Detect if /stravinsky skill is being invoked."""
     patterns = [
-        r'/stravinsky',
-        r'<command-name>/stravinsky</command-name>',
-        r'stravinsky orchestrator',
-        r'ultrawork',
-        r'ultrathink',
+        r"/stravinsky",
+        r"<command-name>/stravinsky</command-name>",
+        r"stravinsky orchestrator",
+        r"\bironstar\b",
     ]
     prompt_lower = prompt.lower()
     return any(re.search(p, prompt_lower) for p in patterns)
@@ -247,7 +243,6 @@ Task(subagent_type="Explore", prompt="Task 3 details", description="Task 3", run
 if __name__ == "__main__":
     sys.exit(main())
 ''',
-
     "todo_continuation.py": '''#!/usr/bin/env python3
 """
 UserPromptSubmit hook: Todo Continuation Enforcer
@@ -339,7 +334,6 @@ def main():
 if __name__ == "__main__":
     sys.exit(main())
 ''',
-
     "todo_delegation.py": '''#!/usr/bin/env python3
 """
 PostToolUse hook for TodoWrite: CRITICAL parallel execution enforcer.
@@ -429,7 +423,6 @@ Your NEXT action MUST be multiple Task() calls, one for each independent TODO.
 if __name__ == "__main__":
     sys.exit(main())
 ''',
-
     "stravinsky_mode.py": '''#!/usr/bin/env python3
 """
 Stravinsky Mode Enforcer Hook
@@ -575,7 +568,6 @@ To exit stravinsky mode, run:
 if __name__ == "__main__":
     main()
 ''',
-
     "tool_messaging.py": '''#!/usr/bin/env python3
 """
 PostToolUse hook for user-friendly tool messaging.
@@ -741,7 +733,6 @@ def main():
 if __name__ == "__main__":
     main()
 ''',
-
     "notification_hook.py": '''#!/usr/bin/env python3
 """
 Notification hook for agent spawn messages.
@@ -846,7 +837,6 @@ def main():
 if __name__ == "__main__":
     sys.exit(main())
 ''',
-
     "subagent_stop.py": '''#!/usr/bin/env python3
 """
 SubagentStop hook: Handler for agent/subagent completion events.
@@ -946,7 +936,6 @@ def main():
 if __name__ == "__main__":
     sys.exit(main())
 ''',
-
     "pre_compact.py": '''#!/usr/bin/env python3
 """
 PreCompact hook: Context preservation before compaction.
@@ -1081,125 +1070,78 @@ HOOK_REGISTRATIONS = {
         {
             "matcher": "*",
             "hooks": [
-                {
-                    "type": "command",
-                    "command": "python3 ~/.claude/hooks/notification_hook.py"
-                }
-            ]
+                {"type": "command", "command": "python3 ~/.claude/hooks/notification_hook.py"}
+            ],
         }
     ],
     "SubagentStop": [
         {
             "matcher": "*",
-            "hooks": [
-                {
-                    "type": "command",
-                    "command": "python3 ~/.claude/hooks/subagent_stop.py"
-                }
-            ]
+            "hooks": [{"type": "command", "command": "python3 ~/.claude/hooks/subagent_stop.py"}],
         }
     ],
     "PreCompact": [
         {
             "matcher": "*",
-            "hooks": [
-                {
-                    "type": "command",
-                    "command": "python3 ~/.claude/hooks/pre_compact.py"
-                }
-            ]
+            "hooks": [{"type": "command", "command": "python3 ~/.claude/hooks/pre_compact.py"}],
         }
     ],
     "PreToolUse": [
         {
             "matcher": "Read,Search,Grep,Bash,Edit,MultiEdit",
-            "hooks": [
-                {
-                    "type": "command",
-                    "command": "python3 ~/.claude/hooks/stravinsky_mode.py"
-                }
-            ]
+            "hooks": [{"type": "command", "command": "python3 ~/.claude/hooks/stravinsky_mode.py"}],
         }
     ],
     "UserPromptSubmit": [
         {
             "matcher": "*",
             "hooks": [
-                {
-                    "type": "command",
-                    "command": "python3 ~/.claude/hooks/parallel_execution.py"
-                },
-                {
-                    "type": "command",
-                    "command": "python3 ~/.claude/hooks/context.py"
-                },
-                {
-                    "type": "command",
-                    "command": "python3 ~/.claude/hooks/todo_continuation.py"
-                }
-            ]
+                {"type": "command", "command": "python3 ~/.claude/hooks/parallel_execution.py"},
+                {"type": "command", "command": "python3 ~/.claude/hooks/context.py"},
+                {"type": "command", "command": "python3 ~/.claude/hooks/todo_continuation.py"},
+            ],
         }
     ],
     "PostToolUse": [
         {
             "matcher": "*",
-            "hooks": [
-                {
-                    "type": "command",
-                    "command": "python3 ~/.claude/hooks/truncator.py"
-                }
-            ]
+            "hooks": [{"type": "command", "command": "python3 ~/.claude/hooks/truncator.py"}],
         },
         {
             "matcher": "mcp__stravinsky__*,mcp__grep-app__*,Task",
-            "hooks": [
-                {
-                    "type": "command",
-                    "command": "python3 ~/.claude/hooks/tool_messaging.py"
-                }
-            ]
+            "hooks": [{"type": "command", "command": "python3 ~/.claude/hooks/tool_messaging.py"}],
         },
         {
             "matcher": "Edit,MultiEdit",
-            "hooks": [
-                {
-                    "type": "command",
-                    "command": "python3 ~/.claude/hooks/edit_recovery.py"
-                }
-            ]
+            "hooks": [{"type": "command", "command": "python3 ~/.claude/hooks/edit_recovery.py"}],
         },
         {
             "matcher": "TodoWrite",
-            "hooks": [
-                {
-                    "type": "command",
-                    "command": "python3 ~/.claude/hooks/todo_delegation.py"
-                }
-            ]
-        }
-    ]
+            "hooks": [{"type": "command", "command": "python3 ~/.claude/hooks/todo_delegation.py"}],
+        },
+    ],
 }
 
 
 def install_hooks():
     """Install Stravinsky hooks to ~/.claude/hooks/"""
-    
+
     # Get home directory
     home = Path.home()
     claude_dir = home / ".claude"
     hooks_dir = claude_dir / "hooks"
     settings_file = claude_dir / "settings.json"
-    
+
     print("🚀 Stravinsky Hook Installer")
     print("=" * 60)
-    
+
     # Create hooks directory if it doesn't exist
     if not hooks_dir.exists():
         print(f"📁 Creating hooks directory: {hooks_dir}")
         hooks_dir.mkdir(parents=True, exist_ok=True)
     else:
         print(f"📁 Hooks directory exists: {hooks_dir}")
-    
+
     # Install each hook file
     print(f"\\n📝 Installing {len(HOOKS)} hook files...")
     for filename, content in HOOKS.items():
@@ -1207,46 +1149,46 @@ def install_hooks():
         print(f"  ✓ {filename}")
         hook_path.write_text(content)
         hook_path.chmod(0o755)  # Make executable
-    
+
     # Merge hook registrations into settings.json
     print(f"\\n⚙️  Updating settings.json...")
-    
+
     # Load existing settings or create new
     if settings_file.exists():
         print(f"  📖 Reading existing settings: {settings_file}")
-        with settings_file.open('r') as f:
+        with settings_file.open("r") as f:
             settings = json.load(f)
     else:
         print(f"  📝 Creating new settings file: {settings_file}")
         settings = {}
-    
+
     # Merge hooks configuration
     if "hooks" not in settings:
         settings["hooks"] = {}
-    
+
     for hook_type, registrations in HOOK_REGISTRATIONS.items():
         settings["hooks"][hook_type] = registrations
         print(f"  ✓ Registered {hook_type} hooks")
-    
+
     # Write updated settings
-    with settings_file.open('w') as f:
+    with settings_file.open("w") as f:
         json.dump(settings, f, indent=2)
-    
+
     print(f"\\n✅ Installation complete!")
     print("=" * 60)
     print(f"\\n📋 Installed hooks:")
     for filename in HOOKS.keys():
         print(f"  • {filename}")
-    
+
     print(f"\\n🔧 Hook types registered:")
     for hook_type in HOOK_REGISTRATIONS.keys():
         print(f"  • {hook_type}")
-    
+
     print(f"\\n📁 Installation directory: {hooks_dir}")
     print(f"⚙️  Settings file: {settings_file}")
     print("\\n🎉 Stravinsky hooks are now active!")
     print("\\n💡 Tip: Run '/stravinsky' to activate orchestrator mode")
-    
+
     return 0
 
 
@@ -1257,6 +1199,7 @@ def main():
     except Exception as e:
         print(f"\\n❌ Installation failed: {e}", file=sys.stderr)
         import traceback
+
         traceback.print_exc()
         return 1
 

@@ -99,7 +99,7 @@ stravinsky:agent_output(task_id="[id]", block=true)
 - This enables auto-delegation without manual /stravinsky invocation
 
 ### Execution Modes:
-- `ironstar` / `irs` / `ultrawork` - Maximum parallel execution (10+ agents)
+- `ironstar` / `irs` - Maximum parallel execution (10+ agents)
 - `ultrathink` - Deep reasoning with delphi consultation
 - `search` - Exhaustive multi-agent search
 

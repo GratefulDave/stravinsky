@@ -12,6 +12,7 @@ Works in tandem with:
 - parallel_execution.py (UserPromptSubmit): Pre-emptive instruction injection
 - stravinsky_mode.py (PreToolUse): Hard blocking of Read/Grep/Bash tools
 """
+
 import json
 import sys
 from pathlib import Path
@@ -77,7 +78,9 @@ DO NOT:
 
 Your NEXT action MUST be multiple Task() calls, one for each independent TODO.
 """
-    print(error_message, file=sys.stderr)
+    # CRITICAL: Output to stdout so Claude sees the message
+    # stderr is not reliably injected into the conversation
+    print(error_message)
 
     # Exit code 2 = HARD BLOCK in stravinsky mode
     # Exit code 1 = WARNING otherwise

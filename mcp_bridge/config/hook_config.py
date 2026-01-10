@@ -118,7 +118,7 @@ def create_sample_disable_hooks() -> Optional[Path]:
 # Example - to disable the comment checker:
 # comment_checker
 #
-# Example - to disable ultrawork mode detection:
+# Example - to disable ironstar mode detection:
 # parallel_execution
 """
 

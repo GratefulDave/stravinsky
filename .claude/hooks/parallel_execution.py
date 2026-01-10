@@ -17,6 +17,7 @@ When "ironstar" is detected in prompt (case insensitive):
 """
 
 import json
+import os
 import sys
 import re
 from pathlib import Path
@@ -26,6 +27,16 @@ STRAVINSKY_MODE_FILE = Path.home() / ".stravinsky_mode"
 
 # IRONSTAR mode pattern for aggressive parallel execution
 IRONSTAR_PATTERN = r"\bironstar\b"
+
+
+# Use CLAUDE_CWD for reliable project directory resolution
+def get_project_dir() -> Path:
+    """Get project directory from CLAUDE_CWD env var or fallback to cwd."""
+    return Path(os.environ.get("CLAUDE_CWD", "."))
+
+
+# Marker file that indicates MCP skill execution context (project-scoped)
+MCP_MODE_MARKER_NAME = ".stravinsky/mcp_mode"
 
 
 def detect_ironstar_mode(prompt):

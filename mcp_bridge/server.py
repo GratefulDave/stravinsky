@@ -28,20 +28,21 @@ from mcp.types import (
 from . import __version__
 
 # --- LOAD .env FILES (GEMINI_API_KEY, etc.) ---
-# Load from current working directory and user home directory
+# Load from ~/.stravinsky/.env (dedicated config location)
 try:
     from dotenv import load_dotenv
     from pathlib import Path
 
-    # Load from ~/.env (user-global)
+    # Load from ~/.env (user-global, lowest priority)
     home_env = Path.home() / ".env"
     if home_env.exists():
         load_dotenv(home_env, override=False)
 
-    # Load from CWD/.env (project-local, takes precedence)
-    cwd_env = Path.cwd() / ".env"
-    if cwd_env.exists():
-        load_dotenv(cwd_env, override=True)
+    # Load from ~/.stravinsky/.env (stravinsky config, takes precedence)
+    stravinsky_env = Path.home() / ".stravinsky" / ".env"
+    if stravinsky_env.exists():
+        load_dotenv(stravinsky_env, override=True)
+        logger.info(f"[Config] Loaded environment from {stravinsky_env}")
 except ImportError:
     pass  # python-dotenv not installed, skip
 

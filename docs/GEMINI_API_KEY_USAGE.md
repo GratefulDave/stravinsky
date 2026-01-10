@@ -1,0 +1,244 @@
+# Gemini API Key Authentication
+
+Stravinsky now supports **two authentication methods** for accessing Gemini models:
+
+1. **API Key** (Simple, recommended for development)
+2. **OAuth** (Advanced, for production with scopes)
+
+## Quick Start: API Key Authentication
+
+### Step 1: Get Your API Key
+
+Visit [Google AI Studio](https://aistudio.google.com/app/apikey) and create a free API key.
+
+### Step 2: Add to Environment
+
+Add your API key to `.env` file in your project root:
+
+```bash
+# Option 1: Use GEMINI_API_KEY
+GEMINI_API_KEY=AIzaSyXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+# Option 2: Use GOOGLE_API_KEY (same effect)
+GOOGLE_API_KEY=AIzaSyXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+```
+
+### Step 3: Use Stravinsky
+
+That's it! Stravinsky will automatically detect and use your API key:
+
+```python
+# In your code or via MCP
+from mcp_bridge.tools.model_invoke import invoke_gemini
+from mcp_bridge.auth.token_store import TokenStore
+
+token_store = TokenStore()
+
+response = await invoke_gemini(
+    token_store=token_store,
+    prompt="Explain async/await in Python",
+    model="gemini-3-flash",
+)
+
+print(response)
+```
+
+## Authentication Priority
+
+When both authentication methods are configured, **API key takes precedence**:
+
+1. **API Key** - If `GEMINI_API_KEY` or `GOOGLE_API_KEY` is set → uses API key
+2. **OAuth Fallback** - If no API key → uses OAuth tokens from `stravinsky-auth login gemini`
+
+## Comparison: API Key vs OAuth
+
+| Feature | API Key | OAuth |
+|---------|---------|-------|
+| **Setup** | 2 minutes (get key, add to .env) | 5-10 minutes (browser flow, token storage) |
+| **Best For** | Development, testing, prototypes | Production, user-based access |
+| **Requires** | Free API key from Google AI Studio | Google Account + OAuth consent |
+| **Token Refresh** | Not needed (key doesn't expire) | Automatic background refresh |
+| **Scopes** | Limited (public API only) | Full OAuth scopes available |
+| **Multi-User** | Single key for all requests | Per-user authentication |
+
+## When to Use Each Method
+
+### Use API Key When:
+- ✅ Quick development and testing
+- ✅ Personal projects
+- ✅ Don't need user-specific access control
+- ✅ Want the simplest setup
+- ✅ Using Gemini Developer API (free tier)
+
+### Use OAuth When:
+- ✅ Production applications
+- ✅ Need OAuth scopes (cloud-platform, userinfo, etc.)
+- ✅ User-based authentication required
+- ✅ Using Vertex AI integration
+- ✅ Need automatic token refresh with expiration handling
+
+## Switching Between Methods
+
+### From OAuth to API Key
+
+Simply add `GEMINI_API_KEY` to your `.env` file. Stravinsky will automatically prefer the API key.
+
+```bash
+# Add this line to .env
+GEMINI_API_KEY=your_key_here
+
+# Stravinsky will now use API key instead of OAuth
+# (OAuth tokens remain stored but won't be used)
+```
+
+### From API Key to OAuth
+
+Remove `GEMINI_API_KEY` from your environment and authenticate via OAuth:
+
+```bash
+# Remove from .env or unset
+unset GEMINI_API_KEY
+unset GOOGLE_API_KEY
+
+# Authenticate with OAuth
+stravinsky-auth login gemini
+
+# Stravinsky will now use OAuth
+```
+
+## Testing Your Setup
+
+Use the provided test script to verify both authentication methods:
+
+```bash
+# Install google-genai dependency (if not already installed)
+uv pip install google-genai
+
+# Run authentication tests
+python tests/test_api_key_auth.py
+```
+
+Expected output:
+
+```
+==============================================================
+  GEMINI AUTHENTICATION TEST SUITE
+==============================================================
+✅ Found API key: AIzaSyXXXXXXXXXXXXXX...XXXX
+
+🧪 Testing Gemini API key authentication...
+
+✅ Response: API key authentication works!
+
+✅ SUCCESS: API key authentication is working!
+
+🧪 Testing OAuth fallback (no API key)...
+
+✅ Correctly fell back to OAuth (not authenticated)
+   Run 'stravinsky-auth login gemini' to set up OAuth
+
+==============================================================
+  TEST RESULTS
+==============================================================
+  API Key Auth:    ✅ PASS
+  OAuth Fallback:  ✅ PASS
+==============================================================
+```
+
+## Model Compatibility
+
+Both authentication methods support the same models:
+
+- `gemini-3-flash` → Uses `gemini-2.0-flash-exp` (API key) or Antigravity (OAuth)
+- `gemini-3-pro-low` → Uses `gemini-2.0-flash-exp` (API key) or Antigravity (OAuth)
+- `gemini-3-pro-high` → Uses `gemini-exp-1206` (API key) or Antigravity (OAuth)
+
+## Troubleshooting
+
+### Error: "google-genai library not installed"
+
+```bash
+# Install the google-genai library
+uv pip install google-genai
+
+# Or add to pyproject.toml dependencies
+google-genai>=0.2.0
+```
+
+### Error: "API key request failed"
+
+**Possible causes:**
+
+1. **Invalid API key** - Double-check your key from Google AI Studio
+2. **API key not set** - Verify `GEMINI_API_KEY` is in `.env` and loaded
+3. **Quota exceeded** - Check your usage at Google AI Studio
+4. **Model not available** - Some models require special access
+
+**Solution:**
+
+```bash
+# Verify environment variable is set
+echo $GEMINI_API_KEY
+
+# If empty, check your .env file
+cat .env | grep GEMINI_API_KEY
+
+# Try loading .env manually
+source .env
+echo $GEMINI_API_KEY
+```
+
+### Still Using OAuth When API Key is Set?
+
+**Check precedence:**
+
+```python
+import os
+
+# This should print your API key if set
+print(os.getenv("GEMINI_API_KEY"))
+print(os.getenv("GOOGLE_API_KEY"))
+
+# If both print None, your .env isn't loaded
+from dotenv import load_dotenv
+load_dotenv()
+
+# Now try again
+print(os.getenv("GEMINI_API_KEY"))
+```
+
+## Security Best Practices
+
+### Do NOT commit API keys to git
+
+```bash
+# Add .env to .gitignore
+echo ".env" >> .gitignore
+
+# Verify .env is ignored
+git check-ignore .env
+# Should output: .env
+```
+
+### Use different keys for different environments
+
+```bash
+# .env.development
+GEMINI_API_KEY=dev_key_here
+
+# .env.production
+GEMINI_API_KEY=prod_key_here
+```
+
+### Rotate keys regularly
+
+1. Create new API key at Google AI Studio
+2. Update `.env` with new key
+3. Test that it works
+4. Delete old key from Google AI Studio
+
+## Additional Resources
+
+- [Google AI Studio](https://aistudio.google.com/)
+- [Gemini API Documentation](https://ai.google.dev/gemini-api/docs)
+- [google-genai Python SDK](https://googleapis.github.io/python-genai/)

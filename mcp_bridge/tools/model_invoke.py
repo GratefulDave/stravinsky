@@ -314,6 +314,112 @@ def is_retryable_exception(e: Exception) -> bool:
     return False
 
 
+async def _invoke_gemini_with_api_key(
+    api_key: str,
+    prompt: str,
+    model: str = "gemini-3-flash",
+    temperature: float = 0.7,
+    max_tokens: int = 4096,
+    thinking_budget: int = 0,
+    image_path: str | None = None,
+) -> str:
+    """
+    Invoke Gemini using API key authentication (google-genai library).
+
+    This is an alternative to OAuth authentication that uses the official
+    google-genai Python library with a simple API key.
+
+    Args:
+        api_key: Gemini API key (from GEMINI_API_KEY or GOOGLE_API_KEY env var)
+        prompt: The prompt to send to Gemini
+        model: Gemini model to use (e.g., "gemini-2.0-flash-exp")
+        temperature: Sampling temperature (0.0-2.0)
+        max_tokens: Maximum tokens in response
+        thinking_budget: Tokens reserved for internal reasoning (if supported)
+        image_path: Optional path to image/PDF for vision analysis
+
+    Returns:
+        The model's response text.
+
+    Raises:
+        ImportError: If google-genai library is not installed
+        ValueError: If API request fails
+    """
+    try:
+        from google import genai
+    except ImportError:
+        raise ImportError(
+            "google-genai library not installed. Install with: pip install google-genai"
+        )
+
+    # Map stravinsky model names to google-genai model names
+    # google-genai uses different model naming (e.g., "gemini-2.0-flash-exp")
+    model_map = {
+        "gemini-3-flash": "gemini-2.0-flash-exp",
+        "gemini-3-pro-low": "gemini-2.0-flash-exp",
+        "gemini-3-pro-high": "gemini-exp-1206",  # Experimental model
+        "gemini-flash": "gemini-2.0-flash-exp",
+        "gemini-pro": "gemini-2.0-flash-exp",
+        "gemini-3-pro": "gemini-2.0-flash-exp",
+        "gemini": "gemini-2.0-flash-exp",
+    }
+    genai_model = model_map.get(model, model)  # Pass through if not in map
+
+    try:
+        # Initialize client with API key
+        client = genai.Client(api_key=api_key)
+
+        # Build generation config
+        config = {
+            "temperature": temperature,
+            "max_output_tokens": max_tokens,
+        }
+
+        # Add thinking budget if supported (experimental feature)
+        if thinking_budget > 0:
+            config["thinking_config"] = {
+                "thinking_budget": thinking_budget,
+            }
+
+        # Build contents - text prompt plus optional image
+        contents = [prompt]
+
+        # Add image data for vision analysis
+        if image_path:
+            from pathlib import Path
+
+            image_file = Path(image_path)
+            if image_file.exists():
+                # google-genai supports direct file path or base64
+                # For simplicity, use the file path directly
+                contents.append(image_file)
+                logger.info(f"[API_KEY] Added vision data: {image_path}")
+
+        # Generate content
+        response = client.models.generate_content(
+            model=genai_model,
+            contents=contents,
+            config=config,
+        )
+
+        # Extract text from response
+        if hasattr(response, 'text'):
+            return response.text
+        elif hasattr(response, 'candidates') and response.candidates:
+            # Fallback: extract from candidates
+            candidate = response.candidates[0]
+            if hasattr(candidate, 'content'):
+                parts = candidate.content.parts
+                text_parts = [part.text for part in parts if hasattr(part, 'text')]
+                return "".join(text_parts) if text_parts else "No response generated"
+
+        return "No response generated"
+
+    except Exception as e:
+        logger.error(f"API key authentication failed: {e}")
+        raise ValueError(f"Gemini API key request failed: {e}")
+
+
 @retry(
     stop=stop_after_attempt(2),  # Reduced from 5 to 2 attempts
     wait=wait_exponential(multiplier=2, min=10, max=120),  # Longer waits: 10s → 20s → 40s
@@ -334,7 +440,10 @@ async def invoke_gemini(
     """
     Invoke a Gemini model with the given prompt.
 
-    Uses OAuth authentication with Antigravity credentials.
+    Supports two authentication methods (API key takes precedence):
+    1. API Key: Set GEMINI_API_KEY or GOOGLE_API_KEY in environment
+    2. OAuth: Use Google OAuth via Antigravity (requires stravinsky-auth login gemini)
+
     Supports vision API for image/PDF analysis when image_path is provided.
 
     Args:
@@ -390,6 +499,22 @@ async def invoke_gemini(
     desc_info = f" | {description}" if description else ""
     print(f"🔮 GEMINI: {model} | agent={agent_type}{task_info}{desc_info}", file=sys.stderr)
 
+    # Check for API key authentication (takes precedence over OAuth)
+    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+    if api_key:
+        logger.info(f"[{agent_type}] Using API key authentication (GEMINI_API_KEY)")
+        return await _invoke_gemini_with_api_key(
+            api_key=api_key,
+            prompt=prompt,
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            thinking_budget=thinking_budget,
+            image_path=image_path,
+        )
+
+    # Fallback to OAuth authentication (Antigravity)
+    logger.info(f"[{agent_type}] Using OAuth authentication (Antigravity)")
     # Acquire semaphore to limit concurrent Gemini requests (prevents 429 rate limits)
     semaphore = _get_gemini_semaphore()
     async with semaphore:

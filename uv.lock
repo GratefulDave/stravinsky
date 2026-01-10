@@ -464,6 +464,11 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/c6/97/451d55e05487a5cd6279a01a7e34921858b16f7dc8aa38a2c684743cd2b3/google_auth-2.45.0-py2.py3-none-any.whl", hash = "sha256:82344e86dc00410ef5382d99be677c6043d72e502b625aa4f4afa0bdacca0f36", size = 233312, upload-time = "2025-12-15T22:58:40.777Z" },
 ]
 
+[package.optional-dependencies]
+requests = [
+    { name = "requests" },
+]
+
 [[package]]
 name = "google-auth-oauthlib"
 version = "1.2.2"
@@ -475,6 +480,27 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/fb/87/e10bf24f7bcffc1421b84d6f9c3377c30ec305d082cd737ddaa6d8f77f7c/google_auth_oauthlib-1.2.2.tar.gz", hash = "sha256:11046fb8d3348b296302dd939ace8af0a724042e8029c1b872d87fabc9f41684", size = 20955, upload-time = "2025-04-22T16:40:29.172Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/ac/84/40ee070be95771acd2f4418981edb834979424565c3eec3cd88b6aa09d24/google_auth_oauthlib-1.2.2-py3-none-any.whl", hash = "sha256:fd619506f4b3908b5df17b65f39ca8d66ea56986e5472eb5978fd8f3786f00a2", size = 19072, upload-time = "2025-04-22T16:40:28.174Z" },
+]
+
+[[package]]
+name = "google-genai"
+version = "1.56.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "anyio" },
+    { name = "distro" },
+    { name = "google-auth", extra = ["requests"] },
+    { name = "httpx" },
+    { name = "pydantic" },
+    { name = "requests" },
+    { name = "sniffio" },
+    { name = "tenacity" },
+    { name = "typing-extensions" },
+    { name = "websockets" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/70/ad/d3ac5a102135bd3f1e4b1475ca65d2bd4bcc22eb2e9348ac40fe3fadb1d6/google_genai-1.56.0.tar.gz", hash = "sha256:0491af33c375f099777ae207d9621f044e27091fafad4c50e617eba32165e82f", size = 340451, upload-time = "2025-12-17T12:35:05.412Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/84/93/94bc7a89ef4e7ed3666add55cd859d1483a22737251df659bf1aa46e9405/google_genai-1.56.0-py3-none-any.whl", hash = "sha256:9e6b11e0c105ead229368cb5849a480e4d0185519f8d9f538d61ecfcf193b052", size = 426563, upload-time = "2025-12-17T12:35:03.717Z" },
 ]
 
 [[package]]
@@ -2145,7 +2171,7 @@ wheels = [
 
 [[package]]
 name = "stravinsky"
-version = "0.4.7"
+version = "0.4.21"
 source = { editable = "." }
 dependencies = [
     { name = "aiofiles" },
@@ -2153,6 +2179,7 @@ dependencies = [
     { name = "cryptography" },
     { name = "google-auth" },
     { name = "google-auth-oauthlib" },
+    { name = "google-genai" },
     { name = "httpx" },
     { name = "jedi" },
     { name = "jedi-language-server" },
@@ -2161,6 +2188,7 @@ dependencies = [
     { name = "mcp" },
     { name = "ollama" },
     { name = "openai" },
+    { name = "pathspec" },
     { name = "plyer" },
     { name = "psutil" },
     { name = "pydantic" },
@@ -2191,6 +2219,7 @@ requires-dist = [
     { name = "cryptography", specifier = ">=41.0.0" },
     { name = "google-auth", specifier = ">=2.20.0" },
     { name = "google-auth-oauthlib", specifier = ">=1.0.0" },
+    { name = "google-genai", specifier = ">=0.2.0" },
     { name = "httpx", specifier = ">=0.24.0" },
     { name = "jedi", specifier = ">=0.19.2" },
     { name = "jedi-language-server", specifier = ">=0.41.0" },
@@ -2200,6 +2229,7 @@ requires-dist = [
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.10.0" },
     { name = "ollama", specifier = ">=0.6.1" },
     { name = "openai", specifier = ">=1.0.0" },
+    { name = "pathspec", specifier = ">=0.12.0" },
     { name = "plyer", specifier = ">=2.1.0" },
     { name = "psutil", specifier = ">=5.9.0" },
     { name = "pydantic", specifier = ">=2.0.0" },

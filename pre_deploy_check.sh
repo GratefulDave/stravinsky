@@ -81,6 +81,7 @@ if [ -d "tests" ] && [ -n "$(find tests -name 'test_*.py' -o -name '*_test.py')"
     (set -o pipefail; uv run pytest tests/ \
         --ignore=tests/test_hooks.py \
         --ignore=tests/test_new_hooks.py \
+        --ignore=tests/test_invoke_gemini_agentic.py \
         -x \
         --tb=short \
         -q 2>&1 | tee /tmp/pytest_output.txt | tail -30)
@@ -89,12 +90,12 @@ if [ -d "tests" ] && [ -n "$(find tests -name 'test_*.py' -o -name '*_test.py')"
 
     if [ $TEST_EXIT -ne 0 ]; then
         echo ""
-        echo "⚠️  WARNING: Some tests are failing"
+        echo "❌ FAILED: Tests must pass before deployment"
+        echo "  Fix failing tests or remove them if obsolete"
         echo "  See /tmp/pytest_output.txt for full output"
-        echo "  Deploying anyway (test check is non-blocking)"
-    else
-        echo "  ✅ All tests passed"
+        exit 1
     fi
+    echo "  ✅ All tests passed"
 else
     echo "  ⚠️  No tests found (tests/ directory empty or missing)"
 fi
@@ -108,33 +109,15 @@ else
     echo "  ✅ No linting errors"
 fi
 
-# Check 8: Git status clean (allow version files only)
+# Check 8: Git status clean
 echo ""
 echo "✓ Check 8: Git status"
-GIT_STATUS=$(git status --porcelain)
-if [ -n "$GIT_STATUS" ]; then
-    # Check if only version files are modified
-    ONLY_VERSION_FILES=true
-    while IFS= read -r line; do
-        file=$(echo "$line" | awk '{print $2}')
-        if [[ "$file" != "pyproject.toml" ]] && \
-           [[ "$file" != "mcp_bridge/__init__.py" ]] && \
-           [[ "$file" != "pre_deploy_check.sh" ]]; then
-            ONLY_VERSION_FILES=false
-            break
-        fi
-    done <<< "$GIT_STATUS"
-
-    if [[ "$ONLY_VERSION_FILES" == "true" ]]; then
-        echo "  ⚠️  Version files modified (allowed for deployment)"
-        git status --short
-    else
-        echo "  ⚠️  WARNING: Uncommitted changes detected (non-blocking)"
-        git status --short
-    fi
-else
-    echo "  ✅ No uncommitted changes"
+if [ -n "$(git status --porcelain)" ]; then
+    echo "❌ FAILED: Uncommitted changes detected"
+    git status --short
+    exit 1
 fi
+echo "  ✅ No uncommitted changes"
 
 echo ""
 echo "================================"

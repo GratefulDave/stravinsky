@@ -528,14 +528,16 @@ async def invoke_gemini(
     # Log with agent context and prompt summary
     logger.info(f"[{agent_type}] → {model}: {prompt_summary}")
 
-    # USER-VISIBLE NOTIFICATION (stderr) - Shows when Gemini is invoked
+    # Check for API key authentication (takes precedence over OAuth)
+    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+
+    # USER-VISIBLE NOTIFICATION (stderr) - Shows when Gemini is invoked with auth method
     import sys
     task_info = f" task={task_id}" if task_id else ""
     desc_info = f" | {description}" if description else ""
-    print(f"🔮 GEMINI: {model} | agent={agent_type}{task_info}{desc_info}", file=sys.stderr)
+    auth_method = "API" if api_key else "OAuth"
+    print(f"🔮 GEMINI ({auth_method}): {model} | agent={agent_type}{task_info}{desc_info}", file=sys.stderr)
 
-    # Check for API key authentication (takes precedence over OAuth)
-    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
     if api_key:
         logger.info(f"[{agent_type}] Using API key authentication (GEMINI_API_KEY)")
         # Rate limit concurrent requests (configurable via ~/.stravinsky/config.json)
@@ -851,6 +853,147 @@ def _execute_tool(name: str, args: dict) -> str:
         return f"Tool error: {str(e)}"
 
 
+async def _invoke_gemini_agentic_with_api_key(
+    api_key: str,
+    prompt: str,
+    model: str = "gemini-3-flash",
+    max_turns: int = 10,
+    timeout: int = 120,
+) -> str:
+    """
+    Invoke Gemini with function calling using API key authentication (google-genai library).
+
+    This implements a multi-turn agentic loop:
+    1. Send prompt with tool definitions
+    2. If model returns FunctionCall, execute the tool
+    3. Send FunctionResponse back to model
+    4. Repeat until model returns text or max_turns reached
+
+    Args:
+        api_key: Gemini API key (from GEMINI_API_KEY or GOOGLE_API_KEY env var)
+        prompt: The task prompt
+        model: Gemini model to use
+        max_turns: Maximum number of tool-use turns
+        timeout: Request timeout in seconds (currently unused by google-genai)
+
+    Returns:
+        Final text response from the model
+
+    Raises:
+        ImportError: If google-genai library is not installed
+        ValueError: If API request fails
+    """
+    # USER-VISIBLE NOTIFICATION (stderr) - Shows agentic mode with API key
+    import sys
+    print(f"🔮 GEMINI (API/Agentic): {model} | max_turns={max_turns}", file=sys.stderr)
+
+    try:
+        from google import genai
+        from google.genai import types
+    except ImportError:
+        raise ImportError(
+            "google-genai library not installed. Install with: pip install google-genai"
+        )
+
+    # Map stravinsky model names to google-genai model names
+    model_map = {
+        "gemini-3-flash": "gemini-2.0-flash-exp",
+        "gemini-3-pro-low": "gemini-2.0-flash-exp",
+        "gemini-3-pro-high": "gemini-exp-1206",
+        "gemini-flash": "gemini-2.0-flash-exp",
+        "gemini-pro": "gemini-2.0-flash-exp",
+        "gemini-3-pro": "gemini-2.0-flash-exp",
+        "gemini": "gemini-2.0-flash-exp",
+    }
+    genai_model = model_map.get(model, model)
+
+    # Initialize client with API key
+    client = genai.Client(api_key=api_key)
+
+    # Convert AGENT_TOOLS to google-genai format
+    # google-genai expects tools as a list of FunctionDeclaration objects
+    tools = []
+    for tool_group in AGENT_TOOLS:
+        for func_decl in tool_group.get("functionDeclarations", []):
+            tools.append(
+                types.FunctionDeclaration(
+                    name=func_decl["name"],
+                    description=func_decl["description"],
+                    parameters=func_decl["parameters"],
+                )
+            )
+
+    # Initialize conversation with user message
+    contents = [types.Content(role="user", parts=[types.Part(text=prompt)])]
+
+    for turn in range(max_turns):
+        try:
+            # Generate content with tools
+            response = client.models.generate_content(
+                model=genai_model,
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    tools=tools,
+                    temperature=0.7,
+                    max_output_tokens=8192,
+                ),
+            )
+
+            # Check if response has function calls
+            if not response.candidates or not response.candidates[0].content.parts:
+                return "No response generated"
+
+            parts = response.candidates[0].content.parts
+            function_calls = []
+            text_parts = []
+
+            for part in parts:
+                if part.function_call:
+                    function_calls.append(part.function_call)
+                elif part.text:
+                    text_parts.append(part.text)
+
+            # If no function calls, return text response
+            if not function_calls:
+                result = "".join(text_parts)
+                return result if result.strip() else "Task completed"
+
+            # Execute function calls and prepare responses
+            function_responses = []
+            for func_call in function_calls:
+                func_name = func_call.name
+                func_args = dict(func_call.args) if func_call.args else {}
+
+                logger.info(f"[AgenticGemini] Turn {turn + 1}: Executing {func_name}")
+                result = _execute_tool(func_name, func_args)
+
+                function_responses.append(
+                    types.Part(
+                        function_response=types.FunctionResponse(
+                            name=func_name,
+                            response={"result": result},
+                        )
+                    )
+                )
+
+            # Add model's response to conversation
+            contents.append(response.candidates[0].content)
+
+            # Add function responses to conversation
+            contents.append(
+                types.Content(
+                    role="user",
+                    parts=function_responses,
+                )
+            )
+
+        except Exception as e:
+            logger.error(f"[AgenticGemini] Error in turn {turn + 1}: {e}")
+            raise ValueError(f"Gemini API key request failed: {e}")
+
+    return "Max turns reached without final response"
+
+
 async def invoke_gemini_agentic(
     token_store: TokenStore,
     prompt: str,
@@ -867,6 +1010,10 @@ async def invoke_gemini_agentic(
     3. Send FunctionResponse back to model
     4. Repeat until model returns text or max_turns reached
 
+    Supports two authentication methods (API key takes precedence):
+    1. API Key: Set GEMINI_API_KEY or GOOGLE_API_KEY in environment
+    2. OAuth: Use Google OAuth via Antigravity (requires stravinsky-auth login gemini)
+
     Args:
         token_store: Token store for OAuth credentials
         prompt: The task prompt
@@ -877,6 +1024,25 @@ async def invoke_gemini_agentic(
     Returns:
         Final text response from the model
     """
+    # Check for API key authentication (takes precedence over OAuth)
+    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+    if api_key:
+        logger.info("[AgenticGemini] Using API key authentication (GEMINI_API_KEY)")
+        return await _invoke_gemini_agentic_with_api_key(
+            api_key=api_key,
+            prompt=prompt,
+            model=model,
+            max_turns=max_turns,
+            timeout=timeout,
+        )
+
+    # Fallback to OAuth authentication (Antigravity)
+    logger.info("[AgenticGemini] Using OAuth authentication (Antigravity)")
+
+    # USER-VISIBLE NOTIFICATION (stderr) - Shows agentic mode with OAuth
+    import sys
+    print(f"🔮 GEMINI (OAuth/Agentic): {model} | max_turns={max_turns}", file=sys.stderr)
+
     access_token = await _ensure_valid_token(token_store, "gemini")
     api_model = resolve_gemini_model(model)
 

@@ -2785,6 +2785,104 @@ async def enhanced_search(
 # ========================
 
 
+class DedicatedIndexingWorker:
+    """Single-threaded async worker for all indexing operations.
+
+    Prevents concurrent indexing by serializing all operations through a queue.
+    Runs a persistent event loop to avoid creating/destroying loops repeatedly.
+    """
+
+    def __init__(self, store: "CodebaseVectorStore"):
+        """Initialize the indexing worker.
+
+        Args:
+            store: CodebaseVectorStore instance for reindexing
+        """
+        import queue
+
+        self.store = store
+        self._queue: queue.Queue = queue.Queue(maxsize=1)  # Max 1 pending request (debouncing)
+        self._loop = None
+        self._thread: threading.Thread | None = None
+        self._shutdown = threading.Event()
+
+    def start(self) -> None:
+        """Start the worker thread with persistent event loop."""
+        if self._thread is not None and self._thread.is_alive():
+            logger.warning("Indexing worker already running")
+            return
+
+        self._thread = threading.Thread(target=self._run_worker, daemon=True, name="IndexingWorker")
+        self._thread.start()
+        logger.debug(f"Started indexing worker for {self.store.project_path}")
+
+    def _run_worker(self) -> None:
+        """Worker thread entry point - runs persistent event loop."""
+        import asyncio
+        import queue
+
+        # Create persistent event loop for this worker thread
+        self._loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self._loop)
+
+        try:
+            while not self._shutdown.is_set():
+                try:
+                    # Wait for reindex request (blocking with timeout)
+                    self._queue.get(timeout=0.5)
+
+                    # Run indexing on persistent loop
+                    self._loop.run_until_complete(self._do_reindex())
+
+                except queue.Empty:
+                    continue  # No work, check shutdown flag
+                except Exception as e:
+                    logger.warning(f"⚠️ Indexing worker failed: {e}\n  Manual reindex: semantic_index('{self.store.project_path}')")
+        finally:
+            # Clean shutdown
+            self._loop.close()
+
+    async def _do_reindex(self) -> None:
+        """Execute reindex with retry logic."""
+        from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
+
+        @retry(
+            stop=stop_after_attempt(3),
+            wait=wait_exponential(multiplier=1, min=2, max=10),
+            retry=retry_if_exception_type((httpx.HTTPError, ConnectionError, TimeoutError)),
+            reraise=True,
+        )
+        async def _indexed():
+            await self.store.index_codebase(force=False)
+
+        await _indexed()
+        logger.info("✅ Worker reindexed codebase for %s", self.store.project_path)
+
+    def request_reindex(self, files: list[Path]) -> None:
+        """Request reindex from any thread (thread-safe).
+
+        Args:
+            files: List of files that changed (for logging only)
+        """
+        import queue
+
+        try:
+            # Non-blocking put - drops if queue full (natural debouncing)
+            self._queue.put_nowait("reindex")
+            logger.debug(f"📥 Queued reindex for {len(files)} files: {[f.name for f in files[:5]]}")
+        except queue.Full:
+            # Already have pending reindex - this is fine (debouncing)
+            logger.debug(f"Reindex already queued, skipping {len(files)} files")
+
+    def shutdown(self) -> None:
+        """Graceful shutdown of worker thread."""
+        self._shutdown.set()
+        if self._thread is not None:
+            self._thread.join(timeout=5)
+            self._thread = None
+        logger.debug("Indexing worker shut down")
+
+
 class CodebaseFileWatcher:
     """Watch a project directory for file changes and trigger reindexing.
 
@@ -2795,6 +2893,7 @@ class CodebaseFileWatcher:
     - Debounces rapid changes to batch them into a single reindex
     - Thread-safe with daemon threads for clean shutdown
     - Integrates with CodebaseVectorStore for incremental indexing
+    - Uses dedicated worker thread to prevent concurrent indexing
     """
 
     # Default debounce time in seconds
@@ -2830,10 +2929,14 @@ class CodebaseFileWatcher:
         self._pending_files: set[Path] = set()
         self._pending_lock = threading.Lock()
 
+        # Dedicated indexing worker (prevents concurrent access)
+        self._indexing_worker = DedicatedIndexingWorker(store)
+
     def start(self) -> None:
         """Start watching the project directory.
 
         Creates and starts a watchdog observer in a daemon thread.
+        Also starts the dedicated indexing worker thread.
         """
         with self._lock:
             if self._running:
@@ -2841,6 +2944,9 @@ class CodebaseFileWatcher:
                 return
 
             try:
+                # Start indexing worker first (must be running before file events arrive)
+                self._indexing_worker.start()
+
                 watchdog = get_watchdog()
                 Observer = watchdog["Observer"]
 
@@ -2866,12 +2972,14 @@ class CodebaseFileWatcher:
             except Exception as e:
                 logger.error(f"Failed to start file watcher: {e}")
                 self._running = False
+                # Clean up worker if observer failed
+                self._indexing_worker.shutdown()
                 raise
 
     def stop(self) -> None:
         """Stop watching the project directory.
 
-        Cancels any pending reindex timers and stops the observer.
+        Cancels any pending reindex timers, stops the observer, and shuts down the indexing worker.
         """
         with self._lock:
             # Cancel pending reindex
@@ -2884,6 +2992,9 @@ class CodebaseFileWatcher:
                 self._observer.stop()
                 self._observer.join(timeout=5)  # Wait up to 5 seconds for shutdown
                 self._observer = None
+
+            # Shutdown indexing worker
+            self._indexing_worker.shutdown()
 
             self._event_handler = None
             self._running = False
@@ -2931,13 +3042,9 @@ class CodebaseFileWatcher:
     def _trigger_reindex(self) -> None:
         """Trigger reindexing of accumulated changed files.
 
-        This is called after the debounce period expires. It performs an
-        incremental reindex focusing on the changed files.
+        This is called after the debounce period expires. Delegates to the
+        dedicated indexing worker to prevent concurrent access.
         """
-        import asyncio
-
-        from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
-
         with self._pending_lock:
             if not self._pending_files:
                 self._pending_reindex_timer = None
@@ -2947,29 +3054,8 @@ class CodebaseFileWatcher:
             self._pending_files.clear()
             self._pending_reindex_timer = None
 
-        # Run async reindex with retry logic
-        @retry(
-            stop=stop_after_attempt(3),
-            wait=wait_exponential(multiplier=1, min=2, max=10),
-            retry=retry_if_exception_type((httpx.HTTPError, ConnectionError, TimeoutError)),
-            reraise=True,
-        )
-        async def _do_reindex():
-            """Wrapper for reindex with retry logic."""
-            await self.store.index_codebase(force=False)
-
-        try:
-            # Use asyncio.run() which properly handles event loop lifecycle
-            # This is safe from a daemon thread and won't conflict with other loops
-            asyncio.run(_do_reindex())
-            logger.info(f"✅ Reindexed {len(files_to_index)} changed files: {[f.name for f in files_to_index[:5]]}")
-        except Exception as e:
-            # Surface error to user via warning (will appear in Claude Code UI)
-            logger.warning(
-                f"⚠️ File watcher reindex failed after retries: {e}\n"
-                f"  Files affected: {[f.name for f in files_to_index[:10]]}\n"
-                f"  Manual reindex recommended: semantic_index(project_path='{self.project_path}')"
-            )
+        # Delegate to dedicated worker (prevents concurrent indexing)
+        self._indexing_worker.request_reindex(files_to_index)
 
 
 def _create_file_change_handler_class():

@@ -1,9 +1,34 @@
 {
   "dependencies": {
-    "null": {
+    "1": {
+      "deps": [],
+      "independent": true,
+      "parallel_safe": true
+    },
+    "2": {
+      "deps": [],
+      "independent": true,
+      "parallel_safe": true
+    },
+    "3": {
       "deps": [],
       "independent": false,
       "parallel_safe": false
+    },
+    "4": {
+      "deps": [],
+      "independent": true,
+      "parallel_safe": true
+    },
+    "5": {
+      "deps": [],
+      "independent": true,
+      "parallel_safe": true
+    },
+    "6": {
+      "deps": [],
+      "independent": true,
+      "parallel_safe": true
     }
   }
 }

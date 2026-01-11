@@ -1,4 +1,3 @@
-
 from mcp.types import Prompt, Tool
 
 
@@ -466,10 +465,35 @@ def get_tool_definitions() -> list[Tool]:
         ),
         Tool(
             name="agent_list",
-            description="List all background agent tasks with their status.",
+            description="List all background agent tasks with their status. By default shows all agents; use show_all=false to see only running/pending.",
             inputSchema={
                 "type": "object",
-                "properties": {},
+                "properties": {
+                    "show_all": {
+                        "type": "boolean",
+                        "description": "If false, only show running/pending agents. If true (default), show all.",
+                        "default": True,
+                    },
+                },
+            },
+        ),
+        Tool(
+            name="agent_cleanup",
+            description="Clean up old completed/failed/cancelled agents to reduce clutter in agent_list. Removes agents older than max_age_minutes.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "max_age_minutes": {
+                        "type": "integer",
+                        "description": "Remove agents older than this many minutes (default: 30)",
+                        "default": 30,
+                    },
+                    "statuses": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "List of statuses to remove (default: ['completed', 'failed', 'cancelled'])",
+                    },
+                },
             },
         ),
         Tool(

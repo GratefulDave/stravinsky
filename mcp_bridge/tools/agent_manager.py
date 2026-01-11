@@ -258,13 +258,28 @@ class AgentManager:
         tasks = self._load_tasks()
         return tasks.get(task_id)
 
-    def list_tasks(self, parent_session_id: str | None = None) -> list[dict[str, Any]]:
-        """List all tasks, optionally filtered by parent session."""
+    def list_tasks(
+        self, parent_session_id: str | None = None, show_all: bool = True
+    ) -> list[dict[str, Any]]:
+        """
+        List tasks, optionally filtered by parent session and status.
+
+        Args:
+            parent_session_id: Optional filter by parent session
+            show_all: If False, only show running/pending agents. If True (default), show all.
+
+        Returns:
+            List of task dictionaries
+        """
         tasks = self._load_tasks()
         task_list = list(tasks.values())
 
         if parent_session_id:
             task_list = [t for t in task_list if t.get("parent_session_id") == parent_session_id]
+
+        # Filter by status if not showing all
+        if not show_all:
+            task_list = [t for t in task_list if t.get("status") in ["running", "pending"]]
 
         return task_list
 
@@ -568,6 +583,76 @@ class AgentManager:
             return cleared
 
         return stopped_count
+
+    def cleanup(
+        self,
+        max_age_minutes: int = 30,
+        statuses: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """
+        Clean up old completed/failed/cancelled agents.
+
+        Args:
+            max_age_minutes: Remove tasks older than this (default: 30 minutes)
+            statuses: List of statuses to remove (default: ['completed', 'failed', 'cancelled'])
+
+        Returns:
+            {
+                "removed": int,
+                "task_ids": list[str],
+                "summary": str
+            }
+        """
+        if statuses is None:
+            statuses = ["completed", "failed", "cancelled"]
+
+        tasks = self._load_tasks()
+        now = datetime.now()
+        removed_ids = []
+
+        for task_id, task in list(tasks.items()):
+            # Skip if status not in cleanup list
+            if task.get("status") not in statuses:
+                continue
+
+            # Check age
+            completed_at = task.get("completed_at")
+            if not completed_at:
+                continue
+
+            try:
+                completed_time = datetime.fromisoformat(completed_at)
+                age_minutes = (now - completed_time).total_seconds() / 60
+
+                if age_minutes > max_age_minutes:
+                    removed_ids.append(task_id)
+                    del tasks[task_id]
+
+                    # Clean up associated files
+                    task_files = [
+                        self.agents_dir / f"{task_id}.log",
+                        self.agents_dir / f"{task_id}.out",
+                        self.agents_dir / f"{task_id}.system",
+                    ]
+                    for f in task_files:
+                        if f.exists():
+                            try:
+                                f.unlink()
+                            except Exception:
+                                pass
+            except (ValueError, AttributeError):
+                # Invalid timestamp, skip
+                continue
+
+        # Save updated tasks
+        if removed_ids:
+            self._save_tasks(tasks)
+
+        return {
+            "removed": len(removed_ids),
+            "task_ids": removed_ids,
+            "summary": f"Removed {len(removed_ids)} agent(s) older than {max_age_minutes} minutes",
+        }
 
     def get_output(self, task_id: str, block: bool = False, timeout: float = 30.0) -> str:
         """
@@ -1086,15 +1171,43 @@ async def agent_cancel(task_id: str) -> str:
             return f"⚠️ Task {task_id} is not running (status: {task['status']}). Cannot cancel."
 
 
-async def agent_list() -> str:
+async def agent_cleanup(max_age_minutes: int = 30, statuses: list[str] | None = None) -> str:
+    """
+    Clean up old completed/failed/cancelled agents.
+
+    Args:
+        max_age_minutes: Remove agents older than this many minutes (default: 30)
+        statuses: List of statuses to remove (default: ['completed', 'failed', 'cancelled'])
+
+    Returns:
+        Formatted cleanup summary
+    """
+    manager = get_manager()
+    result = manager.cleanup(max_age_minutes=max_age_minutes, statuses=statuses)
+
+    if result["removed"] == 0:
+        return f"🧹 No agents older than {max_age_minutes} minutes to clean up."
+
+    return (
+        f"🧹 {Colors.BOLD}Cleanup Complete{Colors.RESET}\n\n"
+        f"{result['summary']}\n\n"
+        f"Removed agents:\n"
+        + "\n".join(f"  • {Colors.BRIGHT_BLACK}{tid}{Colors.RESET}" for tid in result["task_ids"])
+    )
+
+
+async def agent_list(show_all: bool = True) -> str:
     """
     List all background agent tasks.
+
+    Args:
+        show_all: If False, only show running/pending agents. If True (default), show all.
 
     Returns:
         Formatted list of tasks
     """
     manager = get_manager()
-    tasks = manager.list_tasks()
+    tasks = manager.list_tasks(show_all=show_all)
 
     if not tasks:
         return "No background agent tasks found."

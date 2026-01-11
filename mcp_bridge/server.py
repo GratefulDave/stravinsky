@@ -314,7 +314,15 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         elif name == "agent_list":
             from .tools.agent_manager import agent_list
 
-            result_content = await agent_list()
+            result_content = await agent_list(show_all=arguments.get("show_all", True))
+
+        elif name == "agent_cleanup":
+            from .tools.agent_manager import agent_cleanup
+
+            result_content = await agent_cleanup(
+                max_age_minutes=arguments.get("max_age_minutes", 30),
+                statuses=arguments.get("statuses"),
+            )
 
         elif name == "agent_progress":
             from .tools.agent_manager import agent_progress
@@ -507,27 +515,34 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                     debounce_seconds=arguments.get("debounce_seconds", 2.0),
                 )
 
-                result_content = json.dumps({
-                    "status": "started",
-                    "project_path": str(watcher.project_path),
-                    "debounce_seconds": watcher.debounce_seconds,
-                    "provider": watcher.store.provider_name,
-                    "is_running": watcher.is_running()
-                }, indent=2)
+                result_content = json.dumps(
+                    {
+                        "status": "started",
+                        "project_path": str(watcher.project_path),
+                        "debounce_seconds": watcher.debounce_seconds,
+                        "provider": watcher.store.provider_name,
+                        "is_running": watcher.is_running(),
+                    },
+                    indent=2,
+                )
             except ValueError as e:
                 # No index exists
-                result_content = json.dumps({
-                    "error": str(e),
-                    "hint": "Run semantic_index() before starting file watcher"
-                }, indent=2)
+                result_content = json.dumps(
+                    {"error": str(e), "hint": "Run semantic_index() before starting file watcher"},
+                    indent=2,
+                )
                 print(f"⚠️  start_file_watcher ValueError: {e}", file=sys.stderr)
             except Exception as e:
                 # Unexpected error
                 import traceback
-                result_content = json.dumps({
-                    "error": f"{type(e).__name__}: {str(e)}",
-                    "hint": "Check MCP server logs for details"
-                }, indent=2)
+
+                result_content = json.dumps(
+                    {
+                        "error": f"{type(e).__name__}: {str(e)}",
+                        "hint": "Check MCP server logs for details",
+                    },
+                    indent=2,
+                )
                 print(f"❌ start_file_watcher error: {e}", file=sys.stderr)
                 traceback.print_exc(file=sys.stderr)
 
@@ -540,10 +555,9 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 project_path=arguments.get("project_path", "."),
             )
 
-            result_content = json.dumps({
-                "stopped": stopped,
-                "project_path": arguments.get("project_path", ".")
-            }, indent=2)
+            result_content = json.dumps(
+                {"stopped": stopped, "project_path": arguments.get("project_path", ".")}, indent=2
+            )
 
         elif name == "cancel_indexing":
             from .tools.semantic_search import cancel_indexing
@@ -724,6 +738,7 @@ def sync_user_assets():
         # Try importlib.resources as last resort (Python 3.9+)
         try:
             import importlib.resources as resources
+
             # Check if stravinsky_claude_assets is a package
             with resources.files("stravinsky_claude_assets") as assets_path:
                 if assets_path.is_dir():

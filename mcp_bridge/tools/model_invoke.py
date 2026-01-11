@@ -452,17 +452,19 @@ async def _invoke_gemini_with_api_key(
         )
 
     # Map stravinsky model names to google-genai model names
-    # google-genai uses different model naming (e.g., "gemini-2.0-flash-exp")
+    # Pass through gemini-3-* models directly (Tier 3 benefits)
     model_map = {
-        "gemini-3-flash": "gemini-2.0-flash-exp",
-        "gemini-3-pro-low": "gemini-2.0-flash-exp",
-        "gemini-3-pro-high": "gemini-exp-1206",  # Experimental model
-        "gemini-flash": "gemini-2.0-flash-exp",
-        "gemini-pro": "gemini-2.0-flash-exp",
-        "gemini-3-pro": "gemini-2.0-flash-exp",
-        "gemini": "gemini-2.0-flash-exp",
+        "gemini-3-flash": "gemini-3-flash-preview",  # Tier 3 model (not -exp)
+        "gemini-3-flash-preview": "gemini-3-flash-preview",  # Pass through
+        "gemini-3-pro-low": "gemini-3-flash-preview",
+        "gemini-3-pro-high": "gemini-3-pro-preview",  # Tier 3 pro model
+        "gemini-3-pro-preview": "gemini-3-pro-preview",  # Pass through
+        "gemini-flash": "gemini-3-flash-preview",
+        "gemini-pro": "gemini-3-pro-preview",
+        "gemini-3-pro": "gemini-3-pro-preview",
+        "gemini": "gemini-3-flash-preview",
     }
-    genai_model = model_map.get(model, model)  # Pass through if not in map
+    genai_model = model_map.get(model, "gemini-3-flash-preview")  # Default to tier 3 flash
 
     try:
         # Initialize client with API key
@@ -1047,16 +1049,19 @@ async def _invoke_gemini_agentic_with_api_key(
         )
 
     # Map stravinsky model names to google-genai model names
+    # Pass through gemini-3-* models directly (Tier 3 benefits)
     model_map = {
-        "gemini-3-flash": "gemini-2.0-flash-exp",
-        "gemini-3-pro-low": "gemini-2.0-flash-exp",
-        "gemini-3-pro-high": "gemini-exp-1206",
-        "gemini-flash": "gemini-2.0-flash-exp",
-        "gemini-pro": "gemini-2.0-flash-exp",
-        "gemini-3-pro": "gemini-2.0-flash-exp",
-        "gemini": "gemini-2.0-flash-exp",
+        "gemini-3-flash": "gemini-3-flash-preview",  # Tier 3 model (not -exp)
+        "gemini-3-flash-preview": "gemini-3-flash-preview",  # Pass through
+        "gemini-3-pro-low": "gemini-3-flash-preview",
+        "gemini-3-pro-high": "gemini-3-pro-preview",  # Tier 3 pro model
+        "gemini-3-pro-preview": "gemini-3-pro-preview",  # Pass through
+        "gemini-flash": "gemini-3-flash-preview",
+        "gemini-pro": "gemini-3-pro-preview",
+        "gemini-3-pro": "gemini-3-pro-preview",
+        "gemini": "gemini-3-flash-preview",
     }
-    genai_model = model_map.get(model, model)
+    genai_model = model_map.get(model, "gemini-3-flash-preview")  # Default to tier 3 flash
 
     # Initialize client with API key
     client = genai.Client(api_key=api_key)

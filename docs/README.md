@@ -10,6 +10,17 @@
 | [AGENTS.md](AGENTS.md) | Agent type details |
 | [TROUBLESHOOTING.md](TROUBLESHOOTING.md) | Common issues & solutions |
 
+## Architecture Documentation
+
+| Document | Description |
+|----------|-------------|
+| [ARCHITECTURE.md](ARCHITECTURE.md) | High-level system overview with mermaid diagrams |
+| [OAUTH_FLOW.md](OAUTH_FLOW.md) | OAuth authentication flow & token management |
+| [MCP_TOOL_FLOW.md](MCP_TOOL_FLOW.md) | MCP tool invocation lifecycle |
+| [AGENT_ORCHESTRATION.md](AGENT_ORCHESTRATION.md) | Agent spawning & parallel execution |
+| [LSP_ARCHITECTURE.md](LSP_ARCHITECTURE.md) | LSP integration & 35x speedup mechanism |
+| [SEMANTIC_SEARCH_QUICK_START.md](SEMANTIC_SEARCH_QUICK_START.md) | Vector search with embeddings |
+
 ## TL;DR
 
 ```bash

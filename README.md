@@ -90,29 +90,37 @@ stravinsky-auth logout gemini
 
 **When to use:** Primary method for all use cases. Provides automatic fallback to API key on rate limits.
 
+**Rate Limit Architecture:**
+- **OAuth**: Lower rate limits, but convenient (no API key management)
+- **API Key**: **Tier 3 high quotas** - automatic fallback for heavy usage
+
 **Auth Priority:**
 1. OAuth is tried FIRST (if configured)
-2. On OAuth 429 rate limit → Switch to API key for 5 minutes
-3. After 5-minute cooldown → Automatically retry OAuth
+2. On OAuth 429 rate limit → **Automatically switch to API key** (Tier 3 quotas) for 5 minutes
+3. After 5-minute cooldown → Retry OAuth
 
-#### Option 2: API Key (Fallback - Development/Testing)
+#### Option 2: API Key (**Tier 3 High Quotas** - Automatic Fallback)
 
-**Simplest setup** - just add your Gemini API key to `.env`:
+**CRITICAL**: Use a **Tier 3 API key** for high-volume usage. OAuth has lower limits and automatically falls back to your API key.
+
+**Setup** - add your Gemini API key to `.env`:
 
 ```bash
 # Add to your .env file (or export in shell)
-GEMINI_API_KEY=your_api_key_here
+GEMINI_API_KEY=your_tier_3_api_key_here
 
 # Or use GOOGLE_API_KEY (same effect)
-GOOGLE_API_KEY=your_api_key_here
+GOOGLE_API_KEY=your_tier_3_api_key_here
 ```
 
 **Get your API key:**
 1. Visit [Google AI Studio](https://aistudio.google.com/app/apikey)
-2. Create an API key
+2. Create an API key (ensure it's Tier 3 for high quotas)
 3. Add to `.env` file in your project root
 
-**When to use:** Development, testing, or as automatic fallback when OAuth hits rate limits.
+**When to use:**
+- **Primary**: Automatic fallback when OAuth rate limits are exhausted (recommended for all users)
+- Development/testing without OAuth setup
 
 **Secure Token Storage:**
 

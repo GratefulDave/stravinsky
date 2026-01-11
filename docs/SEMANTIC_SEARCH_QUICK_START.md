@@ -2,6 +2,66 @@
 
 After testing and verification, semantic search is **fully functional** and ready for use.
 
+## Architecture Overview
+
+```mermaid
+flowchart TB
+    subgraph "Input"
+        Q[Natural Language Query]
+        SF[Source Files]
+    end
+
+    subgraph "Indexing Pipeline"
+        SF --> CHUNK[Chunker]
+        CHUNK -->|Python| AST[AST Parser<br/>functions/classes]
+        CHUNK -->|Other| LN[Line Chunker<br/>512 lines]
+        AST --> EMB[Embedding Provider]
+        LN --> EMB
+        EMB --> DB[(ChromaDB<br/>~/.stravinsky/vectordb/)]
+    end
+
+    subgraph "Search Pipeline"
+        Q --> QE[Query Embedding]
+        QE --> VS[Vector Similarity Search]
+        DB --> VS
+        VS --> RANK[Ranked Results]
+    end
+
+    subgraph "Embedding Providers"
+        OL[Ollama<br/>nomic-embed-text<br/>768 dims - FREE]
+        MX[Mxbai<br/>mxbai-embed-large<br/>1024 dims - FREE]
+        GE[Gemini<br/>gemini-embedding-001<br/>768 dims]
+        OP[OpenAI<br/>text-embedding-3-small<br/>1536 dims]
+    end
+
+    EMB -.-> OL
+    EMB -.-> MX
+    EMB -.-> GE
+    EMB -.-> OP
+    QE -.-> OL
+```
+
+## Search Flow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant SS as semantic_search()
+    participant EP as Embedding Provider
+    participant DB as ChromaDB
+
+    User->>SS: query="authentication logic"
+    SS->>EP: Generate query embedding
+    EP-->>SS: [0.123, -0.456, ...]
+
+    SS->>DB: collection.query(embedding, n=10)
+    DB-->>SS: Matching chunks + distances
+
+    SS->>SS: Format results with:<br/>- File path<br/>- Line numbers<br/>- Relevance score<br/>- Code preview
+
+    SS-->>User: Formatted results
+```
+
 ## Quick Test
 
 To verify semantic search is working in your environment:
@@ -203,13 +263,70 @@ results = await semantic_search(..., provider="huggingface")
 3. **Better Quality**: Install mxbai model (`ollama pull mxbai-embed-large`) for improved code understanding
 4. **Monitoring**: Use `semantic_health()` before searches in production
 
+## File Watcher Architecture
+
+Automatic reindexing when code files change:
+
+```mermaid
+flowchart TB
+    subgraph "File Watcher"
+        OBS[watchdog Observer]
+        EVT[File Change Event<br/>create/modify/delete]
+        DEB[Debounce Timer<br/>2 seconds]
+    end
+
+    subgraph "Indexing Worker"
+        WK[Dedicated Thread]
+        IDX[index_codebase()]
+    end
+
+    OBS -->|monitors| SF[Source Files]
+    SF -->|changes| EVT
+    EVT --> DEB
+    DEB -->|batch| WK
+    WK --> IDX
+    IDX --> DB[(ChromaDB)]
+```
+
+### Usage
+
+```python
+# Start file watcher
+await start_file_watcher(".", provider="ollama", debounce_seconds=2.0)
+
+# Files are now auto-reindexed on change!
+
+# Stop when done
+await stop_file_watcher(".")
+```
+
+## Advanced Search Types
+
+```mermaid
+flowchart LR
+    subgraph "Search Types"
+        SS[semantic_search<br/>Basic vector search]
+        HS[hybrid_search<br/>Semantic + AST]
+        MQ[multi_query_search<br/>LLM-expanded queries]
+        DS[decomposed_search<br/>Break complex queries]
+        ES[enhanced_search<br/>Auto-select strategy]
+    end
+
+    Q[Query] --> ES
+    ES -->|simple| SS
+    ES -->|complex| DS
+    ES -->|needs_recall| MQ
+    ES -->|structural| HS
+```
+
 ## Documentation Links
 
 - [Full Test Report](./SEMANTIC_SEARCH_TEST_REPORT.md)
-- [Semantic Search Architecture](./semantic_search_architecture.md) (if available)
-- [MCP Tool Integration](../README.md)
+- [Architecture Overview](./ARCHITECTURE.md)
+- [MCP Tool Flow](./MCP_TOOL_FLOW.md)
+- [File Watcher Design](./FILEWATCHER_ARCHITECTURE.md)
 
 ---
 
-**Last Updated**: January 7, 2026  
+**Last Updated**: January 10, 2026
 **Status**: ✅ All tests passing, ready for production

@@ -898,8 +898,56 @@ AGENT_TOOLS = [
     {
         "functionDeclarations": [
             {
+                "name": "semantic_search",
+                "description": "Search codebase with natural language query using semantic embeddings. ALWAYS use this FIRST before grep_search or read_file to find relevant files efficiently. Returns code snippets with file paths and relevance scores.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "Natural language search query (e.g., 'find authentication logic', 'PDF rendering code')",
+                        },
+                        "project_path": {
+                            "type": "string",
+                            "description": "Path to the project root (default: '.')",
+                        },
+                        "n_results": {
+                            "type": "integer",
+                            "description": "Maximum number of results to return (default: 10)",
+                        },
+                    },
+                    "required": ["query"],
+                },
+            },
+            {
+                "name": "hybrid_search",
+                "description": "Hybrid search combining semantic similarity with structural AST pattern matching. Use when you need precise structural patterns (e.g., specific function signatures) combined with semantic relevance.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "Natural language search query (e.g., 'find authentication logic')",
+                        },
+                        "pattern": {
+                            "type": "string",
+                            "description": "Optional ast-grep pattern for structural matching (e.g., 'def $FUNC($$$):', 'async function $NAME($$$)')",
+                        },
+                        "project_path": {
+                            "type": "string",
+                            "description": "Path to the project root (default: '.')",
+                        },
+                        "n_results": {
+                            "type": "integer",
+                            "description": "Maximum number of results to return (default: 10)",
+                        },
+                    },
+                    "required": ["query"],
+                },
+            },
+            {
                 "name": "read_file",
-                "description": "Read the contents of a file. Returns the file contents as text.",
+                "description": "Read the contents of a file. Returns the file contents as text. USE ONLY AFTER semantic_search identifies the target file.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -924,7 +972,7 @@ AGENT_TOOLS = [
             },
             {
                 "name": "grep_search",
-                "description": "Search for a pattern in files using ripgrep. Returns matching lines with file paths and line numbers.",
+                "description": "Search for a pattern in files using ripgrep. Returns matching lines with file paths and line numbers. USE ONLY for precise pattern matching AFTER semantic_search narrows down the search scope.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -960,7 +1008,57 @@ def _execute_tool(name: str, args: dict) -> str:
     from pathlib import Path
 
     try:
-        if name == "read_file":
+        if name == "semantic_search":
+            # Import semantic_search function from tools
+            import asyncio
+            from .semantic_search import semantic_search
+
+            # Extract args with defaults
+            query = args.get("query")
+            if not query:
+                return "Error: 'query' parameter is required for semantic_search"
+
+            project_path = args.get("project_path", ".")
+            n_results = args.get("n_results", 10)
+
+            # Run async function in sync context
+            loop = asyncio.get_event_loop()
+            result = loop.run_until_complete(
+                semantic_search(
+                    query=query,
+                    project_path=project_path,
+                    n_results=n_results,
+                )
+            )
+            return result
+
+        elif name == "hybrid_search":
+            # Import hybrid_search function from tools
+            import asyncio
+            from .semantic_search import hybrid_search
+
+            # Extract args with defaults
+            query = args.get("query")
+            if not query:
+                return "Error: 'query' parameter is required for hybrid_search"
+
+            pattern = args.get("pattern")
+            project_path = args.get("project_path", ".")
+            n_results = args.get("n_results", 10)
+
+            # Run async function in sync context
+            loop = asyncio.get_event_loop()
+            result = loop.run_until_complete(
+                hybrid_search(
+                    query=query,
+                    pattern=pattern,
+                    project_path=project_path,
+                    n_results=n_results,
+                )
+            )
+            return result
+
+        elif name == "read_file":
             path = Path(args["path"])
             if not path.exists():
                 return f"Error: File not found: {path}"

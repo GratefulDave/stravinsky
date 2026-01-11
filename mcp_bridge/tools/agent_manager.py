@@ -229,6 +229,12 @@ class AgentManager:
         # Track background threads for cleanup
         self._threads: dict[str, threading.Thread] = {}
 
+        # Auto-cleanup stale agents on startup (> 30 minutes old)
+        try:
+            self.cleanup(max_age_minutes=30)
+        except Exception:
+            pass  # Ignore cleanup errors on startup
+
     def _load_tasks(self) -> dict[str, Any]:
         """Load tasks from persistent storage."""
         with self._lock:
@@ -587,6 +593,38 @@ class AgentManager:
             return cleared
 
         return stopped_count
+
+    def remove_task(self, task_id: str) -> bool:
+        """
+        Remove a single task and its associated files.
+
+        Args:
+            task_id: The task ID to remove
+
+        Returns:
+            True if task was removed, False if not found
+        """
+        with self._lock:
+            tasks = self._load_tasks()
+            if task_id not in tasks:
+                return False
+
+            del tasks[task_id]
+            self._save_tasks(tasks)
+
+            # Clean up associated files
+            task_files = [
+                self.agents_dir / f"{task_id}.log",
+                self.agents_dir / f"{task_id}.out",
+                self.agents_dir / f"{task_id}.system",
+            ]
+            for f in task_files:
+                if f.exists():
+                    try:
+                        f.unlink()
+                    except Exception:
+                        pass
+            return True
 
     def cleanup(
         self,
@@ -1231,12 +1269,12 @@ async def agent_cleanup(max_age_minutes: int = 30, statuses: list[str] | None = 
     )
 
 
-async def agent_list(show_all: bool = True) -> str:
+async def agent_list(show_all: bool = False) -> str:
     """
     List all background agent tasks.
 
     Args:
-        show_all: If False, only show running/pending agents. If True (default), show all.
+        show_all: If True, show all agents. If False (default), only show running/pending agents.
 
     Returns:
         Formatted list of tasks

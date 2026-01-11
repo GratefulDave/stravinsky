@@ -717,7 +717,7 @@ class TestAgentList:
             }
             manager._save_tasks(task_data)
 
-            result = await agent_list()
+            result = await agent_list(show_all=True)
             assert "task_1" in result
             assert "task_2" in result
             assert "explore" in result

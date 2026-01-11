@@ -357,10 +357,10 @@ Orchestrator Synthesizes
 | `/verify` | verify.md | Post-Implementation Verification |
 | `/version` | version.md | Check Stravinsky version |
 | `/publish` | publish.md | PyPI deployment workflow |
-| `/str-watch` | str-watch.md | Start semantic search file watching |
-| `/str-unwatch` | str-unwatch.md | Stop file watching |
-| `/str-cancel` | str-cancel.md | Cancel ongoing indexing |
-| `/str-clean` | str-clean.md | Delete semantic search indexes |
+| `/str:watch` | str/watch.md | Start semantic search file watching |
+| `/str:unwatch` | str/unwatch.md | Stop file watching |
+| `/str:cancel` | str/cancel.md | Cancel ongoing indexing |
+| `/str:clean` | str/clean.md | Delete semantic search indexes |
 | `/index` | index.md | Index project for semantic search |
 
 **Location**: `/Users/davidandrews/PycharmProjects/stravinsky/.claude/commands/`

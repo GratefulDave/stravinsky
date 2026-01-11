@@ -11,10 +11,6 @@
           {
             "type": "command",
             "command": "python3 ~/.claude/hooks/notification_hook.py"
-          },
-          {
-            "type": "command",
-            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/send_event.py --source-app stravinsky --event-type Notification"
           }
         ]
       }
@@ -26,10 +22,6 @@
           {
             "type": "command",
             "command": "python3 ~/.claude/hooks/subagent_stop.py"
-          },
-          {
-            "type": "command",
-            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/send_event.py --source-app stravinsky --event-type SubagentStop"
           }
         ]
       }
@@ -41,10 +33,6 @@
           {
             "type": "command",
             "command": "python3 ~/.claude/hooks/pre_compact.py"
-          },
-          {
-            "type": "command",
-            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/send_event.py --source-app stravinsky --event-type PreCompact"
           }
         ]
       }
@@ -65,15 +53,6 @@
           {
             "type": "command",
             "command": "python3 ~/.claude/hooks/comment_checker.py"
-          }
-        ]
-      },
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/send_event.py --source-app stravinsky --event-type PreToolUse"
           }
         ]
       }
@@ -101,10 +80,6 @@
           {
             "type": "command",
             "command": "python3 ~/.claude/hooks/todo_continuation.py"
-          },
-          {
-            "type": "command",
-            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/send_event.py --source-app stravinsky --event-type UserPromptSubmit"
           }
         ]
       }
@@ -120,10 +95,6 @@
           {
             "type": "command",
             "command": "python3 ~/.claude/hooks/session_recovery.py"
-          },
-          {
-            "type": "command",
-            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/send_event.py --source-app stravinsky --event-type PostToolUse"
           }
         ]
       },
@@ -160,27 +131,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/send_event.py --source-app stravinsky --event-type Stop --add-chat"
-          }
-        ]
-      }
-    ],
-    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/send_event.py --source-app stravinsky --event-type SessionStart"
-          }
-        ]
-      }
-    ],
-    "SessionEnd": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/send_event.py --source-app stravinsky --event-type SessionEnd"
+            "command": "python3 ~/.claude/hooks/stop_hook.py"
           }
         ]
       }

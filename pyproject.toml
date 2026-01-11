@@ -1,6 +1,6 @@
 [project]
 name = "stravinsky"
-version = "0.4.39"
+version = "0.4.40"
 description = "MCP Bridge for Claude Code with Multi-Model Support. Install globally: claude mcp add --scope user stravinsky -- uvx stravinsky. Add to CLAUDE.md: See https://pypi.org/project/stravinsky/"
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
@@ -64,6 +64,18 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["mcp_bridge"]
+
+[tool.hatch.build.targets.wheel.force-include]
+# Include .claude/ assets in the wheel so they can be synced to user scope
+".claude" = "stravinsky_claude_assets"
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/mcp_bridge",
+    "/.claude",
+    "/README.md",
+    "/pyproject.toml",
+]
 
 [tool.ruff]
 line-length = 100

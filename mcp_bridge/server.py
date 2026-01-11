@@ -682,8 +682,104 @@ async def get_prompt(name: str, arguments: dict[str, str] | None) -> GetPromptRe
     )
 
 
+def sync_user_assets():
+    """
+    Copy package assets to user scope (~/.claude/) on every MCP load.
+
+    This ensures all repos get the latest commands, hooks, rules, and agents
+    from the installed Stravinsky package.
+
+    Handles both:
+    - Development: .claude/ relative to project root
+    - Installed package: stravinsky_claude_assets/ in site-packages
+    """
+    from pathlib import Path
+    import shutil
+
+    # Try multiple locations for package assets
+    package_dir = Path(__file__).parent.parent  # stravinsky/
+
+    # Location 1: Development - .claude/ at project root
+    dev_claude = package_dir / ".claude"
+
+    # Location 2: Installed package - stravinsky_claude_assets in site-packages
+    # When installed via pip/uvx, hatch includes .claude as stravinsky_claude_assets
+    installed_claude = package_dir / "stravinsky_claude_assets"
+
+    # Also check relative to mcp_bridge (alternate install layout)
+    mcp_bridge_dir = Path(__file__).parent
+    installed_claude_alt = mcp_bridge_dir.parent / "stravinsky_claude_assets"
+
+    # Find the first existing assets directory
+    package_claude = None
+    for candidate in [dev_claude, installed_claude, installed_claude_alt]:
+        if candidate.exists():
+            package_claude = candidate
+            break
+
+    # User scope directory
+    user_claude = Path.home() / ".claude"
+
+    if package_claude is None:
+        # Try importlib.resources as last resort (Python 3.9+)
+        try:
+            import importlib.resources as resources
+            # Check if stravinsky_claude_assets is a package
+            with resources.files("stravinsky_claude_assets") as assets_path:
+                if assets_path.is_dir():
+                    package_claude = Path(assets_path)
+        except (ImportError, ModuleNotFoundError, TypeError):
+            pass
+
+    if package_claude is None:
+        logger.debug(f"Package assets not found (checked: {dev_claude}, {installed_claude})")
+        return
+
+    # Directories to sync
+    dirs_to_sync = ["commands", "hooks", "rules", "agents"]
+
+    for dir_name in dirs_to_sync:
+        src_dir = package_claude / dir_name
+        dst_dir = user_claude / dir_name
+
+        if not src_dir.exists():
+            continue
+
+        # Create destination if it doesn't exist
+        dst_dir.mkdir(parents=True, exist_ok=True)
+
+        # Copy all files recursively (overwrite if source is newer)
+        for src_file in src_dir.rglob("*"):
+            if src_file.is_file():
+                # Compute relative path
+                rel_path = src_file.relative_to(src_dir)
+                dst_file = dst_dir / rel_path
+
+                # Create parent directories
+                dst_file.parent.mkdir(parents=True, exist_ok=True)
+
+                # Copy if source is newer or dest doesn't exist
+                should_copy = not dst_file.exists()
+                if dst_file.exists():
+                    src_mtime = src_file.stat().st_mtime
+                    dst_mtime = dst_file.stat().st_mtime
+                    should_copy = src_mtime > dst_mtime
+
+                if should_copy:
+                    shutil.copy2(src_file, dst_file)
+                    logger.debug(f"Synced {dir_name}/{rel_path} to user scope")
+
+    logger.info("Synced package assets to user scope (~/.claude/)")
+
+
 async def async_main():
     """Server execution entry point."""
+    # Sync package assets to user scope on every MCP load
+    try:
+        sync_user_assets()
+    except Exception as e:
+        logger.warning(f"Failed to sync user assets: {e}")
+
     # Initialize hooks at runtime, not import time
     try:
         from .hooks import initialize_hooks

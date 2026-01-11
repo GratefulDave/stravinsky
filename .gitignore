@@ -36,6 +36,7 @@ stravinsky/
 
 # Stravinsky temp files
 .stravinsky/agents/*.out
+.stravinsky/agents/*.log
 .stravinsky/agents/*.system
 .stravinsky/agents.json
 logs/*.log

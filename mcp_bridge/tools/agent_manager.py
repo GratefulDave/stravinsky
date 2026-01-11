@@ -172,6 +172,7 @@ class AgentTask:
     status: str  # pending, running, completed, failed, cancelled
     created_at: str
     parent_session_id: str | None = None
+    terminal_session_id: str | None = None  # NEW: Terminal/Claude Code instance identifier
     started_at: str | None = None
     completed_at: str | None = None
     result: str | None = None
@@ -209,13 +210,25 @@ class AgentManager:
         # Initialize lock FUWT - used by _save_tasks and _load_tasks
         self._lock = threading.RLock()
 
+        # Session identifier MUST be created BEFORE setting up directories
+        # Use CLAUDE_CODE_SESSION_ID if available, otherwise use process PID
+        # This ensures each terminal/Claude Code instance has its own session
+        import uuid as uuid_module
+
+        self.session_id = os.environ.get(
+            "CLAUDE_CODE_SESSION_ID", f"pid_{os.getpid()}_{uuid_module.uuid4().hex[:8]}"
+        )
+        logger.info(f"[AgentManager] Session ID: {self.session_id}")
+
         if base_dir:
             self.base_dir = Path(base_dir)
         else:
             self.base_dir = Path.cwd() / ".stravinsky"
 
         self.agents_dir = self.base_dir / "agents"
-        self.state_file = self.base_dir / "agents.json"
+        # CRITICAL FIX: Make state file terminal-specific to prevent context mixing
+        # Each terminal instance gets its own agents.json file
+        self.state_file = self.base_dir / f"agents_{self.session_id}.json"
 
         self.base_dir.mkdir(parents=True, exist_ok=True)
         self.agents_dir.mkdir(parents=True, exist_ok=True)
@@ -265,20 +278,28 @@ class AgentManager:
         return tasks.get(task_id)
 
     def list_tasks(
-        self, parent_session_id: str | None = None, show_all: bool = True
+        self,
+        parent_session_id: str | None = None,
+        show_all: bool = True,
+        current_session_only: bool = True,
     ) -> list[dict[str, Any]]:
         """
-        List tasks, optionally filtered by parent session and status.
+        List tasks, optionally filtered by parent session, status, and terminal session.
 
         Args:
             parent_session_id: Optional filter by parent session
             show_all: If False, only show running/pending agents. If True (default), show all.
+            current_session_only: If True (default), only show tasks from the current terminal session.
 
         Returns:
             List of task dictionaries
         """
         tasks = self._load_tasks()
         task_list = list(tasks.values())
+
+        # NEW: Filter by current terminal session by default
+        if current_session_only:
+            task_list = [t for t in task_list if t.get("terminal_session_id") == self.session_id]
 
         if parent_session_id:
             task_list = [t for t in task_list if t.get("parent_session_id") == parent_session_id]
@@ -328,6 +349,7 @@ class AgentManager:
             status="pending",
             created_at=datetime.now().isoformat(),
             parent_session_id=parent_session_id,
+            terminal_session_id=self.session_id,  # NEW: Track which terminal spawned this agent
             timeout=timeout,
         )
 
@@ -1269,21 +1291,23 @@ async def agent_cleanup(max_age_minutes: int = 30, statuses: list[str] | None = 
     )
 
 
-async def agent_list(show_all: bool = False) -> str:
+async def agent_list(show_all: bool = False, all_sessions: bool = False) -> str:
     """
     List all background agent tasks.
 
     Args:
         show_all: If True, show all agents. If False (default), only show running/pending agents.
+        all_sessions: If True, show agents from ALL terminal sessions. If False (default), only current session.
 
     Returns:
         Formatted list of tasks
     """
     manager = get_manager()
-    tasks = manager.list_tasks(show_all=show_all)
+    tasks = manager.list_tasks(show_all=show_all, current_session_only=not all_sessions)
 
     if not tasks:
-        return "No background agent tasks found."
+        session_msg = " (current session only)" if not all_sessions else " (all sessions)"
+        return f"No background agent tasks found{session_msg}."
 
     lines = []
 

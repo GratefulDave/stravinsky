@@ -216,6 +216,13 @@ def extract_description(tool_name: str, params: dict) -> str:
         repo = params.get("repo", "")
         return f"Fetching {path} from {repo}"
 
+    # Agent spawn (MCP tool)
+    if "agent_spawn" in tool_name:
+        agent_type = params.get("agent_type", "unknown")
+        description = params.get("description", "")
+        model = AGENT_MODELS.get(agent_type, "gemini-3-flash")
+        return f"{agent_type}({model})"
+
     # Task delegation
     if tool_name == "Task":
         subagent_type = params.get("subagent_type", "unknown")

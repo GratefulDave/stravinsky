@@ -13,7 +13,7 @@ import os
 import time
 import uuid
 
-from mcp_bridge.config.rate_limits import get_rate_limiter
+from mcp_bridge.config.rate_limits import get_rate_limiter, get_gemini_time_limiter
 
 logger = logging.getLogger(__name__)
 
@@ -583,6 +583,15 @@ async def invoke_gemini(
                 "OAuth rate-limited (429) and no API key available. "
                 "Add GEMINI_API_KEY to ~/.stravinsky/.env"
             )
+
+        # Check time-window rate limit (30 req/min)
+        time_limiter = get_gemini_time_limiter()
+        wait_time = time_limiter.acquire_visible("GEMINI", "API key")
+        if wait_time > 0:
+            await asyncio.sleep(wait_time)
+            # Re-acquire after sleep
+            wait_time = time_limiter.acquire_visible("GEMINI", "API key")
+
         print(
             f"🔮 GEMINI (API-fallback): {model} | agent={agent_type}{task_info}{desc_info}",
             file=sys.stderr,
@@ -590,7 +599,7 @@ async def invoke_gemini(
         logger.info(f"[{agent_type}] Using API key (API-only mode after 429)")
         semaphore = _get_gemini_semaphore(model)
         async with semaphore:
-            return await _invoke_gemini_with_api_key(
+            result = await _invoke_gemini_with_api_key(
                 api_key=api_key,
                 prompt=prompt,
                 model=model,
@@ -599,8 +608,20 @@ async def invoke_gemini(
                 thinking_budget=thinking_budget,
                 image_path=image_path,
             )
+            # Prepend auth header for visibility in logs
+            auth_header = f"[Auth: API key | Model: {model}]\n\n"
+            return auth_header + result
 
     # DEFAULT: Try OAuth first (Antigravity)
+
+    # Check time-window rate limit (30 req/min)
+    time_limiter = get_gemini_time_limiter()
+    wait_time = time_limiter.acquire_visible("GEMINI", "OAuth")
+    if wait_time > 0:
+        await asyncio.sleep(wait_time)
+        # Re-acquire after sleep
+        wait_time = time_limiter.acquire_visible("GEMINI", "OAuth")
+
     print(
         f"🔮 GEMINI (OAuth): {model} | agent={agent_type}{task_info}{desc_info}",
         file=sys.stderr,
@@ -769,7 +790,7 @@ async def invoke_gemini(
                 _set_api_only_mode("OAuth rate-limited (429)")
                 logger.info("[Gemini] Retrying with API key after OAuth 429")
                 # Retry immediately with API key
-                return await _invoke_gemini_with_api_key(
+                result = await _invoke_gemini_with_api_key(
                     api_key=api_key,
                     prompt=prompt,
                     model=model,
@@ -778,6 +799,9 @@ async def invoke_gemini(
                     thinking_budget=thinking_budget,
                     image_path=image_path,
                 )
+                # Prepend auth header for visibility
+                auth_header = f"[Auth: API key (OAuth 429 fallback) | Model: {model}]\n\n"
+                return auth_header + result
             else:
                 # No API key available - raise clear error
                 raise ValueError(
@@ -803,7 +827,10 @@ async def invoke_gemini(
                         cwd=os.getcwd(),
                     )
                     if fallback_result.returncode == 0 and fallback_result.stdout.strip():
-                        return fallback_result.stdout.strip()
+                        result = fallback_result.stdout.strip()
+                        # Prepend auth header for visibility
+                        auth_header = f"[Auth: Claude fallback | Model: sonnet-4.5]\n\n"
+                        return auth_header + result
                 except Exception as fallback_error:
                     logger.error(f"Fallback to Claude also failed: {fallback_error}")
 
@@ -813,7 +840,11 @@ async def invoke_gemini(
         data = response.json()
 
         # Extract text from response using thinking-aware parser
-        return _extract_gemini_response(data)
+        result = _extract_gemini_response(data)
+
+        # Prepend auth header for visibility in logs
+        auth_header = f"[Auth: OAuth | Model: {model}]\n\n"
+        return auth_header + result
 
 
 # ========================
@@ -1126,21 +1157,41 @@ async def invoke_gemini_agentic(
                 "OAuth rate-limited (429) and no API key available. "
                 "Add GEMINI_API_KEY to ~/.stravinsky/.env"
             )
+
+        # Check time-window rate limit (30 req/min)
+        time_limiter = get_gemini_time_limiter()
+        wait_time = time_limiter.acquire_visible("GEMINI", "API key")
+        if wait_time > 0:
+            await asyncio.sleep(wait_time)
+            # Re-acquire after sleep
+            wait_time = time_limiter.acquire_visible("GEMINI", "API key")
+
         print(
             f"🔮 GEMINI (API-fallback/Agentic): {model} | max_turns={max_turns}",
             file=sys.stderr,
         )
         logger.info("[AgenticGemini] Using API key (API-only mode after 429)")
-        return await _invoke_gemini_agentic_with_api_key(
+        result = await _invoke_gemini_agentic_with_api_key(
             api_key=api_key,
             prompt=prompt,
             model=model,
             max_turns=max_turns,
             timeout=timeout,
         )
+        # Prepend auth header for visibility in logs
+        auth_header = f"[Auth: API key (Agentic) | Model: {model}]\n\n"
+        return auth_header + result
 
     # DEFAULT: Try OAuth first (Antigravity)
     logger.info("[AgenticGemini] Using OAuth authentication (Antigravity)")
+
+    # Check time-window rate limit (30 req/min)
+    time_limiter = get_gemini_time_limiter()
+    wait_time = time_limiter.acquire_visible("GEMINI", "OAuth")
+    if wait_time > 0:
+        await asyncio.sleep(wait_time)
+        # Re-acquire after sleep
+        wait_time = time_limiter.acquire_visible("GEMINI", "OAuth")
 
     # USER-VISIBLE NOTIFICATION (stderr) - Shows agentic mode with OAuth
     import sys
@@ -1243,13 +1294,16 @@ async def invoke_gemini_agentic(
                 _set_api_only_mode("OAuth rate-limited (429) in agentic mode")
                 logger.info("[AgenticGemini] Retrying with API key after OAuth 429")
                 # Retry entire agentic call with API key
-                return await _invoke_gemini_agentic_with_api_key(
+                result = await _invoke_gemini_agentic_with_api_key(
                     api_key=api_key,
                     prompt=prompt,
                     model=model,
                     max_turns=max_turns,
                     timeout=timeout,
                 )
+                # Prepend auth header for visibility
+                auth_header = f"[Auth: API key (OAuth 429 fallback, Agentic) | Model: {model}]\n\n"
+                return auth_header + result
             else:
                 # No API key available - raise clear error
                 raise ValueError(
@@ -1267,13 +1321,15 @@ async def invoke_gemini_agentic(
         inner_response = data.get("response", data)
         candidates = inner_response.get("candidates", [])
         if not candidates:
-            return "No response generated"
+            auth_header = f"[Auth: OAuth (Agentic) | Model: {model}]\n\n"
+            return auth_header + "No response generated"
 
         content = candidates[0].get("content", {})
         parts = content.get("parts", [])
 
         if not parts:
-            return "No response parts"
+            auth_header = f"[Auth: OAuth (Agentic) | Model: {model}]\n\n"
+            return auth_header + "No response parts"
 
         # Check for function call
         function_call = None
@@ -1306,9 +1362,12 @@ async def invoke_gemini_agentic(
             )
         else:
             # No function call, return text response
-            return text_response or "Task completed"
+            result = text_response or "Task completed"
+            auth_header = f"[Auth: OAuth (Agentic) | Model: {model}]\n\n"
+            return auth_header + result
 
-    return "Max turns reached without final response"
+    auth_header = f"[Auth: OAuth (Agentic) | Model: {model}]\n\n"
+    return auth_header + "Max turns reached without final response"
 
 
 @retry(

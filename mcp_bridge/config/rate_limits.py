@@ -19,8 +19,10 @@ Configuration file: ~/.stravinsky/config.json
 
 import json
 import logging
+import sys
 import threading
-from collections import defaultdict
+import time
+from collections import defaultdict, deque
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -217,3 +219,99 @@ def rate_limited(model: str, timeout: float = 60.0) -> RateLimitContext:
             pass
     """
     return RateLimitContext(get_rate_limiter(), model, timeout)
+
+
+class TimeWindowRateLimiter:
+    """
+    Time-window rate limiter (30 requests/minute) with user-visible feedback.
+
+    Implements sliding window algorithm for accurate rate limiting.
+    Complements the existing semaphore-based concurrency limiter.
+    """
+
+    def __init__(self, calls: int = 30, period: int = 60):
+        """
+        Initialize time-window rate limiter.
+
+        Args:
+            calls: Maximum number of calls per period (default: 30)
+            period: Time period in seconds (default: 60)
+        """
+        self.calls = calls
+        self.period = period
+        self._timestamps: deque = deque()
+        self._lock = threading.Lock()
+
+    def acquire_visible(self, provider: str, auth_mode: str) -> float:
+        """
+        Acquire slot with user-visible feedback.
+
+        Args:
+            provider: Provider name for logging (e.g., "GEMINI", "OPENAI")
+            auth_mode: Authentication method (e.g., "OAuth", "API key")
+
+        Returns:
+            wait_time: Time to wait in seconds (0 if no wait needed)
+
+        Note:
+            This method prints status to stderr for user visibility.
+        """
+        with self._lock:
+            now = time.time()
+
+            # Clean old timestamps (sliding window)
+            while self._timestamps and self._timestamps[0] < now - self.period:
+                self._timestamps.popleft()
+
+            current = len(self._timestamps)
+
+            if current < self.calls:
+                self._timestamps.append(now)
+                # Show current count in stderr for visibility
+                print(
+                    f"🔮 {provider} ({auth_mode}): {current + 1}/{self.calls} this minute",
+                    file=sys.stderr,
+                )
+                return 0.0
+
+            # Rate limit hit - calculate wait time
+            wait_time = self._timestamps[0] + self.period - now
+            print(
+                f"⏳ RATE LIMIT ({provider}): {self.calls}/min hit. Waiting {wait_time:.1f}s...",
+                file=sys.stderr,
+            )
+            logger.warning(
+                f"[RateLimit] {provider} hit {self.calls}/min limit. Waiting {wait_time:.1f}s ({auth_mode})"
+            )
+
+            return wait_time
+
+    def get_stats(self) -> dict[str, int]:
+        """Get current rate limiter statistics."""
+        with self._lock:
+            now = time.time()
+            # Clean old timestamps
+            while self._timestamps and self._timestamps[0] < now - self.period:
+                self._timestamps.popleft()
+
+            return {
+                "current_count": len(self._timestamps),
+                "limit": self.calls,
+                "period_seconds": self.period,
+            }
+
+
+# Global time-window rate limiter for Gemini (30 req/min)
+_gemini_time_limiter: TimeWindowRateLimiter | None = None
+_gemini_time_limiter_lock = threading.Lock()
+
+
+def get_gemini_time_limiter() -> TimeWindowRateLimiter:
+    """Get or create the global Gemini time-window rate limiter."""
+    global _gemini_time_limiter
+    if _gemini_time_limiter is None:
+        with _gemini_time_limiter_lock:
+            if _gemini_time_limiter is None:
+                _gemini_time_limiter = TimeWindowRateLimiter(calls=30, period=60)
+                logger.info("[TimeWindowRateLimiter] Created Gemini rate limiter (30 req/min)")
+    return _gemini_time_limiter

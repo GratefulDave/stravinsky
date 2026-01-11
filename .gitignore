@@ -48,3 +48,4 @@ pygls/
 .claude/hooks/send_event.py
 .claude/hooks/utils/
 .claude/settings.local.json
+.claude/execution_state.json

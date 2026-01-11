@@ -468,6 +468,8 @@ class AgentManager:
 
             except FileNotFoundError:
                 error_msg = f"Claude CLI not found at {self.CLAUDE_CLI}. Install with: npm install -g @anthropic-ai/claude-code"
+                # Ensure agents directory exists before writing log files
+                self.agents_dir.mkdir(parents=True, exist_ok=True)
                 log_file.write_text(error_msg)
                 # Write error to .out file for debugging
                 output_file.write_text(f"❌ FILE NOT FOUND: {error_msg}")
@@ -481,6 +483,8 @@ class AgentManager:
 
             except Exception as e:
                 error_msg = str(e)
+                # Ensure agents directory exists before writing log files
+                self.agents_dir.mkdir(parents=True, exist_ok=True)
                 log_file.write_text(error_msg)
                 # Write error to .out file for debugging
                 output_file.write_text(f"❌ EXCEPTION: {error_msg}")

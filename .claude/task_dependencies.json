@@ -29,6 +29,11 @@
       "deps": [],
       "independent": true,
       "parallel_safe": true
+    },
+    "7": {
+      "deps": [],
+      "independent": false,
+      "parallel_safe": true
     }
   }
 }

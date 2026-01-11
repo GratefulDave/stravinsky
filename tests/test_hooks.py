@@ -18,7 +18,7 @@ async def test_compaction_hook():
 
 @pytest.mark.asyncio
 async def test_budget_optimizer_hook():
-    params = {"model": "gemini-2.0-flash-thinking", "prompt": "Please refactor and optimize this complex code", "thinking_budget": 0}
+    params = {"model": "gemini-3-flash", "prompt": "Please refactor and optimize this complex code", "thinking_budget": 0}
     result = await budget_optimizer_hook(params)
     assert result is not None
     assert result["thinking_budget"] == 16000

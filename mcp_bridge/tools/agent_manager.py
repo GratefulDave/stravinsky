@@ -768,7 +768,7 @@ async def agent_spawn(
         prompt: The task for the agent to perform
         agent_type: Type of agent (explore, dewey, frontend, delphi)
         description: Short description shown in status
-        model: Model to use (gemini-3-flash, gemini-2.0-flash, claude)
+        model: Model to use (gemini-3-flash, gemini-3-pro, claude)
         thinking_budget: Reserved reasoning tokens
         timeout: Execution timeout in seconds
         blocking: If True, wait for completion and return result directly (use for delphi)

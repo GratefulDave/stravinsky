@@ -431,7 +431,7 @@ async def _invoke_gemini_with_api_key(
     Args:
         api_key: Gemini API key (from GEMINI_API_KEY or GOOGLE_API_KEY env var)
         prompt: The prompt to send to Gemini
-        model: Gemini model to use (e.g., "gemini-2.0-flash-exp")
+        model: Gemini model to use (e.g., "gemini-3-flash-preview")
         temperature: Sampling temperature (0.0-2.0)
         max_tokens: Maximum tokens in response
         thinking_budget: Tokens reserved for internal reasoning (if supported)

@@ -157,9 +157,9 @@ Expected output:
 
 Both authentication methods support the same models:
 
-- `gemini-3-flash` → Uses `gemini-2.0-flash-exp` (API key) or Antigravity (OAuth)
-- `gemini-3-pro-low` → Uses `gemini-2.0-flash-exp` (API key) or Antigravity (OAuth)
-- `gemini-3-pro-high` → Uses `gemini-exp-1206` (API key) or Antigravity (OAuth)
+- `gemini-3-flash` → Uses `gemini-3-flash-preview` (API key, Tier 3) or Antigravity (OAuth)
+- `gemini-3-pro-low` → Uses `gemini-3-flash-preview` (API key, Tier 3) or Antigravity (OAuth)
+- `gemini-3-pro-high` → Uses `gemini-3-pro-preview` (API key, Tier 3) or Antigravity (OAuth)
 
 ## Troubleshooting
 

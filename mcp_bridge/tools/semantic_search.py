@@ -2418,7 +2418,7 @@ db session factory pattern"""
         result = await invoke_gemini(
             token_store=TokenStore(),
             prompt=prompt,
-            model="gemini-2.0-flash",
+            model="gemini-3-flash",
             temperature=0.7,
             max_tokens=200,
         )
@@ -2472,7 +2472,7 @@ authentication logic"""
         result = await invoke_gemini(
             token_store=TokenStore(),
             prompt=prompt,
-            model="gemini-2.0-flash",
+            model="gemini-3-flash",
             temperature=0.3,  # Lower temperature for more consistent decomposition
             max_tokens=150,
         )

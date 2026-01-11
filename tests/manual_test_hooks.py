@@ -40,7 +40,7 @@ async def test_compaction_hook():
 async def test_budget_optimizer_hook():
     print("Testing budget optimizer hook...")
     # Keyword: refactor
-    params = {"model": "gemini-2.0-flash-thinking", "prompt": "Please refactor this", "thinking_budget": 0}
+    params = {"model": "gemini-3-flash", "prompt": "Please refactor this", "thinking_budget": 0}
     result = await budget_optimizer_hook(params)
     assert result is not None
     assert result["thinking_budget"] == 16000

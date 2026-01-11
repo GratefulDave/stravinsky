@@ -37,7 +37,7 @@ async def run_task(task_id: str, base_dir: str):
         return
 
     prompt = task.get("prompt")
-    model = task.get("model", "gemini-2.0-flash")
+    model = task.get("model", "gemini-3-flash")
 
     output_file = agents_dir / f"{task_id}.out"
     agents_dir.mkdir(parents=True, exist_ok=True)

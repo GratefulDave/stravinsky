@@ -272,7 +272,25 @@ For ANY task with 2+ independent steps:
 
 1.  **Immediately use agent_spawn** for each independent component
 2.  Fire all agents simultaneously, don't wait
-3.  Monitor with agent_progress, collect with agent_output
+3.  **CRITICAL**: After spawning, automatically collect results in THE SAME RESPONSE:
+    - Use `agent_output(task_id, block=True)` for each spawned agent
+    - This waits for completion and retrieves the result
+    - DO NOT stop after spawning - the agents run in background but you MUST collect
+    - Example pattern:
+      ```python
+      # Spawn all agents (parallel)
+      task_id_1 = agent_spawn(...)
+      task_id_2 = agent_spawn(...)
+      task_id_3 = agent_spawn(...)
+      
+      # Collect ALL results in same response (blocks until complete)
+      result_1 = agent_output(task_id_1, block=True)
+      result_2 = agent_output(task_id_2, block=True) 
+      result_3 = agent_output(task_id_3, block=True)
+      
+      # Now synthesize the results
+      # [your analysis here]
+      ```
 
 ### ULTRATHINK / ULTRAWORK
 

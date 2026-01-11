@@ -56,6 +56,10 @@ def vector_store(temp_project):
         stop_file_watcher(str(temp_project))
     except Exception:
         pass
+    # Clean up vectordb directory to avoid orphaned test directories
+    import shutil
+    if store.db_path.exists():
+        shutil.rmtree(store.db_path, ignore_errors=True)
 
 
 class TestCodebaseFileWatcher:
@@ -235,6 +239,10 @@ class TestModuleLevel:
         # Clean up
         assert stop_file_watcher(str(temp_project))
         assert not watcher.is_running()
+        # Clean up vectordb directory
+        import shutil
+        if watcher.store.db_path.exists():
+            shutil.rmtree(watcher.store.db_path, ignore_errors=True)
 
     @pytest.mark.asyncio
     async def test_get_file_watcher(self, temp_project):
@@ -251,6 +259,10 @@ class TestModuleLevel:
 
         # Clean up
         stop_file_watcher(str(temp_project))
+        # Clean up vectordb directory
+        import shutil
+        if watcher.store.db_path.exists():
+            shutil.rmtree(watcher.store.db_path, ignore_errors=True)
 
     def test_get_nonexistent_watcher(self, temp_project):
         """Test getting a watcher that doesn't exist."""
@@ -282,6 +294,10 @@ class TestModuleLevel:
 
         # Clean up
         stop_file_watcher(str(temp_project))
+        # Clean up vectordb directory
+        import shutil
+        if watcher.store.db_path.exists():
+            shutil.rmtree(watcher.store.db_path, ignore_errors=True)
 
     def test_stop_nonexistent_watcher(self, temp_project):
         """Test stopping a watcher that doesn't exist."""

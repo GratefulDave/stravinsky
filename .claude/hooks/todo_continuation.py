@@ -7,6 +7,7 @@ a reminder to continue working on them before starting new work.
 
 Aligned with oh-my-opencode's [SYSTEM REMINDER - TODO CONTINUATION] pattern.
 """
+
 import json
 import os
 import sys
@@ -54,32 +55,52 @@ def main():
         print(prompt)
         return 0
 
-    # Build reminder
-    reminder_parts = ["[SYSTEM REMINDER - TODO CONTINUATION]", ""]
+    # Build AGGRESSIVE reminder with RALPH loop activation
+    reminder_parts = [
+        "",
+        "=" * 80,
+        "🔄 RALPH LOOP: INCOMPLETE WORK DETECTED",
+        "=" * 80,
+        "",
+    ]
 
     if in_progress:
-        reminder_parts.append(f"IN PROGRESS ({len(in_progress)} items):")
+        reminder_parts.append(f"📌 IN_PROGRESS ({len(in_progress)} items):")
         for t in in_progress:
-            reminder_parts.append(f"  - {t.get('content', 'Unknown task')}")
+            reminder_parts.append(f"   • {t.get('content', 'Unknown task')}")
         reminder_parts.append("")
 
     if pending:
-        reminder_parts.append(f"PENDING ({len(pending)} items):")
+        reminder_parts.append(f"📋 PENDING ({len(pending)} items):")
         for t in pending[:5]:  # Show max 5 pending
-            reminder_parts.append(f"  - {t.get('content', 'Unknown task')}")
+            reminder_parts.append(f"   • {t.get('content', 'Unknown task')}")
         if len(pending) > 5:
-            reminder_parts.append(f"  ... and {len(pending) - 5} more")
+            reminder_parts.append(f"   ... and {len(pending) - 5} more")
         reminder_parts.append("")
 
-    reminder_parts.extend([
-        "IMPORTANT: You have incomplete work. Before starting anything new:",
-        "1. Continue working on IN_PROGRESS todos first",
-        "2. If blocked, explain why and move to next PENDING item",
-        "3. Only start NEW work if all todos are complete or explicitly abandoned",
-        "",
-        "---",
-        "",
-    ])
+    reminder_parts.extend(
+        [
+            "⚡ MANDATORY CONTINUATION PROTOCOL:",
+            "",
+            "YOU MUST CONTINUE WORKING IMMEDIATELY. DO NOT WAIT FOR USER INPUT.",
+            "",
+            "1. If IN_PROGRESS todo exists → Complete it NOW",
+            "2. If blocked → Explain why and mark as pending, move to next",
+            "3. Pick next PENDING todo → Mark as in_progress → Execute",
+            "4. Repeat until ALL todos are completed",
+            "",
+            "🚫 DO NOT:",
+            '   - Ask user "Should I continue?" (YES, ALWAYS CONTINUE)',
+            "   - Wait for user confirmation (CONTINUE AUTOMATICALLY)",
+            "   - Stop with pending work (COMPLETE EVERYTHING)",
+            "   - Start new work before finishing todos (FINISH FIRST)",
+            "",
+            "THIS IS AN AUTO-CONTINUATION. PROCEED IMMEDIATELY.",
+            "",
+            "=" * 80,
+            "",
+        ]
+    )
 
     reminder = "\n".join(reminder_parts)
     print(reminder + prompt)

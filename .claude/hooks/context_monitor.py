@@ -56,7 +56,7 @@ def set_last_compact_tokens(tokens: int):
     """Record token count at compact recommendation."""
     ensure_state_dir()
     try:
-        state = {"last_compact_tokens": tokens, "timestamp": datetime.utcnow().isoformat()}
+        state = {"last_compact_tokens": tokens, "timestamp": datetime.now(timezone.utc).isoformat()}
         CONTEXT_STATE_FILE.write_text(json.dumps(state))
     except IOError:
         pass

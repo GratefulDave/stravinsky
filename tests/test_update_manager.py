@@ -23,12 +23,13 @@ CRITICAL SAFETY PRINCIPLES:
 import json
 import pytest
 import shutil
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 # ============================================================================
 # TEST FIXTURES - Mock Data Setup
 # ============================================================================
+
 
 @pytest.fixture
 def temp_home(tmp_path):
@@ -118,10 +119,16 @@ def official_settings():
                 {
                     "matcher": "*",
                     "hooks": [
-                        {"type": "command", "command": "python3 ~/.claude/hooks/parallel_execution.py"},
+                        {
+                            "type": "command",
+                            "command": "python3 ~/.claude/hooks/parallel_execution.py",
+                        },
                         {"type": "command", "command": "python3 ~/.claude/hooks/context.py"},
-                        {"type": "command", "command": "python3 ~/.claude/hooks/todo_continuation.py"},
-                    ]
+                        {
+                            "type": "command",
+                            "command": "python3 ~/.claude/hooks/todo_continuation.py",
+                        },
+                    ],
                 }
             ],
             "PostToolUse": [
@@ -129,7 +136,7 @@ def official_settings():
                     "matcher": "*",
                     "hooks": [
                         {"type": "command", "command": "python3 ~/.claude/hooks/truncator.py"},
-                    ]
+                    ],
                 }
             ],
             "PreToolUse": [
@@ -137,9 +144,9 @@ def official_settings():
                     "matcher": "Read,Grep,Bash",
                     "hooks": [
                         {"type": "command", "command": "python3 ~/.claude/hooks/stravinsky_mode.py"}
-                    ]
+                    ],
                 }
-            ]
+            ],
         }
     }
 
@@ -153,9 +160,12 @@ def user_settings():
                 {
                     "matcher": "*",
                     "hooks": [
-                        {"type": "command", "command": "python3 ~/.claude/hooks/parallel_execution.py"},
+                        {
+                            "type": "command",
+                            "command": "python3 ~/.claude/hooks/parallel_execution.py",
+                        },
                         {"type": "command", "command": "python3 ~/.claude/hooks/my_custom_hook.py"},
-                    ]
+                    ],
                 }
             ],
             "PostToolUse": [
@@ -163,11 +173,11 @@ def user_settings():
                     "matcher": "*",
                     "hooks": [
                         {"type": "command", "command": "python3 ~/.claude/hooks/truncator.py"},
-                    ]
+                    ],
                 }
-            ]
+            ],
         },
-        "customSetting": "userValue"
+        "customSetting": "userValue",
     }
 
 
@@ -176,16 +186,13 @@ def manifest_official():
     """Official manifest for version tracking."""
     return {
         "version": "1.2.0",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "hooks": {
             "truncator.py": "sha256_hash_official",
             "edit_recovery.py": "sha256_hash_official",
             "context.py": "sha256_hash_official",
         },
-        "statusline": {
-            "enabled": True,
-            "format": "default"
-        }
+        "statusline": {"enabled": True, "format": "default"},
     }
 
 
@@ -194,22 +201,20 @@ def manifest_user():
     """User's installed manifest."""
     return {
         "version": "1.1.0",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "hooks": {
             "truncator.py": "sha256_hash_user_modified",
             "edit_recovery.py": "sha256_hash_official",
             "custom_hook.py": "sha256_hash_custom",
         },
-        "statusline": {
-            "enabled": True,
-            "format": "custom"
-        }
+        "statusline": {"enabled": True, "format": "custom"},
     }
 
 
 # ============================================================================
 # TEST CLASS: Hook Installation Tests
 # ============================================================================
+
 
 class TestHookInstallation:
     """Test hook installation scenarios."""
@@ -283,6 +288,7 @@ class TestHookInstallation:
 # TEST CLASS: Hook Update Tests
 # ============================================================================
 
+
 class TestHookUpdate:
     """Test hook update scenarios."""
 
@@ -324,8 +330,7 @@ class TestHookUpdate:
         # Create new official version
         updated_hooks = official_hooks.copy()
         updated_hooks["truncator.py"] = updated_hooks["truncator.py"].replace(
-            "def truncate",
-            "# Updated\ndef truncate"
+            "def truncate", "# Updated\ndef truncate"
         )
 
         # Detect unmodified
@@ -385,6 +390,7 @@ class TestHookUpdate:
 # TEST CLASS: Conflict Detection Tests
 # ============================================================================
 
+
 class TestConflictDetection:
     """Test conflict detection and resolution."""
 
@@ -397,9 +403,7 @@ class TestConflictDetection:
         (hooks_dir / "truncator.py").write_text(truncator_official)
 
         # User modifies
-        truncator_modified = truncator_official.replace(
-            "30000", "50000"
-        )
+        truncator_modified = truncator_official.replace("30000", "50000")
         (hooks_dir / "truncator.py").write_text(truncator_modified)
 
         # Detect conflict
@@ -440,9 +444,7 @@ class TestConflictDetection:
         (hooks_dir / "truncator.py").unlink()
 
         # Detect deletion
-        deleted = set(official_hooks.keys()) - {
-            f.name for f in hooks_dir.glob("*.py")
-        }
+        deleted = set(official_hooks.keys()) - {f.name for f in hooks_dir.glob("*.py")}
         assert len(deleted) > 0
         assert "truncator.py" in deleted
 
@@ -453,10 +455,12 @@ class TestConflictDetection:
         # Scenario: Official has update, user has modifications
         truncator_official = official_hooks["truncator.py"]
         truncator_modified = truncator_official.replace(
-            "30000", "50000"  # User customization
+            "30000",
+            "50000",  # User customization
         )
         truncator_update = truncator_official.replace(
-            "30000", "25000"  # Official update
+            "30000",
+            "25000",  # Official update
         )
 
         (hooks_dir / "truncator.py").write_text(truncator_modified)
@@ -481,6 +485,7 @@ class TestConflictDetection:
 # TEST CLASS: Backup and Rollback Tests
 # ============================================================================
 
+
 class TestBackupAndRollback:
     """Test backup creation and rollback mechanism."""
 
@@ -495,7 +500,7 @@ class TestBackupAndRollback:
 
         # Create backup
         backup_dir.mkdir(parents=True, exist_ok=True)
-        timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
         backup_path = backup_dir / f"hooks_backup_{timestamp}"
         backup_path.mkdir(parents=True, exist_ok=True)
 
@@ -543,9 +548,7 @@ class TestBackupAndRollback:
             shutil.copy2(hook_file, original_backup / hook_file.name)
 
         # Modify hooks
-        modified_truncator = official_hooks["truncator.py"].replace(
-            "30000", "99999"
-        )
+        modified_truncator = official_hooks["truncator.py"].replace("30000", "99999")
         (hooks_dir / "truncator.py").write_text(modified_truncator)
 
         # Verify modification
@@ -612,6 +615,7 @@ class TestBackupAndRollback:
 # TEST CLASS: Settings.json Merge Tests
 # ============================================================================
 
+
 class TestSettingsMerge:
     """Test settings.json merge without data loss."""
 
@@ -644,7 +648,7 @@ class TestSettingsMerge:
                         "hooks": [
                             {"type": "command", "command": "hook_a.py"},
                             {"type": "command", "command": "hook_b.py"},
-                        ]
+                        ],
                     }
                 ]
             }
@@ -657,7 +661,9 @@ class TestSettingsMerge:
         result = json.loads(settings_file.read_text())
 
         # Add new without duplication
-        if "hook_c.py" not in [h["command"] for h in result["hooks"]["UserPromptSubmit"][0]["hooks"]]:
+        if "hook_c.py" not in [
+            h["command"] for h in result["hooks"]["UserPromptSubmit"][0]["hooks"]
+        ]:
             result["hooks"]["UserPromptSubmit"][0]["hooks"].append(
                 {"type": "command", "command": "hook_c.py"}
             )
@@ -682,10 +688,7 @@ class TestSettingsMerge:
             current["hooks"] = {}
 
         current["hooks"]["PreToolUse"] = [
-            {
-                "matcher": "*",
-                "hooks": [{"type": "command", "command": "test.py"}]
-            }
+            {"matcher": "*", "hooks": [{"type": "command", "command": "test.py"}]}
         ]
 
         settings_file.write_text(json.dumps(current, indent=2))
@@ -705,13 +708,7 @@ class TestSettingsMerge:
             {"type": "command", "command": "third.py"},
         ]
 
-        settings = {
-            "hooks": {
-                "UserPromptSubmit": [
-                    {"matcher": "*", "hooks": hooks}
-                ]
-            }
-        }
+        settings = {"hooks": {"UserPromptSubmit": [{"matcher": "*", "hooks": hooks}]}}
 
         settings_file.write_text(json.dumps(settings, indent=2))
         result = json.loads(settings_file.read_text())
@@ -724,6 +721,7 @@ class TestSettingsMerge:
 # ============================================================================
 # TEST CLASS: Statusline Preservation Tests
 # ============================================================================
+
 
 class TestStatuslinePreservation:
     """Test statusline settings preservation."""
@@ -765,7 +763,7 @@ class TestStatuslinePreservation:
         # Save to conflict file for recovery
         conflict_data = {
             "original_statusline": original_statusline,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
         conflict_file.write_text(json.dumps(conflict_data, indent=2))
 
@@ -780,11 +778,13 @@ class TestStatuslinePreservation:
 # TEST CLASS: Version Tracking and Manifest Tests
 # ============================================================================
 
+
 class TestVersionTracking:
     """Test version tracking and manifest validation."""
 
     def test_manifest_version_comparison(self, temp_home, manifest_user, manifest_official):
         """Test comparing manifest versions."""
+
         def parse_version(version_str: str) -> tuple:
             """Parse semantic version."""
             parts = version_str.split(".")
@@ -824,7 +824,7 @@ class TestVersionTracking:
         # Update manifest
         manifest_v2 = {
             "version": "1.1.0",
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
         manifest_file.write_text(json.dumps(manifest_v2, indent=2))
 
@@ -850,6 +850,7 @@ class TestVersionTracking:
 # ============================================================================
 # TEST CLASS: Dry-Run Mode Tests
 # ============================================================================
+
 
 class TestDryRunMode:
     """Test dry-run mode for previewing changes."""
@@ -885,7 +886,7 @@ class TestDryRunMode:
 
         preview = {
             "mode": "dry-run",
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "changes": [
                 {"file": "truncator.py", "action": "update", "lines_changed": 5},
                 {"file": "custom_hook.py", "action": "keep", "reason": "user_modified"},
@@ -908,10 +909,13 @@ class TestDryRunMode:
 # TEST CLASS: Integration Tests
 # ============================================================================
 
+
 class TestIntegration:
     """Integration tests for complete update workflows."""
 
-    def test_complete_update_workflow(self, temp_home, official_hooks, user_hooks, official_settings):
+    def test_complete_update_workflow(
+        self, temp_home, official_hooks, user_hooks, official_settings
+    ):
         """Test complete update workflow."""
         hooks_dir = temp_home / ".claude" / "hooks"
         settings_file = temp_home / ".claude" / "settings.json"
@@ -992,6 +996,7 @@ class TestIntegration:
 # ============================================================================
 # TEST CLASS: Edge Cases and Safety Tests
 # ============================================================================
+
 
 class TestEdgeCasesAndSafety:
     """Test edge cases and safety scenarios."""
@@ -1077,9 +1082,8 @@ class TestEdgeCasesAndSafety:
                     {
                         "matcher": "*",
                         "hooks": [
-                            {"type": "command", "command": f"hook_{i}.py"}
-                            for i in range(100)
-                        ]
+                            {"type": "command", "command": f"hook_{i}.py"} for i in range(100)
+                        ],
                     }
                 ]
             }
@@ -1096,10 +1100,14 @@ class TestEdgeCasesAndSafety:
         lock_file = temp_home / ".claude" / ".update_lock"
 
         # Acquire lock
-        lock_file.write_text(json.dumps({
-            "pid": 12345,
-            "timestamp": datetime.utcnow().isoformat(),
-        }))
+        lock_file.write_text(
+            json.dumps(
+                {
+                    "pid": 12345,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                }
+            )
+        )
 
         assert lock_file.exists()
 

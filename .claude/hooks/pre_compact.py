@@ -75,7 +75,7 @@ def log_compaction(preserved: List[str], stravinsky_active: bool):
     ensure_state_dir()
 
     entry = {
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "preserved_count": len(preserved),
         "stravinsky_mode": stravinsky_active,
         "preview": [p[:50] for p in preserved[:3]],

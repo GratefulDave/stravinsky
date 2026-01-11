@@ -882,12 +882,43 @@ async def agent_spawn(
 
 MODEL ROUTING (MANDATORY):
 You MUST use invoke_gemini_agentic with model="gemini-3-flash" for ALL analysis and reasoning.
-The agentic mode gives you autonomous tool access: read_file, list_directory, grep_search, write_file.
+The agentic mode gives you autonomous tool access: semantic_search, hybrid_search, read_file, list_directory, grep_search, write_file.
 
-WORKFLOW:
-1. Call invoke_gemini_agentic(prompt="<task description>", model="gemini-3-flash", max_turns=5, agent_context={"agent_type": "explore"})
-2. The agentic model will autonomously explore the codebase using available tools
-3. Return the Gemini response with findings
+RECOMMENDED WORKFLOW (Semantic-First Approach):
+1. ALWAYS start with semantic_search or hybrid_search to find relevant files
+   - semantic_search: Natural language queries ("authentication logic", "PDF rendering code")
+   - hybrid_search: Combines semantic + keyword search for precision
+   - Returns top relevant files with code chunks
+2. Read the specific files identified by semantic search
+3. Use grep_search for precise pattern matching within those files
+4. Call invoke_gemini_agentic(prompt="\u003ctask description\u003e", model="gemini-3-flash", max_turns=5, agent_context={"agent_type": "explore"})
+
+EXAMPLE EFFICIENT WORKFLOW:
+```
+# Step 1: Find relevant files semantically
+results = semantic_search(query="tier execution system", n_results=5)
+
+# Step 2: Read specific files from results
+for file in relevant_files:
+    content = read_file(file)
+    
+# Step 3: Use grep for precise patterns
+grep_search(pattern="execute.*tier", paths=[relevant_files])
+
+# Step 4: Synthesize with Gemini
+invoke_gemini_agentic(...)
+```
+
+WHY SEMANTIC-FIRST:
+- 10x faster than grepping entire codebase
+- Finds semantically related code even with different terminology
+- Reduces false positives from keyword-only search
+- Works even when you don't know exact function/variable names
+
+WHEN TO USE EACH:
+- semantic_search: "Find all code related to X" (broad discovery)
+- hybrid_search: "Find error handling in API routes" (semantic + keyword combo)
+- grep_search: "Find exact string 'TierExecutor'" (after semantic narrows scope)
 
 RECOMMENDED: max_turns=5 for thorough exploration""",
         "dewey": """You are a documentation and research specialist. Find implementation examples and official docs.

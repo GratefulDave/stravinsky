@@ -926,7 +926,7 @@ class CodebaseVectorStore:
     }
 
     # Directories to skip (non-code related)
-    SKIP_DIRS = {
+    SKIP_DUW = {
         # Python
         "__pycache__",
         ".venv",
@@ -1425,9 +1425,9 @@ class CodebaseVectorStore:
                                     file_path.is_file()
                                     and file_path.suffix.lower() in self.CODE_EXTENSIONS
                                 ):
-                                    # Apply SKIP_DIRS even within whitelisted directories
+                                    # Apply SKIP_DUW even within whitelisted directories
                                     if not any(
-                                        skip_dir in file_path.parts for skip_dir in self.SKIP_DIRS
+                                        skip_dir in file_path.parts for skip_dir in self.SKIP_DUW
                                     ):
                                         whitelist_paths.add(file_path.resolve())
 
@@ -1442,7 +1442,7 @@ class CodebaseVectorStore:
         """Get all indexable files in the project.
 
         If a .stravinskyadd whitelist file exists, ONLY those paths are indexed.
-        Otherwise, all code files are indexed (excluding SKIP_DIRS).
+        Otherwise, all code files are indexed (excluding SKIP_DUW).
         """
         # Check for whitelist mode
         whitelist = self._load_whitelist()
@@ -1487,7 +1487,7 @@ class CodebaseVectorStore:
                     continue
 
                 # Skip excluded directories
-                if any(skip_dir in file_path.parts for skip_dir in self.SKIP_DIRS):
+                if any(skip_dir in file_path.parts for skip_dir in self.SKIP_DUW):
                     continue
 
                 # Only include code files

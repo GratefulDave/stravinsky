@@ -63,18 +63,18 @@ Before final answer:
 
 **File:** `~/.claude/hooks/parallel_execution.py`
 
-**Existing:** Already had detection for `/stravinsky` and `ironstar`
+**Existing:** Already had detection for `/stravinsky` and `ultrawork`
 
 ```python
 patterns = [
     r"/stravinsky",
     r"<command-name>/stravinsky</command-name>",
     r"stravinsky orchestrator",
-    r"\bironstar\b",  # "ironstar" mode trigger
+    r"\bultrawork\b",  # "ultrawork" mode trigger
 ]
 ```
 
-**Effect:** Activates stravinsky mode when user includes "ironstar" in their prompt.
+**Effect:** Activates stravinsky mode when user includes "ultrawork" in their prompt.
 
 ## How It Works Now
 

@@ -24,7 +24,7 @@ def detect_stravinsky_invocation(prompt):
         r"/stravinsky",
         r"<command-name>/stravinsky</command-name>",
         r"stravinsky orchestrator",
-        r"\bironstar\b",
+        r"\bultrawork\b",
     ]
     prompt_lower = prompt.lower()
     return any(re.search(p, prompt_lower) for p in patterns)

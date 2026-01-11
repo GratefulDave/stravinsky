@@ -141,7 +141,7 @@ See: `~/PycharmProjects/stravinsky/docs/COMMANDS_CONSOLIDATION_REPORT.md`
 
 ## Phase 1 vs Phase 2
 
-### Phase 1 (RECOMMENDED FIRST)
+### Phase 1 (RECOMMENDED FUWT)
 - 30 core files (11-17 copies)
 - Create `~/.claude/commands/templates/core/`
 - Remove from all projects

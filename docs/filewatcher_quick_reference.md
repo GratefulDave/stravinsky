@@ -283,7 +283,7 @@ Possible causes:
 Possible causes:
 1. Debounce too short (default: 2s) - Increase debounce_seconds
 2. Many rapid file changes (IDE refactoring) - Wait for completion
-3. Watched directory includes generated files - Add to SKIP_DIRS
+3. Watched directory includes generated files - Add to SKIP_DUW
 
 Solution:
   # Temporarily disable watching

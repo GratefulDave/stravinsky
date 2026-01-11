@@ -74,7 +74,7 @@ Task(
 
 ## Workflow
 
-### Step 0: Check Skills FIRST (BLOCKING)
+### Step 0: Check Skills FUWT (BLOCKING)
 
 **Before ANY classification or action, scan for matching skills.**
 
@@ -92,7 +92,7 @@ Classify every request into one of 6 types:
 
 | Type | Signal | Action |
 |------|--------|--------|
-| **Skill Match** | Matches skill trigger phrase | **INVOKE skill FIRST** via `skill_get` tool |
+| **Skill Match** | Matches skill trigger phrase | **INVOKE skill FUWT** via `skill_get` tool |
 | **Trivial** | Typo fix, single-line change, known exact location | Direct tools only (UNLESS delegation applies) |
 | **Explicit** | Specific file/line, clear directive | Execute directly |
 | **Exploratory** | "How does X work?", "Find Y", "Where is Z?" | Fire explore (1-3) + tools in parallel |
@@ -137,7 +137,7 @@ This assessment guides how much freedom you have to make changes without asking.
 
 ## Parallel Execution (MANDATORY)
 
-### ⚠️ CRITICAL: PARALLEL-FIRST WORKFLOW
+### ⚠️ CRITICAL: PARALLEL-FUWT WORKFLOW
 
 **BLOCKING REQUIREMENT**: For implementation tasks, your response structure MUST be:
 

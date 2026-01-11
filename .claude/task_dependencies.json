@@ -1,0 +1,9 @@
+{
+  "dependencies": {
+    "null": {
+      "deps": [],
+      "independent": false,
+      "parallel_safe": false
+    }
+  }
+}

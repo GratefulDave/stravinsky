@@ -580,7 +580,7 @@ async def test_pattern_exclusion(store: object, project: TestProject) -> bool:
     files_indexed = stats.get("total_files", 0)
     print_info(f"Total files indexed: {files_indexed}")
 
-    # Verify that build directory was skipped (it's in SKIP_DIRS)
+    # Verify that build directory was skipped (it's in SKIP_DUW)
     files_list = await _get_indexed_files(store)
     excluded_files = [
         f for f in files_list 

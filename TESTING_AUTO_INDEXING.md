@@ -223,7 +223,7 @@ python tests/manual_test_auto_indexing.py
 - [x] Incremental indexing works
 
 ### Pattern Matching
-- [x] SKIP_DIRS excludes directories
+- [x] SKIP_DUW excludes directories
 - [x] Only .py files indexed (in watcher)
 - [x] Hidden files skipped
 - [x] Files outside project skipped

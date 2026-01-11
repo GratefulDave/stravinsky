@@ -303,7 +303,7 @@ result = await agent_progress(task_id, lines=20)
 result = await agent_output(task_id, block=True)
 ```
 
-## ULTRATHINK / IRONSTAR Modes
+## ULTRATHINK / ULTRAWORK Modes
 
 ### ULTRATHINK
 
@@ -317,13 +317,13 @@ flowchart LR
     DEEP --> RESULT[Thorough Result]
 ```
 
-### IRONSTAR
+### ULTRAWORK
 
 Maximum parallel execution:
 
 ```mermaid
 flowchart TB
-    REQ[Multi-Part Request] --> IS[IRONSTAR Mode]
+    REQ[Multi-Part Request] --> IS[ULTRAWORK Mode]
 
     IS --> SPAWN1[agent_spawn #1]
     IS --> SPAWN2[agent_spawn #2]

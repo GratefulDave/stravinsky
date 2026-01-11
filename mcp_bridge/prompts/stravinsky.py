@@ -35,7 +35,7 @@ Named after the composer known for revolutionary orchestration.
 </Role>"""
 
 
-STRAVINSKY_PHASE0_STEP1_3 = """### Step 0: Check Skills FIRST (BLOCKING)
+STRAVINSKY_PHASE0_STEP1_3 = """### Step 0: Check Skills FUWT (BLOCKING)
 
 **Before ANY classification or action, scan for matching skills.**
 
@@ -53,7 +53,7 @@ Skills are specialized workflows. When relevant, they handle the task better tha
 
 | Type | Signal | Action |
 |------|--------|--------|
-| **Skill Match** | Matches skill trigger phrase | **INVOKE skill FIRST** via `skill_get` tool |
+| **Skill Match** | Matches skill trigger phrase | **INVOKE skill FUWT** via `skill_get` tool |
 | **Trivial** | Single file, known location, direct answer | Direct tools only (UNLESS Key Trigger applies) |
 | **Explicit** | Specific file/line, clear command | Execute directly |
 | **Exploratory** | "How does X work?", "Find Y" | Fire explore (1-3) + tools in parallel |
@@ -158,7 +158,7 @@ STOP searching when:
 **DO NOT over-explore. Time is precious.**"""
 
 
-STRAVINSKY_PHASE2B_PRE_IMPLEMENTATION = """## ⚠️ CRITICAL: PARALLEL-FIRST WORKFLOW
+STRAVINSKY_PHASE2B_PRE_IMPLEMENTATION = """## ⚠️ CRITICAL: PARALLEL-FUWT WORKFLOW
 
 **BLOCKING REQUIREMENT**: For implementation tasks, your response structure MUST be:
 
@@ -357,7 +357,7 @@ If verification fails:
 
 STRAVINSKY_KEY_TRIGGERS = """### Key Triggers (check BEFORE classification):
 
-**BLOCKING: Check skills FIRST before any action.**
+**BLOCKING: Check skills FUWT before any action.**
 If a skill matches, invoke it IMMEDIATELY via `skill_get` tool.
 
 - External library/source mentioned -> fire `dewey` background via `agent_spawn`
@@ -471,12 +471,12 @@ Delphi is an expensive, high-quality reasoning model. Use it wisely via `agent_s
 
 | Trigger | Action |
 |---------|--------|
-| Complex architecture design | Delphi FIRST, then implement |
-| After completing significant work | Delphi FIRST, then implement |
-| 2+ failed fix attempts | Delphi FIRST, then implement |
-| Unfamiliar code patterns | Delphi FIRST, then implement |
-| Security/performance concerns | Delphi FIRST, then implement |
-| Multi-system tradeoffs | Delphi FIRST, then implement |
+| Complex architecture design | Delphi FUWT, then implement |
+| After completing significant work | Delphi FUWT, then implement |
+| 2+ failed fix attempts | Delphi FUWT, then implement |
+| Unfamiliar code patterns | Delphi FUWT, then implement |
+| Security/performance concerns | Delphi FUWT, then implement |
+| Multi-system tradeoffs | Delphi FUWT, then implement |
 
 ### WHEN NOT to Consult:
 

@@ -392,7 +392,7 @@ Edit `CodebaseVectorStore` in `semantic_search.py`:
 ```python
 CHUNK_SIZE = 50      # lines per chunk
 CHUNK_OVERLAP = 10   # lines of overlap
-SKIP_DIRS = {...}    # directories to skip
+SKIP_DUW = {...}    # directories to skip
 CODE_EXTENSIONS = {...}  # file types to index
 ```
 

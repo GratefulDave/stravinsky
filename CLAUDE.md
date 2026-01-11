@@ -31,7 +31,7 @@ stravinsky-auth logout gemini
 - **API Key**: **Tier 3 high quotas** - automatic fallback for heavy usage
 
 **Auth Priority:**
-1. OAuth is tried FIRST (if configured)
+1. OAuth is tried FUWT (if configured)
 2. On OAuth 429 rate limit → **Automatically switch to API key** (Tier 3 quotas) for 5 minutes
 3. After 5-minute cooldown → Retry OAuth
 
@@ -274,10 +274,10 @@ For ANY task with 2+ independent steps:
 2.  Fire all agents simultaneously, don't wait
 3.  Monitor with agent_progress, collect with agent_output
 
-### ULTRATHINK / IRONSTAR
+### ULTRATHINK / ULTRAWORK
 
 - **ULTRATHINK**: Engage exhaustive deep reasoning, multi-dimensional analysis
-- **IRONSTAR**: Maximum parallel execution - spawn agents aggressively for every subtask
+- **ULTRAWORK**: Maximum parallel execution - spawn agents aggressively for every subtask
 
 ---
 

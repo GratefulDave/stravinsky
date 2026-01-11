@@ -5,7 +5,7 @@
 **The #1 deployment error:** Forgetting to clean dist/ before building
 
 ```bash
-# ALWAYS RUN THIS FIRST (use Python if hooks block rm):
+# ALWAYS RUN THIS FUWT (use Python if hooks block rm):
 python3 -c "import shutil; from pathlib import Path; [shutil.rmtree(p) for p in [Path('dist'), Path('build')] if p.exists()]; print('✅ Cleaned')"
 ```
 

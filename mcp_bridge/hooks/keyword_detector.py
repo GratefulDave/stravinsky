@@ -1,7 +1,7 @@
 """
 Keyword Detector Hook.
 
-Detects trigger keywords (ironstar, search, analyze) in user prompts
+Detects trigger keywords (ultrawork, search, analyze) in user prompts
 and injects corresponding mode activation tags.
 """
 
@@ -11,7 +11,7 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-IRONSTAR_MODE = """<ironstar-mode>
+ULTRAWORK_MODE = """<ultrawork-mode>
 [CODE RED] Maximum precision required. Ultrathink before acting.
 
 YOU MUST LEVERAGE ALL AVAILABLE AGENTS TO THEIR FULLEST POTENTIAL.
@@ -27,7 +27,7 @@ TELL THE USER WHAT AGENTS YOU WILL LEVERAGE NOW TO SATISFY USER'S REQUEST.
 ## EXECUTION RULES
 - **TODO**: Track EVERY step. Mark complete IMMEDIATELY after each.
 - **PARALLEL**: Fire independent agent calls simultaneously via background_task - NEVER wait sequentially.
-- **BACKGROUND FIRST**: Use background_task for exploration/research agents (10+ concurrent if needed).
+- **BACKGROUND FUWT**: Use background_task for exploration/research agents (10+ concurrent if needed).
 - **VERIFY**: Re-read request after completion. Check ALL requirements met before reporting done.
 - **DELEGATE**: Don't do everything yourself - orchestrate specialized agents for their strengths.
 
@@ -57,7 +57,7 @@ TELL THE USER WHAT AGENTS YOU WILL LEVERAGE NOW TO SATISFY USER'S REQUEST.
 
 THE USER ASKED FOR X. DELIVER EXACTLY X. NOT A SUBSET. NOT A DEMO. NOT A STARTING POINT.
 
-</ironstar-mode>
+</ultrawork-mode>
 
 ---
 """
@@ -114,8 +114,8 @@ Use delphi agent for strategic consultation on architecture, debugging, and comp
 """
 
 KEYWORD_PATTERNS = {
-    r"\bironstar\b": IRONSTAR_MODE,
-    r"\birs\b": IRONSTAR_MODE,
+    r"\bultrawork\b": ULTRAWORK_MODE,
+    r"\buw\b": ULTRAWORK_MODE,
     r"\bultrathink\b": ULTRATHINK_MODE,
     r"\bsearch\b": SEARCH_MODE,
     r"\banalyze\b": ANALYZE_MODE,

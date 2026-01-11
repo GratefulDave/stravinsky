@@ -75,6 +75,10 @@
           },
           {
             "type": "command",
+            "command": "python3 ~/.claude/hooks/parallel_reinforcement_v2.py"
+          },
+          {
+            "type": "command",
             "command": "python3 ~/.claude/hooks/context.py"
           },
           {
@@ -95,6 +99,10 @@
           {
             "type": "command",
             "command": "python3 ~/.claude/hooks/session_recovery.py"
+          },
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/hooks/execution_state_tracker.py"
           }
         ]
       },
@@ -122,6 +130,10 @@
           {
             "type": "command",
             "command": "python3 ~/.claude/hooks/todo_delegation.py"
+          },
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/hooks/dependency_tracker.py"
           }
         ]
       }

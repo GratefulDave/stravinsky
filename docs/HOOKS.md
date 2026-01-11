@@ -23,7 +23,7 @@ Stravinsky uses a sophisticated hook system to enhance Claude Code's behavior:
 **Features**:
 - Detects implementation tasks (create, build, refactor, etc.)
 - Injects TodoWrite → Task() parallelization pattern
-- **IRONSTAR MODE**: When "ironstar" or "irs" detected:
+- **ULTRAWORK MODE**: When "ultrawork" or "uw" detected:
   - Aggressive parallelization instructions
   - Maximum agent concurrency
   - Zero tolerance for partial completion
@@ -31,7 +31,7 @@ Stravinsky uses a sophisticated hook system to enhance Claude Code's behavior:
 
 **Triggers**:
 - Keywords: implement, add, create, build, refactor, fix, update, modify
-- Magic words: ironstar, irs, ultrathink, /stravinsky
+- Magic words: ultrawork, uw, ultrathink, /stravinsky
 
 ---
 

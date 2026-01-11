@@ -13,6 +13,11 @@ import json
 import os
 import sys
 
+# Add utils directory to path for imports
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "utils"))
+from colors import get_agent_color, colorize, Color, supports_color
+from console_format import format_tool_use, format_agent_spawn, MessageType
+
 # Agent model mappings
 AGENT_MODELS = {
     "explore": "gemini-3-flash",
@@ -196,13 +201,13 @@ def extract_description(tool_name: str, params: dict) -> str:
     if "invoke_gemini" in tool_name:
         prompt = params.get("prompt", "")
         # Extract first meaningful line
-        first_line = prompt.split('\n')[0][:50] if prompt else "Processing"
+        first_line = prompt.split("\n")[0][:50] if prompt else "Processing"
         return first_line
 
     # OpenAI invocation
     if "invoke_openai" in tool_name:
         prompt = params.get("prompt", "")
-        first_line = prompt.split('\n')[0][:50] if prompt else "Strategic analysis"
+        first_line = prompt.split("\n")[0][:50] if prompt else "Strategic analysis"
         return first_line
 
     # GitHub file fetch
@@ -239,8 +244,11 @@ def main():
             description = params.get("description", "")
             model = AGENT_MODELS.get(subagent_type, "unknown")
 
-            # Show full agent delegation message
-            print(f"🎯 {subagent_type}:{model}('{description}')", file=sys.stderr)
+            # Use rich formatting for agent spawns
+            message = format_agent_spawn(
+                agent_type=subagent_type, model=model, description=description
+            )
+            print(message, file=sys.stderr)
         else:
             # Parse MCP tool name to get server, tool_type, and emoji
             server, tool_type, emoji = parse_mcp_tool_name(tool_name)
@@ -248,8 +256,11 @@ def main():
             # Get description of what the tool did
             description = extract_description(tool_name, params)
 
-            # Format output: emoji tool_type:server('description')
-            print(f"{emoji} {tool_type}:{server}('{description}')", file=sys.stderr)
+            # Use rich formatting for tool usage
+            message = format_tool_use(
+                tool_name=tool_type, server=server, description=description, emoji=emoji
+            )
+            print(message, file=sys.stderr)
 
         sys.exit(0)
 

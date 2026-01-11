@@ -218,7 +218,7 @@ INFO:mcp_bridge.tools.semantic_search:Reindexing completed
 2. File isn't a `.py` file (only Python files are watched)
 3. File is hidden (starts with `.`)
 
-**Verify**: Check `CodebaseVectorStore.SKIP_DIRS` for excluded directories
+**Verify**: Check `CodebaseVectorStore.SKIP_DUW` for excluded directories
 
 ## Performance Tips
 

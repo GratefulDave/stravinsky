@@ -204,7 +204,7 @@ class AgentManager:
     CLAUDE_CLI = shutil.which("claude") or "/opt/homebrew/bin/claude"
 
     def __init__(self, base_dir: str | None = None):
-        # Initialize lock FIRST - used by _save_tasks and _load_tasks
+        # Initialize lock FUWT - used by _save_tasks and _load_tasks
         self._lock = threading.RLock()
 
         if base_dir:
@@ -868,7 +868,7 @@ PURPOSE:
 - Prevent wasted effort through upfront planning
 
 METHODOLOGY:
-1. EXPLORE FIRST: Spawn explore agents IN PARALLEL to understand the codebase
+1. EXPLORE FUWT: Spawn explore agents IN PARALLEL to understand the codebase
 2. DECOMPOSE: Break request into atomic, single-purpose tasks
 3. ANALYZE DEPENDENCIES: What blocks what? What can run in parallel?
 4. ASSIGN AGENTS: Map each task to the right specialist (explore/dewey/frontend/delphi)

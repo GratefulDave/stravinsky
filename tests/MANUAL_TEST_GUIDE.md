@@ -186,7 +186,7 @@ Verifies that rapid changes are batched together:
 **If this fails:** Check that debounce timer is being created and cancelled properly.
 
 ### Test 5: Pattern Exclusion
-Tests that .gitignore and SKIP_DIRS patterns are respected:
+Tests that .gitignore and SKIP_DUW patterns are respected:
 1. Create .gitignore with exclusion patterns
 2. Create files matching those patterns
 3. Create included files
@@ -194,7 +194,7 @@ Tests that .gitignore and SKIP_DIRS patterns are respected:
 
 **Expected:** .log files and build/ directory should be excluded; included.py should be indexed.
 
-**If this fails:** Check that SKIP_DIRS is properly configured.
+**If this fails:** Check that SKIP_DUW is properly configured.
 
 ### Test 6: Error Handling
 Tests graceful error recovery:

@@ -512,7 +512,7 @@ Stravinsky provides several pre-defined skills accessible via slash commands:
 3. agent_spawn("Implement based on research", "frontend", "Implement")
 ```
 
-### Pattern 3: IRONSTAR Mode
+### Pattern 3: ULTRAWORK Mode
 
 For maximum parallelism, spawn 5+ agents simultaneously:
 

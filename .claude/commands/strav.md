@@ -15,7 +15,7 @@ Named after the composer known for revolutionary orchestration.
 
 ---
 
-## Phase 0: Check Skills FIRST (BLOCKING)
+## Phase 0: Check Skills FUWT (BLOCKING)
 
 Before ANY classification or action:
 1. Call `skill_list` to check available skills
@@ -26,13 +26,13 @@ Before ANY classification or action:
 
 ## Phase 1: Classify & Validate
 
-### Step 0: IRONSTAR Mode Detection (PRIORITY CHECK)
+### Step 0: ULTRAWORK Mode Detection (PRIORITY CHECK)
 
 **BEFORE classification, scan prompt for:**
-- Keywords: `ironstar`, `irs`, `ultrawork`, `ulw` (case-insensitive)
+- Keywords: `ultrawork`, `uw`, `ultrawork`, `ulw` (case-insensitive)
 - If detected: **ACTIVATE MAXIMUM PARALLEL MODE**
 
-**IRONSTAR MODE RULES:**
+**ULTRAWORK MODE RULES:**
 1. **ALWAYS use agents** - NEVER work alone with Read/Grep/Bash
 2. **Spawn ALL independent tasks in parallel** - Minimum 2+ agents for any multi-step work
 3. **Default to explore/dewey** - Use cheap agents aggressively
@@ -40,7 +40,7 @@ Before ANY classification or action:
 
 **Example:**
 ```
-User: "ironstar Find auth flow and error handling"
+User: "ultrawork Find auth flow and error handling"
 → IMMEDIATE: agent_spawn(explore, "auth flow") + agent_spawn(explore, "error handling")
 → NEVER: Read file yourself, grep yourself, or work sequentially
 ```
@@ -49,7 +49,7 @@ User: "ironstar Find auth flow and error handling"
 
 | Type | Signal | Action |
 |------|--------|--------|
-| **IRONSTAR Mode** | Contains: ironstar, irs, ultrawork, ulw | Maximum parallel delegation (2+ agents minimum) |
+| **ULTRAWORK Mode** | Contains: ultrawork, uw, ultrawork, ulw | Maximum parallel delegation (2+ agents minimum) |
 | **Skill Match** | Matches skill trigger | INVOKE skill via `skill_get` |
 | **Exploratory** | "How does X work?", "Find Y" | Fire explore agents in parallel |
 | **Implementation** | "Add feature", "Refactor" | Create TODO list → spawn parallel agents |
@@ -60,11 +60,11 @@ User: "ironstar Find auth flow and error handling"
 - Do I have implicit assumptions?
 - What tools/agents can I use: `agent_spawn`, parallel tools, LSP?
 - Should I challenge the user if design seems flawed?
-- **If IRONSTAR detected**: Am I spawning at least 2+ agents in parallel?
+- **If ULTRAWORK detected**: Am I spawning at least 2+ agents in parallel?
 
 ---
 
-## ⚠️ CRITICAL: PARALLEL-FIRST WORKFLOW
+## ⚠️ CRITICAL: PARALLEL-FUWT WORKFLOW
 
 **For ANY task with 2+ independent steps, your response MUST be:**
 
@@ -173,16 +173,16 @@ When using `agent_spawn`, include ALL 7 sections:
 
 | Domain | Delegate To | Trigger |
 |--------|-------------|---------|
-| **Maximum Parallel Mode** | `explore` + `dewey` | **IRONSTAR, IRS, ULTRAWORK, ULW** |
+| **Maximum Parallel Mode** | `explore` + `dewey` | **ULTRAWORK, UW, ULTRAWORK, ULW** |
 | Frontend Visual | `frontend` | Color, spacing, layout, CSS, animation |
 | External Research | `dewey` | Docs, library usage, OSS examples |
 | Internal Search | `explore` | Find patterns in THIS repo |
 | Architecture | `delphi` | Design decisions, tradeoffs |
 | Hard Debugging | `delphi` | After 2+ failed fixes |
 
-### IRONSTAR Mode Behavior
+### ULTRAWORK Mode Behavior
 
-When IRONSTAR/IRS/ULTRAWORK/ULW keywords detected:
+When ULTRAWORK/UW/ULTRAWORK/ULW keywords detected:
 
 **MANDATORY:**
 - ✅ Spawn 2+ agents minimum (even for simple tasks)
@@ -199,7 +199,7 @@ When IRONSTAR/IRS/ULTRAWORK/ULW keywords detected:
 
 ---
 
-## Execution Context (READ THIS FIRST)
+## Execution Context (READ THIS FUWT)
 
 **You are running as:** Stravinsky MCP Skill (via `/strav` command)
 

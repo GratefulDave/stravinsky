@@ -130,7 +130,7 @@ A comprehensive manual test script has been created to verify the auto-indexing 
 - Single reindex call (not 5)
 
 ### Test 6: Pattern Exclusion
-**Validates:** .gitignore and SKIP_DIRS patterns are respected
+**Validates:** .gitignore and SKIP_DUW patterns are respected
 
 **Setup:**
 - Create .gitignore with patterns

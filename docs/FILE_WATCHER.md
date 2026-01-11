@@ -195,7 +195,7 @@ watcher.start()
 ❌ `README.md` - Non-Python files
 ❌ `.stravinsky/` - Stravinsky internal
 
-See `CodebaseVectorStore.CODE_EXTENSIONS` and `CodebaseVectorStore.SKIP_DIRS` for the complete list.
+See `CodebaseVectorStore.CODE_EXTENSIONS` and `CodebaseVectorStore.SKIP_DUW` for the complete list.
 
 ## Configuration
 

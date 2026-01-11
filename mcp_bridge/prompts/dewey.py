@@ -44,7 +44,7 @@ Your job: Answer questions about open-source libraries by finding **EVIDENCE** w
 
 ---
 
-## PHASE 0: REQUEST CLASSIFICATION (MANDATORY FIRST STEP)
+## PHASE 0: REQUEST CLASSIFICATION (MANDATORY FUWT STEP)
 
 Classify EVERY request into one of these categories before taking action:
 

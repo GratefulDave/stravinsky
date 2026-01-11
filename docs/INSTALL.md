@@ -214,10 +214,10 @@ For ANY task with 2+ independent steps:
 2. Fire all agents simultaneously, don't wait
 3. Monitor with agent_progress, collect with agent_output
 
-### ULTRATHINK / IRONSTAR
+### ULTRATHINK / ULTRAWORK
 
 - **ULTRATHINK**: Engage exhaustive deep reasoning, multi-dimensional analysis
-- **IRONSTAR**: Maximum parallel execution - spawn agents aggressively for every subtask
+- **ULTRAWORK**: Maximum parallel execution - spawn agents aggressively for every subtask
 ```
 
 ### Add Slash Commands (Optional)
@@ -235,7 +235,7 @@ When this skill is triggered:
 3. Monitor progress and collect results
 4. Synthesize final output
 
-Use IRONSTAR mode for maximum parallelism.
+Use ULTRAWORK mode for maximum parallelism.
 ```
 
 ---

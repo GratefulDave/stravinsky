@@ -562,7 +562,7 @@ From explore.md decision tree:
 **Changes needed**:
 1. Add semantic_search to all agent tool lists (not just explore)
 2. Create semantic_search-first query classification logic
-3. Document semantic_search as FIRST choice for conceptual queries
+3. Document semantic_search as FUWT choice for conceptual queries
 4. Update decision tree in explore.md (lines 46-62)
 
 ### Opportunity 2: Hybrid Search as Default

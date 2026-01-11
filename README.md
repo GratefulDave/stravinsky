@@ -95,7 +95,7 @@ stravinsky-auth logout gemini
 - **API Key**: **Tier 3 high quotas** - automatic fallback for heavy usage
 
 **Auth Priority:**
-1. OAuth is tried FIRST (if configured)
+1. OAuth is tried FUWT (if configured)
 2. On OAuth 429 rate limit → **Automatically switch to API key** (Tier 3 quotas) for 5 minutes
 3. After 5-minute cooldown → Retry OAuth
 
@@ -191,10 +191,10 @@ Stravinsky uses **native Claude Code subagents** (.claude/agents/) with automati
 - **Blocking**: debugger (2+ failures), frontend (ALL visual), delphi (3+ failures or architecture)
 - **Never Work Alone**: Orchestrator blocks Read/Grep/Bash via PreToolUse hooks
 
-### ULTRATHINK / IRONSTAR
+### ULTRATHINK / ULTRAWORK
 
 - **ULTRATHINK**: Engage exhaustive deep reasoning with extended thinking budget (32k tokens)
-- **IRONSTAR**: Maximum parallel execution - spawn all async agents immediately
+- **ULTRAWORK**: Maximum parallel execution - spawn all async agents immediately
 
 ---
 

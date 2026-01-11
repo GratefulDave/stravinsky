@@ -331,7 +331,7 @@ class _FileChangeHandler(watchdog.events.FileSystemEventHandler):
             return False
         
         # Skip excluded directories
-        if any(skip_dir in path.parts for skip_dir in CodebaseVectorStore.SKIP_DIRS):
+        if any(skip_dir in path.parts for skip_dir in CodebaseVectorStore.SKIP_DUW):
             return False
         
         # Skip files outside project

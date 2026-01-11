@@ -33,7 +33,7 @@ For ANY task with 2+ independent steps:
 3. Monitor with agent_progress, collect with agent_output
 
 ### Trigger Commands
-- **IRONSTAR** / **IRS**: Maximum parallel execution - spawn agents aggressively for every subtask
+- **ULTRAWORK** / **UW**: Maximum parallel execution - spawn agents aggressively for every subtask
 - **ULTRATHINK**: Engage exhaustive deep reasoning, multi-dimensional analysis
 - **SEARCH**: Maximize search effort across codebase and external resources
 - **ANALYZE**: Deep analysis mode with delphi consultation for complex issues
@@ -99,11 +99,11 @@ stravinsky:agent_output(task_id="[id]", block=true)
 - This enables auto-delegation without manual /stravinsky invocation
 
 ### Execution Modes:
-- `ironstar` / `irs` - Maximum parallel execution (10+ agents)
+- `ultrawork` / `irs` - Maximum parallel execution (10+ agents)
 - `ultrathink` - Deep reasoning with delphi consultation
 - `search` - Exhaustive multi-agent search
 
-**Your FIRST action must be spawning agents, not using Read/Search tools.**
+**Your FUWT action must be spawning agents, not using Read/Search tools.**
 """
 
 COMMAND_PARALLEL = """---

@@ -48,9 +48,10 @@ _CODEX_INSTRUCTIONS_RELEASE_TAG = "rust-v0.77.0"  # Update as needed
 # ==============================================
 # GEMINI AUTH MODE STATE (OAuth-first with 429 fallback)
 # ==============================================
-# When OAuth gets a 429 rate limit, we switch to API-only mode for the session.
-# This avoids hammering OAuth when rate-limited and uses the fallback API key.
-_GEMINI_API_ONLY_MODE = False  # Set to True after 429 from OAuth
+# When OAuth gets a 429 rate limit, we switch to API-only mode for 5 minutes.
+# After 5 minutes, we automatically retry OAuth.
+_GEMINI_OAUTH_429_TIMESTAMP: float | None = None  # Timestamp of last 429
+_OAUTH_COOLDOWN_SECONDS = 300  # 5 minutes
 
 
 def _get_gemini_api_key() -> str | None:
@@ -59,29 +60,54 @@ def _get_gemini_api_key() -> str | None:
 
 
 def _set_api_only_mode(reason: str = "429 rate limit"):
-    """Switch to API-only mode after OAuth rate limit."""
-    global _GEMINI_API_ONLY_MODE
-    if not _GEMINI_API_ONLY_MODE:
-        _GEMINI_API_ONLY_MODE = True
-        logger.warning(f"[Gemini] Switching to API-only mode: {reason}")
-        import sys
+    """Switch to API-only mode after OAuth rate limit (5-minute cooldown)."""
+    global _GEMINI_OAUTH_429_TIMESTAMP
+    _GEMINI_OAUTH_429_TIMESTAMP = time.time()
+    logger.warning(f"[Gemini] Switching to API-only mode: {reason}")
+    import sys
 
-        print(
-            f"⚠️ GEMINI: OAuth rate-limited (429). "
-            f"Switching to API-ONLY SESSION MODE (all subsequent requests will use API key).",
-            file=sys.stderr,
-        )
+    print(
+        f"⚠️ GEMINI: OAuth rate-limited (429). "
+        f"Using API key for 5 minutes (will retry OAuth at {time.strftime('%H:%M:%S', time.localtime(_GEMINI_OAUTH_429_TIMESTAMP + _OAUTH_COOLDOWN_SECONDS))}).",
+        file=sys.stderr,
+    )
 
 
 def _is_api_only_mode() -> bool:
-    """Check if we're in API-only mode (after 429)."""
-    return _GEMINI_API_ONLY_MODE
+    """
+    Check if we're in API-only mode (5-minute cooldown after 429).
+
+    Returns True if:
+    - 429 occurred AND
+    - Less than 5 minutes have elapsed
+
+    Automatically resets to OAuth mode after 5 minutes.
+    """
+    global _GEMINI_OAUTH_429_TIMESTAMP
+
+    if _GEMINI_OAUTH_429_TIMESTAMP is None:
+        return False
+
+    elapsed = time.time() - _GEMINI_OAUTH_429_TIMESTAMP
+
+    if elapsed >= _OAUTH_COOLDOWN_SECONDS:
+        # Cooldown expired - reset to OAuth mode
+        logger.info(
+            f"[Gemini] 5-minute cooldown expired (elapsed: {elapsed:.0f}s). Retrying OAuth."
+        )
+        _GEMINI_OAUTH_429_TIMESTAMP = None
+        return False
+
+    # Still in cooldown
+    remaining = _OAUTH_COOLDOWN_SECONDS - elapsed
+    logger.debug(f"[Gemini] API-only mode active ({remaining:.0f}s remaining)")
+    return True
 
 
 def reset_gemini_auth_mode():
-    """Reset to OAuth-first mode. Call this to retry OAuth after cooldown."""
-    global _GEMINI_API_ONLY_MODE
-    _GEMINI_API_ONLY_MODE = False
+    """Reset to OAuth-first mode. Call this to manually reset cooldown."""
+    global _GEMINI_OAUTH_429_TIMESTAMP
+    _GEMINI_OAUTH_429_TIMESTAMP = None
     logger.info("[Gemini] Reset to OAuth-first mode")
 
 
@@ -513,9 +539,10 @@ async def invoke_gemini(
     """
     Invoke a Gemini model with the given prompt.
 
-    Supports two authentication methods (API key takes precedence):
-    1. API Key: Set GEMINI_API_KEY or GOOGLE_API_KEY in environment
-    2. OAuth: Use Google OAuth via Antigravity (requires stravinsky-auth login gemini)
+    Supports two authentication methods (OAuth-first with API fallback):
+    1. OAuth (PRIMARY): Use Google OAuth via Antigravity (requires stravinsky-auth login gemini)
+    2. API Key (FALLBACK): Set GEMINI_API_KEY or GOOGLE_API_KEY in environment
+       - Used automatically on OAuth 429 rate limit (5-minute cooldown, then retries OAuth)
 
     Supports vision API for image/PDF analysis when image_path is provided.
 
@@ -588,6 +615,15 @@ async def invoke_gemini(
                 "Add GEMINI_API_KEY to ~/.stravinsky/.env"
             )
 
+        # Calculate remaining cooldown time
+        if _GEMINI_OAUTH_429_TIMESTAMP is not None:
+            remaining = _OAUTH_COOLDOWN_SECONDS - (time.time() - _GEMINI_OAUTH_429_TIMESTAMP)
+            remaining_mins = int(remaining // 60)
+            remaining_secs = int(remaining % 60)
+            cooldown_msg = f" (OAuth retry in {remaining_mins}m {remaining_secs}s)"
+        else:
+            cooldown_msg = ""
+
         # Check time-window rate limit (30 req/min)
         time_limiter = get_gemini_time_limiter()
         wait_time = time_limiter.acquire_visible("GEMINI", "API key")
@@ -597,10 +633,10 @@ async def invoke_gemini(
             wait_time = time_limiter.acquire_visible("GEMINI", "API key")
 
         print(
-            f"🔑 GEMINI (API-ONLY SESSION): {model} | agent={agent_type}{task_info}{desc_info}",
+            f"🔑 GEMINI (API-only cooldown{cooldown_msg}): {model} | agent={agent_type}{task_info}{desc_info}",
             file=sys.stderr,
         )
-        logger.info(f"[{agent_type}] Using API key (session-persistent after OAuth 429)")
+        logger.info(f"[{agent_type}] Using API key (5-min cooldown after OAuth 429)")
         semaphore = _get_gemini_semaphore(model)
         async with semaphore:
             result = await _invoke_gemini_with_api_key(
@@ -613,7 +649,7 @@ async def invoke_gemini(
                 image_path=image_path,
             )
             # Prepend auth header for visibility in logs
-            auth_header = f"[Auth: API key (session-persistent) | Model: {model}]\n\n"
+            auth_header = f"[Auth: API key (5-min cooldown) | Model: {model}]\n\n"
             return auth_header + result
 
     # DEFAULT: Try OAuth first (Antigravity)
@@ -1128,9 +1164,10 @@ async def invoke_gemini_agentic(
     3. Send FunctionResponse back to model
     4. Repeat until model returns text or max_turns reached
 
-    Supports two authentication methods (API key takes precedence):
-    1. API Key: Set GEMINI_API_KEY or GOOGLE_API_KEY in environment
-    2. OAuth: Use Google OAuth via Antigravity (requires stravinsky-auth login gemini)
+    Supports two authentication methods (OAuth-first with API fallback):
+    1. OAuth (PRIMARY): Use Google OAuth via Antigravity (requires stravinsky-auth login gemini)
+    2. API Key (FALLBACK): Set GEMINI_API_KEY or GOOGLE_API_KEY in environment
+       - Used automatically on OAuth 429 rate limit (5-minute cooldown, then retries OAuth)
 
     Args:
         token_store: Token store for OAuth credentials
@@ -1162,6 +1199,15 @@ async def invoke_gemini_agentic(
                 "Add GEMINI_API_KEY to ~/.stravinsky/.env"
             )
 
+        # Calculate remaining cooldown time
+        if _GEMINI_OAUTH_429_TIMESTAMP is not None:
+            remaining = _OAUTH_COOLDOWN_SECONDS - (time.time() - _GEMINI_OAUTH_429_TIMESTAMP)
+            remaining_mins = int(remaining // 60)
+            remaining_secs = int(remaining % 60)
+            cooldown_msg = f" (OAuth retry in {remaining_mins}m {remaining_secs}s)"
+        else:
+            cooldown_msg = ""
+
         # Check time-window rate limit (30 req/min)
         time_limiter = get_gemini_time_limiter()
         wait_time = time_limiter.acquire_visible("GEMINI", "API key")
@@ -1171,10 +1217,10 @@ async def invoke_gemini_agentic(
             wait_time = time_limiter.acquire_visible("GEMINI", "API key")
 
         print(
-            f"🔑 GEMINI (API-ONLY SESSION/Agentic): {model} | max_turns={max_turns}",
+            f"🔑 GEMINI (API-only cooldown{cooldown_msg}/Agentic): {model} | max_turns={max_turns}",
             file=sys.stderr,
         )
-        logger.info("[AgenticGemini] Using API key (session-persistent after OAuth 429)")
+        logger.info("[AgenticGemini] Using API key (5-min cooldown after OAuth 429)")
         result = await _invoke_gemini_agentic_with_api_key(
             api_key=api_key,
             prompt=prompt,
@@ -1183,7 +1229,7 @@ async def invoke_gemini_agentic(
             timeout=timeout,
         )
         # Prepend auth header for visibility in logs
-        auth_header = f"[Auth: API key (session-persistent, Agentic) | Model: {model}]\n\n"
+        auth_header = f"[Auth: API key (5-min cooldown, Agentic) | Model: {model}]\n\n"
         return auth_header + result
 
     # DEFAULT: Try OAuth first (Antigravity)

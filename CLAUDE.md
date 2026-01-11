@@ -6,25 +6,9 @@
 
 ### Authentication
 
-Stravinsky supports **two authentication methods** for Gemini (API key takes precedence):
+Stravinsky supports **two authentication methods** for Gemini (OAuth-first with automatic API fallback):
 
-#### Option 1: API Key (Recommended for Development)
-
-**Simplest setup** - add `GEMINI_API_KEY` to your `.env` file:
-
-```bash
-# Add to .env file in project root
-GEMINI_API_KEY=your_api_key_here
-
-# Or use GOOGLE_API_KEY (same effect)
-GOOGLE_API_KEY=your_api_key_here
-```
-
-**Get your API key:** Visit [Google AI Studio](https://aistudio.google.com/app/apikey)
-
-**When to use:** Development, testing, or when you don't need OAuth scopes.
-
-#### Option 2: OAuth (Production/Advanced)
+#### Option 1: OAuth (Recommended - Primary Method)
 
 **Full OAuth flow** with automatic token refresh:
 
@@ -40,7 +24,28 @@ stravinsky-auth status
 stravinsky-auth logout gemini
 ```
 
-**When to use:** Production apps, OAuth scopes, or user-based access control.
+**When to use:** Primary method for all use cases. Provides automatic fallback to API key on rate limits.
+
+**Auth Priority:**
+1. OAuth is tried FIRST (if configured)
+2. On OAuth 429 rate limit → Switch to API key for 5 minutes
+3. After 5-minute cooldown → Automatically retry OAuth
+
+#### Option 2: API Key (Fallback - Development/Testing)
+
+**Simplest setup** - add `GEMINI_API_KEY` to your `.env` file:
+
+```bash
+# Add to .env file in project root
+GEMINI_API_KEY=your_api_key_here
+
+# Or use GOOGLE_API_KEY (same effect)
+GOOGLE_API_KEY=your_api_key_here
+```
+
+**Get your API key:** Visit [Google AI Studio](https://aistudio.google.com/app/apikey)
+
+**When to use:** Development, testing, or as automatic fallback when OAuth hits rate limits.
 
 ## Setup in Claude Code
 

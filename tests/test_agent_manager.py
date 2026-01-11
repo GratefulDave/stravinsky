@@ -250,8 +250,11 @@ class TestAgentManager:
         assert "Task completed successfully" in output or "Agent Task" in output
 
     @patch("mcp_bridge.tools.agent_manager.subprocess.Popen")
-    def test_get_output_running_task_non_blocking(self, mock_popen, agent_manager, mock_token_store):
+    def test_get_output_running_task_non_blocking(
+        self, mock_popen, agent_manager, mock_token_store
+    ):
         """Test getting output from a running task without blocking."""
+
         # Mock long-running process
         def communicate_slow(timeout=None):
             time.sleep(10)  # Longer than test timeout
@@ -293,6 +296,10 @@ class TestAgentManager:
             timeout=10,
         )
 
+        # Give the background thread time to start and complete
+        # The mocked communicate() returns immediately, but thread needs to process
+        time.sleep(0.1)
+
         output = agent_manager.get_output(task_id, block=True, timeout=5)
         # Should contain output after blocking wait
         assert "Completed" in output or "completed" in output.lower()
@@ -305,6 +312,7 @@ class TestAgentManager:
     @patch("mcp_bridge.tools.agent_manager.subprocess.Popen")
     def test_cancel_running_task(self, mock_popen, agent_manager, mock_token_store):
         """Test cancelling a running task."""
+
         # Mock long-running process
         def communicate_slow(timeout=None):
             time.sleep(30)
@@ -594,7 +602,7 @@ class TestAgentOutput:
             # Extract task_id from result
             task_id_start = task_id.find("agent_")
             if task_id_start >= 0:
-                actual_task_id = task_id[task_id_start:task_id_start + 14]
+                actual_task_id = task_id[task_id_start : task_id_start + 14]
 
                 output = await agent_output(actual_task_id, block=False)
                 assert output is not None
@@ -757,7 +765,7 @@ class TestErrorHandling:
             # Extract task_id
             task_id_start = task_id.find("agent_")
             if task_id_start >= 0:
-                actual_task_id = task_id[task_id_start:task_id_start + 14]
+                actual_task_id = task_id[task_id_start : task_id_start + 14]
                 task = manager.get_task(actual_task_id)
 
                 if task:
@@ -792,7 +800,7 @@ class TestErrorHandling:
             # Extract task_id
             task_id_start = task_id.find("agent_")
             if task_id_start >= 0:
-                actual_task_id = task_id[task_id_start:task_id_start + 14]
+                actual_task_id = task_id[task_id_start : task_id_start + 14]
                 task = manager.get_task(actual_task_id)
 
                 if task:
@@ -827,7 +835,7 @@ class TestErrorHandling:
             # Extract task_id
             task_id_start = task_id.find("agent_")
             if task_id_start >= 0:
-                actual_task_id = task_id[task_id_start:task_id_start + 14]
+                actual_task_id = task_id[task_id_start : task_id_start + 14]
                 task = manager.get_task(actual_task_id)
 
                 if task:

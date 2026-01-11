@@ -88,9 +88,11 @@ MODEL_FAMILY_EMOJI = {
     "gpt-5.2": "🟣",
 }
 
+
 # ANSI color codes for terminal output
 class Colors:
     """ANSI color codes for colorized terminal output."""
+
     RESET = "\033[0m"
     BOLD = "\033[1m"
     DIM = "\033[2m"
@@ -339,6 +341,9 @@ class AgentManager:
         """
 
         def run_agent():
+            # Ensure agents directory exists (may be cleaned up during testing)
+            self.agents_dir.mkdir(parents=True, exist_ok=True)
+
             log_file = self.agents_dir / f"{task_id}.log"
             output_file = self.agents_dir / f"{task_id}.out"
 
@@ -580,16 +585,17 @@ class AgentManager:
         if not task:
             return f"Task {task_id} not found."
 
-        if block and task["status"] == "running":
+        if block and task["status"] in ["pending", "running"]:
             # Poll for completion
             start = datetime.now()
             while (datetime.now() - start).total_seconds() < timeout:
                 task = self.get_task(task_id)
-                if not task or task["status"] != "running":
+                if not task or task["status"] not in ["pending", "running"]:
                     break
                 time.sleep(0.5)
 
         # Refresh task state after potential blocking wait
+        task = self.get_task(task_id)
         if not task:
             return f"Task {task_id} not found."
 
@@ -1003,9 +1009,7 @@ Use invoke_gemini with model="gemini-3-flash" for ALL synthesis work.
     # Enhanced format with ANSI colors: cost_emoji agent:model('description') status_emoji
     # 🟢 explore:gemini-3-flash('Find auth...') ⏳
     # With colors: agent type in cyan, model in yellow, description bold
-    return colorize_agent_spawn_message(
-        cost_emoji, agent_type, display_model, short_desc, task_id
-    )
+    return colorize_agent_spawn_message(cost_emoji, agent_type, display_model, short_desc, task_id)
 
 
 async def agent_output(task_id: str, block: bool = False) -> str:

@@ -66,7 +66,11 @@ def _set_api_only_mode(reason: str = "429 rate limit"):
         logger.warning(f"[Gemini] Switching to API-only mode: {reason}")
         import sys
 
-        print(f"⚠️ GEMINI: OAuth rate-limited (429). Switching to API key mode.", file=sys.stderr)
+        print(
+            f"⚠️ GEMINI: OAuth rate-limited (429). "
+            f"Switching to API-ONLY SESSION MODE (all subsequent requests will use API key).",
+            file=sys.stderr,
+        )
 
 
 def _is_api_only_mode() -> bool:
@@ -593,10 +597,10 @@ async def invoke_gemini(
             wait_time = time_limiter.acquire_visible("GEMINI", "API key")
 
         print(
-            f"🔮 GEMINI (API-fallback): {model} | agent={agent_type}{task_info}{desc_info}",
+            f"🔑 GEMINI (API-ONLY SESSION): {model} | agent={agent_type}{task_info}{desc_info}",
             file=sys.stderr,
         )
-        logger.info(f"[{agent_type}] Using API key (API-only mode after 429)")
+        logger.info(f"[{agent_type}] Using API key (session-persistent after OAuth 429)")
         semaphore = _get_gemini_semaphore(model)
         async with semaphore:
             result = await _invoke_gemini_with_api_key(
@@ -609,7 +613,7 @@ async def invoke_gemini(
                 image_path=image_path,
             )
             # Prepend auth header for visibility in logs
-            auth_header = f"[Auth: API key | Model: {model}]\n\n"
+            auth_header = f"[Auth: API key (session-persistent) | Model: {model}]\n\n"
             return auth_header + result
 
     # DEFAULT: Try OAuth first (Antigravity)
@@ -1167,10 +1171,10 @@ async def invoke_gemini_agentic(
             wait_time = time_limiter.acquire_visible("GEMINI", "API key")
 
         print(
-            f"🔮 GEMINI (API-fallback/Agentic): {model} | max_turns={max_turns}",
+            f"🔑 GEMINI (API-ONLY SESSION/Agentic): {model} | max_turns={max_turns}",
             file=sys.stderr,
         )
-        logger.info("[AgenticGemini] Using API key (API-only mode after 429)")
+        logger.info("[AgenticGemini] Using API key (session-persistent after OAuth 429)")
         result = await _invoke_gemini_agentic_with_api_key(
             api_key=api_key,
             prompt=prompt,
@@ -1179,7 +1183,7 @@ async def invoke_gemini_agentic(
             timeout=timeout,
         )
         # Prepend auth header for visibility in logs
-        auth_header = f"[Auth: API key (Agentic) | Model: {model}]\n\n"
+        auth_header = f"[Auth: API key (session-persistent, Agentic) | Model: {model}]\n\n"
         return auth_header + result
 
     # DEFAULT: Try OAuth first (Antigravity)

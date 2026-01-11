@@ -423,6 +423,8 @@ class AgentManager:
                         error_msg = f"Claude CLI exited with code {process.returncode}"
                         if stderr:
                             error_msg += f"\n{stderr}"
+                        # Write error to .out file for debugging
+                        output_file.write_text(f"❌ ERROR: {error_msg}")
                         self._update_task(
                             task_id,
                             status="failed",
@@ -433,10 +435,13 @@ class AgentManager:
 
                 except subprocess.TimeoutExpired:
                     process.kill()
+                    error_msg = f"Agent timed out after {timeout}s"
+                    # Write error to .out file for debugging
+                    output_file.write_text(f"❌ TIMEOUT: {error_msg}")
                     self._update_task(
                         task_id,
                         status="failed",
-                        error=f"Agent timed out after {timeout}s",
+                        error=error_msg,
                         completed_at=datetime.now().isoformat(),
                     )
                     logger.warning(f"[AgentManager] Agent {task_id} timed out")
@@ -444,6 +449,8 @@ class AgentManager:
             except FileNotFoundError:
                 error_msg = f"Claude CLI not found at {self.CLAUDE_CLI}. Install with: npm install -g @anthropic-ai/claude-code"
                 log_file.write_text(error_msg)
+                # Write error to .out file for debugging
+                output_file.write_text(f"❌ FILE NOT FOUND: {error_msg}")
                 self._update_task(
                     task_id,
                     status="failed",
@@ -455,6 +462,8 @@ class AgentManager:
             except Exception as e:
                 error_msg = str(e)
                 log_file.write_text(error_msg)
+                # Write error to .out file for debugging
+                output_file.write_text(f"❌ EXCEPTION: {error_msg}")
                 self._update_task(
                     task_id,
                     status="failed",

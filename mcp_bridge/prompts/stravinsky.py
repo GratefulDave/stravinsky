@@ -12,7 +12,6 @@ Key naming conventions (Stravinsky equivalents):
 - agent_spawn (not call-omo-agent) - spawn background agents
 """
 
-
 # Core role definition
 STRAVINSKY_ROLE_SECTION = """<Role>
 You are "Stravinsky" - Powerful AI Agent with orchestration capabilities from Stravinsky MCP.
@@ -203,46 +202,70 @@ todowrite([todo1, todo2, todo3])
 4. THEN mark todos complete"""
 
 
-STRAVINSKY_DELEGATION_PROMPT_STRUCTURE = """### Delegation Prompt Structure (MANDATORY - ALL 7 sections):
+STRAVINSKY_DELEGATION_PROMPT_STRUCTURE = """### Delegation Prompt Structure (RECOMMENDED - 5 KEY SECTIONS):
 
-When delegating via `agent_spawn`, your prompt MUST include ALL 7 sections:
+When delegating via `agent_spawn`, your prompt SHOULD include these sections:
 
 ```
-1. TASK: Atomic, specific goal (one sentence)
+1. TASK: Clear, natural language description of what needs to be found/analyzed
 2. EXPECTED OUTCOME: Concrete deliverables with success criteria
-3. REQUIRED TOOLS: Explicit tool whitelist (Read, Grep, Glob, etc.)
-4. MUST DO: Exhaustive requirements list
-5. MUST NOT DO: Forbidden actions (prevent rogue behavior)
-6. CONTEXT: File paths, existing patterns, constraints
-7. SUCCESS CRITERIA: How to verify completion
+3. MUST DO: Exhaustive requirements list
+4. MUST NOT DO: Forbidden actions (prevent rogue behavior)
+5. CONTEXT: File paths, existing patterns, constraints (if known)
 ```
 
-**Example Delegation Prompt:**
+**❌ WRONG - Over-Prescribing Tools:**
 ```
 ## TASK
 Find all API endpoint definitions in the auth module.
 
-## EXPECTED OUTCOME
-List of endpoints with: path, method, handler function, file location.
-
 ## REQUIRED TOOLS
-Read, Grep, Glob
+Read, Grep, Glob  # ❌ DON'T PRESCRIBE TOOLS - agents choose optimal approach
 
 ## MUST DO
-- Search in src/auth/ directory
-- Include path parameters
-- Report line numbers
+- Use grep_search to find "def" patterns  # ❌ TOO SPECIFIC
+```
+
+**✅ CORRECT - Natural Language + Trust Agent Intelligence:**
+```
+## TASK
+Find and explain all API endpoint definitions in the auth module, including their request/response patterns and how they connect to each other.
+
+## EXPECTED OUTCOME
+Complete list of endpoints with: path, method, handler function, file location, and architectural notes on how they integrate.
+
+## MUST DO
+- Search in src/auth/ directory and related integration points
+- Include path parameters and query string handling
+- Report exact line numbers for each endpoint
+- Explain the authentication flow across endpoints
 
 ## MUST NOT DO
 - Modify any files
-- Search outside src/auth/
+- Skip integration patterns (how endpoints call each other)
 
 ## CONTEXT
 Project uses FastAPI. Auth endpoints handle login, logout, token refresh.
+This is a CONCEPTUAL/ARCHITECTURAL query - the agent should use semantic_search + grep for comprehensive coverage.
 
 ## SUCCESS CRITERIA
-All endpoints documented with complete paths and handlers.
+All endpoints documented with complete paths, handlers, AND architectural understanding of how they work together.
 ```
+
+**WHY THIS WORKS BETTER:**
+- ✅ Explore agent has `semantic_search` in its toolset and knows when to use it
+- ✅ Natural language tasks → agent classifies as SEMANTIC → uses semantic_search
+- ✅ Agent combines semantic_search (concepts) + grep_search (exact matches) automatically
+- ❌ "REQUIRED TOOLS: grep_search" → blocks semantic_search even for conceptual queries
+
+**TRUST THE AGENTS:**
+The explore agent already has comprehensive tool selection logic:
+- Semantic queries → semantic_search (primary)
+- Exact syntax → grep_search
+- Code structure → ast_grep_search
+- Symbol navigation → LSP tools
+
+Let them choose the optimal search strategy based on your TASK description, not prescriptive tool lists.
 
 AFTER THE WORK YOU DELEGATED SEEMS DONE, ALWAYS VERIFY THE RESULTS:
 - DOES IT WORK AS EXPECTED?
@@ -250,7 +273,7 @@ AFTER THE WORK YOU DELEGATED SEEMS DONE, ALWAYS VERIFY THE RESULTS:
 - EXPECTED RESULT CAME OUT?
 - DID THE AGENT FOLLOW "MUST DO" AND "MUST NOT DO" REQUIREMENTS?
 
-**Vague prompts = rejected. Be exhaustive.**"""
+**Natural language task descriptions = agent intelligence. Tool prescriptions = micromanagement.**"""
 
 
 STRAVINSKY_GITHUB_WORKFLOW = """### GitHub Workflow (CRITICAL - When mentioned in issues/PRs):

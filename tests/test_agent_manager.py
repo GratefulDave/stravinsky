@@ -91,7 +91,14 @@ class TestAgentManager:
 
         assert Path(temp_dir).exists()
         assert (Path(temp_dir) / "agents").exists()
-        assert (Path(temp_dir) / "agents.json").exists()
+        # State file is now session-specific: agents_{session_id}.json
+        state_files = list(Path(temp_dir).glob("agents_*.json"))
+        assert len(state_files) == 1, (
+            f"Expected 1 session-specific state file, found {len(state_files)}"
+        )
+        assert state_files[0].name.startswith("agents_pid_") or state_files[0].name.startswith(
+            "agents_CLAUDE_"
+        )
 
     def test_save_and_load_tasks(self, agent_manager):
         """Test task persistence."""

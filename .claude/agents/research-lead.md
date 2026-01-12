@@ -68,6 +68,18 @@ Task: "Understand authentication flow"
 → Synthesize
 ```
 
+### Pattern 3: Semantic/Conceptual Search
+```
+Task: "How is caching implemented?" (conceptual, no exact syntax)
+→ spawn explore with explicit semantic_search guidance:
+  "Use semantic_search to find caching-related code.
+   Query: 'caching and memoization patterns'
+   This is a CONCEPTUAL query - use semantic_search, NOT grep."
+→ Synthesize findings with implementation recommendations
+```
+
+**IMPORTANT for conceptual queries**: When the query describes BEHAVIOR (not specific class/function names), instruct explore agents to use `semantic_search` as the PRIMARY tool, not grep. Semantic search finds code by meaning, not text matching.
+
 ## Model Routing
 
 **You are a CHEAP agent** - use Gemini Flash for everything:

@@ -718,7 +718,9 @@ class AgentManager:
             "summary": f"Removed {len(removed_ids)} agent(s) older than {max_age_minutes} minutes",
         }
 
-    def get_output(self, task_id: str, block: bool = False, timeout: float = 30.0) -> str:
+    def get_output(
+        self, task_id: str, block: bool = False, timeout: float = 30.0, auto_cleanup: bool = False
+    ) -> str:
         """
         Get output from an agent task.
 
@@ -726,6 +728,7 @@ class AgentManager:
             task_id: The task ID
             block: If True, wait for completion
             timeout: Max seconds to wait if blocking
+            auto_cleanup: If True, automatically remove task after retrieving output (default: False)
 
         Returns:
             Formatted task output/status
@@ -756,9 +759,10 @@ class AgentManager:
         cost_emoji = get_agent_emoji(agent_type)
         display_model = AGENT_DISPLAY_MODELS.get(agent_type, AGENT_DISPLAY_MODELS["_default"])
 
+        # Build output message
         if status == "completed":
             result = task.get("result", "(no output)")
-            return f"""{cost_emoji} {Colors.BRIGHT_GREEN}✅ Agent Task Completed{Colors.RESET}
+            output = f"""{cost_emoji} {Colors.BRIGHT_GREEN}✅ Agent Task Completed{Colors.RESET}
 
 **Task ID**: {Colors.BRIGHT_BLACK}{task_id}{Colors.RESET}
 **Agent**: {Colors.CYAN}{agent_type}{Colors.RESET}:{Colors.YELLOW}{display_model}{Colors.RESET}('{Colors.BOLD}{description}{Colors.RESET}')
@@ -768,7 +772,7 @@ class AgentManager:
 
         elif status == "failed":
             error = task.get("error", "(no error details)")
-            return f"""{cost_emoji} {Colors.BRIGHT_RED}❌ Agent Task Failed{Colors.RESET}
+            output = f"""{cost_emoji} {Colors.BRIGHT_RED}❌ Agent Task Failed{Colors.RESET}
 
 **Task ID**: {Colors.BRIGHT_BLACK}{task_id}{Colors.RESET}
 **Agent**: {Colors.CYAN}{agent_type}{Colors.RESET}:{Colors.YELLOW}{display_model}{Colors.RESET}('{Colors.BOLD}{description}{Colors.RESET}')
@@ -777,7 +781,7 @@ class AgentManager:
 {error}"""
 
         elif status == "cancelled":
-            return f"""{cost_emoji} {Colors.BRIGHT_YELLOW}⚠️ Agent Task Cancelled{Colors.RESET}
+            output = f"""{cost_emoji} {Colors.BRIGHT_YELLOW}⚠️ Agent Task Cancelled{Colors.RESET}
 
 **Task ID**: {Colors.BRIGHT_BLACK}{task_id}{Colors.RESET}
 **Agent**: {Colors.CYAN}{agent_type}{Colors.RESET}:{Colors.YELLOW}{display_model}{Colors.RESET}('{Colors.BOLD}{description}{Colors.RESET}')"""
@@ -785,7 +789,7 @@ class AgentManager:
         else:  # pending or running
             pid = task.get("pid", "N/A")
             started = task.get("started_at", "N/A")
-            return f"""{cost_emoji} {Colors.BRIGHT_YELLOW}⏳ Agent Task Running{Colors.RESET}
+            output = f"""{cost_emoji} {Colors.BRIGHT_YELLOW}⏳ Agent Task Running{Colors.RESET}
 
 **Task ID**: {Colors.BRIGHT_BLACK}{task_id}{Colors.RESET}
 **Agent**: {Colors.CYAN}{agent_type}{Colors.RESET}:{Colors.YELLOW}{display_model}{Colors.RESET}('{Colors.BOLD}{description}{Colors.RESET}')
@@ -793,6 +797,13 @@ class AgentManager:
 **Started**: {Colors.DIM}{started}{Colors.RESET}
 
 Use `agent_output` with block=true to wait for completion."""
+
+        # Auto-cleanup: Remove task if it's in a terminal state and auto_cleanup is enabled
+        if auto_cleanup and status in ["completed", "failed", "cancelled"]:
+            self.remove_task(task_id)
+            logger.info(f"[AgentManager] Auto-cleaned up task {task_id} ({status})")
+
+        return output
 
     def get_progress(self, task_id: str, lines: int = 20) -> str:
         """
@@ -1192,19 +1203,20 @@ Use invoke_gemini with model="gemini-3-flash" for ALL synthesis work.
     return colorize_agent_spawn_message(cost_emoji, agent_type, display_model, short_desc, task_id)
 
 
-async def agent_output(task_id: str, block: bool = False) -> str:
+async def agent_output(task_id: str, block: bool = False, auto_cleanup: bool = False) -> str:
     """
     Get output from a background agent task.
 
     Args:
         task_id: The task ID from agent_spawn
         block: If True, wait for the task to complete (up to 30s)
+        auto_cleanup: If True, automatically remove task after retrieving output (default: False)
 
     Returns:
         Task status and output
     """
     manager = get_manager()
-    return manager.get_output(task_id, block=block)
+    return manager.get_output(task_id, block=block, auto_cleanup=auto_cleanup)
 
 
 async def agent_retry(

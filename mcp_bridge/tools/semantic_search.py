@@ -18,6 +18,7 @@ Architecture:
 - Chunking strategy: function/class level with context
 """
 
+import asyncio
 import atexit
 import hashlib
 import logging
@@ -25,7 +26,10 @@ import sys
 import threading
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
+
+if TYPE_CHECKING:
+    import pathspec
 
 import httpx
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
@@ -295,7 +299,10 @@ class GitIgnoreManager:
             rel_path_str = str(rel_path).replace("\\", "/")
 
             # Check against patterns
-            return self.spec.match_file(rel_path_str)
+            spec = self.spec
+            if spec is None:
+                return False  # No patterns loaded, nothing is ignored
+            return spec.match_file(rel_path_str)
         except ValueError:
             # Path is outside project - not ignored by gitignore (but may be ignored for other reasons)
             return False
@@ -1936,6 +1943,25 @@ async def semantic_search(
         Formatted search results with file paths and code snippets.
     """
     store = get_store(project_path, provider)
+
+    # Check if index exists before searching
+    try:
+        doc_count = store.collection.count()
+        if doc_count == 0:
+            return (
+                "⚠️ **Semantic index is empty or not created.**\n\n"
+                "You must run `semantic_index()` before using semantic search.\n\n"
+                "**Quick fix:**\n"
+                "```python\n"
+                f'semantic_index(project_path="{project_path}", provider="{provider}")\n'
+                "```\n\n"
+                "This indexes your codebase for natural language search. "
+                "Run it once per project (takes 30s-2min depending on size)."
+            )
+    except Exception as e:
+        logger.warning(f"Could not check index status: {e}")
+        # Continue anyway - the search will fail gracefully if no index
+
     results = await store.search(
         query,
         n_results,
@@ -2311,7 +2337,9 @@ async def start_file_watcher(
                 # Failed to index - log and create watcher anyway (it will index on file changes)
                 logger.warning(f"Failed to index before starting watcher: {e}")
                 print(f"⚠️  Warning: Could not index project: {e}", file=sys.stderr)
-                print("🔄 Starting watcher anyway - will index on first file change", file=sys.stderr)
+                print(
+                    "🔄 Starting watcher anyway - will index on first file change", file=sys.stderr
+                )
 
             watcher = store.start_watching(debounce_seconds=debounce_seconds)
             _watchers[path] = watcher
@@ -2840,7 +2868,9 @@ class DedicatedIndexingWorker:
             return
 
         self._shutdown.clear()
-        self._thread = threading.Thread(target=self._run_worker, daemon=False, name="IndexingWorker")
+        self._thread = threading.Thread(
+            target=self._run_worker, daemon=False, name="IndexingWorker"
+        )
         self._thread.start()
         logger.info(f"Started indexing worker for {self.store.project_path}")
 
@@ -2852,12 +2882,12 @@ class DedicatedIndexingWorker:
         timestamp = datetime.now().isoformat()
         try:
             with open(self._log_file, "a") as f:
-                f.write(f"\n{'='*80}\n")
+                f.write(f"\n{'=' * 80}\n")
                 f.write(f"[{timestamp}] {msg}\n")
                 if exc:
                     f.write(f"Exception: {type(exc).__name__}: {exc}\n")
                     f.write(traceback.format_exc())
-                f.write(f"{'='*80}\n")
+                f.write(f"{'=' * 80}\n")
         except Exception as log_exc:
             logger.error(f"Failed to write to log file: {log_exc}")
         logger.error(f"{msg} (logged to {self._log_file})")
@@ -2902,13 +2932,15 @@ class DedicatedIndexingWorker:
         @retry(
             stop=stop_after_attempt(3),
             wait=wait_exponential(multiplier=1, min=2, max=10),
-            retry=retry_if_exception_type((
-                httpx.HTTPError,
-                ConnectionError,
-                TimeoutError,
-                sqlite3.OperationalError,  # Database locked
-                OSError,  # File system errors
-            )),
+            retry=retry_if_exception_type(
+                (
+                    httpx.HTTPError,
+                    ConnectionError,
+                    TimeoutError,
+                    sqlite3.OperationalError,  # Database locked
+                    OSError,  # File system errors
+                )
+            ),
             reraise=True,
         )
         async def _indexed():

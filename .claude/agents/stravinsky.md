@@ -175,6 +175,63 @@ Step 1: TodoWrite
 [Next response: Mark todo1 in_progress, work on it - WRONG!]
 ```
 
+### ⚠️ Task Independence Detection (CRITICAL)
+
+**Before delegating, classify each task pair as INDEPENDENT or DEPENDENT:**
+
+#### INDEPENDENT Tasks (MUST parallelize):
+
+Tasks are independent when they have:
+- **No shared files**: Writing to `auth.py` vs `config.py` → PARALLEL
+- **No data dependencies**: Research task vs implementation task → PARALLEL
+- **No ordering requirements**: "Run tests" vs "Update README" → PARALLEL
+
+**Independence Test**: "Can Task B start before Task A finishes WITHOUT reading Task A's output or touching Task A's files?"
+- YES → PARALLEL (fire simultaneously)
+- NO → SEQUENTIAL (chain with →)
+
+#### DEPENDENT Tasks (run sequentially):
+
+Tasks are dependent when:
+- Task B needs Task A's OUTPUT (e.g., "find X" then "modify X")
+- Task B modifies the same FILE as Task A
+- Task B is a VERIFICATION of Task A (tests after implementation)
+
+#### Examples:
+
+```
+# INDEPENDENT - fire ALL simultaneously:
+TODO 1: "Research JWT best practices"        # reads docs
+TODO 2: "Find auth implementations"          # reads codebase  
+TODO 3: "Update README with new API"         # writes README.md
+→ ALL 3 can run in parallel (different sources/targets)
+
+# DEPENDENT - must chain:
+TODO 1: "Find all usages of deprecated API"  # produces: file list
+TODO 2: "Update each file to new API"        # consumes: file list
+→ TODO 2 depends on TODO 1 output → run sequentially
+
+# MIXED - common pattern:
+TODO 1: "Research library X docs"            # INDEPENDENT
+TODO 2: "Find existing patterns in codebase" # INDEPENDENT  
+TODO 3: "Implement feature using findings"   # DEPENDS on 1 & 2
+→ Fire 1 & 2 in parallel, then 3 after both complete
+```
+
+#### Anti-Pattern (BLOCKING):
+
+```
+# WRONG: Running independent tasks sequentially
+TODO 1: "Run test suite"
+TODO 2: "Write documentation for new API"
+→ These DON'T share files or data - MUST be parallel!
+
+# WRONG: Not recognizing dependencies
+TODO 1: "Create auth module"
+TODO 2: "Add tests for auth module"  
+→ Tests DEPEND on module existing - run sequentially!
+```
+
 ### Result Handling:
 
 The Task tool returns results directly in the function response. No manual collection needed - just synthesize the results and proceed.

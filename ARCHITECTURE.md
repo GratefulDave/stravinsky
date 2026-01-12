@@ -1,15 +1,56 @@
 # Stravinsky Architecture Guide
 
-## Overview
+**Version:** v0.5.x (Updated 2026-01-11)
+**Purpose:** Comprehensive architectural documentation for developers and contributors
 
-Stravinsky is an MCP bridge for Claude Code that enables multi-model AI orchestration with parallel agent execution. This document provides comprehensive architectural guidance based on extensive analysis of the hooks system, agent orchestration patterns, and native subagent integration.
+---
+
+## Executive Summary
+
+Stravinsky is a **Model Context Protocol (MCP) bridge** that enables Claude Code to:
+- Orchestrate multi-model AI workflows (Gemini, OpenAI, Claude)
+- Spawn background agents with full tool access
+- Perform semantic code understanding via vector embeddings
+- Leverage Language Server Protocol for code refactoring
+
+### Core Design Principles
+
+1. **Zero-Import-Weight Startup**: Sub-second initialization via aggressive lazy loading
+2. **OAuth-First with API Fallback**: Automatic degradation to API keys on rate limits
+3. **Parallel Agent Execution**: Background agents run as independent Claude CLI processes
+4. **Semantic-First Search**: Vector embeddings + AST patterns for code discovery
+5. **Defense in Depth**: Multi-layer hook architecture for safety and flexibility
+
+---
 
 ## Table of Contents
 
-1. [Hooks Architecture](#hooks-architecture)
-2. [Native Subagent Migration](#native-subagent-migration)
-3. [Hybrid Architecture Recommendations](#hybrid-architecture-recommendations)
-4. [Implementation Roadmap](#implementation-roadmap)
+1. [Quick Reference](#quick-reference)
+2. [Project Structure](#project-structure)
+3. [Core Components](#core-components)
+4. [Tool Categories](#tool-categories)
+5. [Authentication Flows](#authentication-flows)
+6. [Hook System](#hook-system)
+7. [Design Patterns](#design-patterns)
+8. [Deployment Architecture](#deployment-architecture)
+9. [Performance Optimizations](#performance-optimizations)
+10. [Native Subagent Migration](#native-subagent-migration)
+11. [Contributing Guidelines](#contributing-guidelines)
+12. [Troubleshooting](#troubleshooting)
+
+---
+
+## Quick Reference
+
+| Component | File | Purpose |
+|-----------|------|---------|
+| **MCP Server** | `mcp_bridge/server.py` | Protocol entry point (zero-import-weight) |
+| **Agent Manager** | `tools/agent_manager.py` | Background agent orchestration |
+| **Model Routing** | `tools/model_invoke.py` | Multi-model API calls with OAuth fallback |
+| **Semantic Search** | `tools/semantic_search.py` | Vector-based code search (ChromaDB) |
+| **OAuth** | `auth/google_auth.py`, `auth/openai_auth.py` | Authentication flows |
+| **Hook Manager** | `hooks/manager.py` | Tool execution middleware |
+| **Native Hooks** | `.claude/hooks/` | PreToolUse/PostToolUse delegation |
 
 ---
 

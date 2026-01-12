@@ -149,9 +149,18 @@ class TestAgentManager:
 
     def test_list_tasks_with_data(self, agent_manager):
         """Test listing tasks with multiple tasks."""
+        # Include terminal_session_id to match the manager's session filter
         task_data = {
-            "task_1": {"id": "task_1", "status": "completed"},
-            "task_2": {"id": "task_2", "status": "running"},
+            "task_1": {
+                "id": "task_1",
+                "status": "completed",
+                "terminal_session_id": agent_manager.session_id,
+            },
+            "task_2": {
+                "id": "task_2",
+                "status": "running",
+                "terminal_session_id": agent_manager.session_id,
+            },
         }
 
         agent_manager._save_tasks(task_data)
@@ -705,7 +714,7 @@ class TestAgentList:
             manager = AgentManager(base_dir=temp_dir)
             mock_get_manager.return_value = manager
 
-            # Create multiple tasks
+            # Create multiple tasks - include terminal_session_id to match session filter
             task_data = {
                 "task_1": {
                     "id": "task_1",
@@ -713,6 +722,7 @@ class TestAgentList:
                     "status": "completed",
                     "description": "Find code",
                     "created_at": datetime.now().isoformat(),
+                    "terminal_session_id": manager.session_id,
                 },
                 "task_2": {
                     "id": "task_2",
@@ -720,6 +730,7 @@ class TestAgentList:
                     "status": "running",
                     "description": "Research docs",
                     "created_at": datetime.now().isoformat(),
+                    "terminal_session_id": manager.session_id,
                 },
             }
             manager._save_tasks(task_data)

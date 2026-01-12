@@ -50,3 +50,4 @@ pygls/
 .claude/hooks/utils/
 .claude/settings.local.json
 .claude/execution_state.json
+.stravinsky/agents*.*

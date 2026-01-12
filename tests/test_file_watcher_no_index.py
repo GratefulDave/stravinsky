@@ -14,6 +14,7 @@ Test Scenarios:
 - Test 3: Verify error message is helpful
 """
 
+import asyncio
 import os
 import shutil
 import tempfile
@@ -92,7 +93,9 @@ def test_start_watcher_without_index():
             print("This test requires the mcp_bridge package to be installed.")
             print("Skipping test.")
             cleanup_test_project(test_dir)
-            return False
+            import pytest
+
+            pytest.skip(f"Cannot import semantic_search module: {e}")
 
         print("\n1. Attempting to start file watcher WITHOUT creating index first...")
         print(f"   Project path: {test_dir}")
@@ -146,7 +149,7 @@ def test_start_watcher_without_index():
 
         traceback.print_exc()
         cleanup_test_project(test_dir)
-        return False
+        assert False, f"Unexpected error: {e}"
 
 
 def test_start_watcher_with_index():
@@ -176,7 +179,9 @@ def test_start_watcher_with_index():
             print("This test requires the mcp_bridge package to be installed.")
             print("Skipping test.")
             cleanup_test_project(test_dir)
-            return False
+            import pytest
+
+            pytest.skip(f"Cannot import semantic_search module: {e}")
 
         print("\n1. Creating semantic index first...")
         print(f"   Project path: {test_dir}")
@@ -190,7 +195,7 @@ def test_start_watcher_with_index():
         except Exception as e:
             print(f"   ❌ FAIL: Error creating index: {e}")
             cleanup_test_project(test_dir)
-            return False
+            assert False, f"Error creating index: {e}"
 
         print("\n2. Checking index stats...")
         try:
@@ -270,10 +275,12 @@ def test_error_message_quality():
         print(f"⚠️  WARNING: Cannot import semantic_search module: {e}")
         print("Skipping test.")
         cleanup_test_project(test_dir)
-        return False
+        import pytest
+
+        pytest.skip(f"Cannot import semantic_search module: {e}")
 
     try:
-        start_file_watcher(test_dir, provider="ollama")
+        asyncio.run(start_file_watcher(test_dir, provider="ollama"))
     except ValueError as e:
         error_msg = str(e)
         print(f"\nError message:\n  '{error_msg}'")
@@ -300,16 +307,16 @@ def test_error_message_quality():
         if passed >= 3:
             print(f"\n✅ TEST 3 PASSED: Error message quality is good ({passed}/4 checks)")
             cleanup_test_project(test_dir)
-            return True
+            assert True  # Explicit pass for pytest
         else:
             print(f"\n⚠️  TEST 3 PARTIAL: Error message could be improved ({passed}/4 checks)")
             cleanup_test_project(test_dir)
-            return passed >= 2  # At least 2 checks should pass
+            assert passed >= 2, f"Error message quality too low ({passed}/4 checks)"
 
     except Exception as e:
         print(f"❌ TEST 3 FAILED: Wrong exception type: {type(e).__name__}")
         cleanup_test_project(test_dir)
-        return False
+        assert False, f"Wrong exception type: {type(e).__name__}"
 
 
 def main():

@@ -2322,9 +2322,11 @@ async def start_file_watcher(
     Returns:
         The started CodebaseFileWatcher instance
     """
-    path = str(Path(project_path).resolve())
+    normalized_path = CodebaseVectorStore._normalize_project_path(project_path)
+    path_key = str(normalized_path)
+
     with _watchers_lock:
-        if path not in _watchers:
+        if path_key not in _watchers:
             store = get_store(project_path, provider)
 
             # Check if index exists - create if missing, update if stale
@@ -2352,12 +2354,12 @@ async def start_file_watcher(
                 )
 
             watcher = store.start_watching(debounce_seconds=debounce_seconds)
-            _watchers[path] = watcher
+            _watchers[path_key] = watcher
         else:
-            watcher = _watchers[path]
+            watcher = _watchers[path_key]
             if not watcher.is_running():
                 watcher.start()
-        return _watchers[path]
+        return _watchers[path_key]
 
 
 def stop_file_watcher(project_path: str) -> bool:
@@ -2369,12 +2371,14 @@ def stop_file_watcher(project_path: str) -> bool:
     Returns:
         True if watcher was stopped, False if no watcher was active
     """
-    path = str(Path(project_path).resolve())
+    normalized_path = CodebaseVectorStore._normalize_project_path(project_path)
+    path_key = str(normalized_path)
+
     with _watchers_lock:
-        if path in _watchers:
-            watcher = _watchers[path]
+        if path_key in _watchers:
+            watcher = _watchers[path_key]
             watcher.stop()
-            del _watchers[path]
+            del _watchers[path_key]
             return True
         return False
 

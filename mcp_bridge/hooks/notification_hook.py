@@ -10,6 +10,7 @@ Example: spawned delphi:gpt-5.2-medium('Debug xyz code')
 """
 
 import json
+import os
 import sys
 
 # Agent display model mappings
@@ -49,7 +50,7 @@ def extract_agent_info(message: str) -> dict[str, str] | None:
             agent_type = agent
             # Extract description after agent name
             idx = message_lower.find(agent)
-            description = message[idx + len(agent):].strip()[:60]
+            description = message[idx + len(agent) :].strip()[:60]
             break
 
     if not agent_type:
@@ -90,8 +91,16 @@ def main():
     if not agent_info:
         return 0
 
+    # Get repo name for context
+    cwd = os.environ.get("CLAUDE_CWD", "")
+    repo_name = os.path.basename(cwd) if cwd else ""
+
     # Format and output
-    output = f"spawned {agent_info['agent_type']}:{agent_info['model']}('{agent_info['description']}')"
+    if repo_name:
+        output = f"spawned [{repo_name}] {agent_info['agent_type']}:{agent_info['model']}('{agent_info['description']}')"
+    else:
+        output = f"spawned {agent_info['agent_type']}:{agent_info['model']}('{agent_info['description']}')"
+
     print(output, file=sys.stderr)
 
     return 0

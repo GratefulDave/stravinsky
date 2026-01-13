@@ -71,14 +71,15 @@ def mock_provider():
 @pytest.fixture
 async def vector_store(temp_project_dir, mock_provider):
     """Create a vector store with mock provider."""
-    store = CodebaseVectorStore(str(temp_project_dir), provider="ollama")
-    # Replace provider with mock
-    store.provider = mock_provider
-    yield store
-    # Cleanup: delete the test database
-    import shutil
-    if store.db_path.exists():
-        shutil.rmtree(store.db_path)
+    with tempfile.TemporaryDirectory() as db_tmp:
+        db_base = Path(db_tmp)
+        store = CodebaseVectorStore(str(temp_project_dir), provider="ollama", base_path=db_base)
+        store.provider = mock_provider
+        yield store
+        if store.db_path.exists():
+            import shutil
+
+            shutil.rmtree(store.db_path)
 
 
 # ============================================================================
@@ -142,11 +143,11 @@ async def test_chunk_python_with_classes(vector_store, temp_project_dir):
 
     # Should have class chunk + method chunks
     assert len(chunks) >= 3  # Class + 2 methods minimum
-    
+
     # Verify class is identified
     class_chunks = [c for c in chunks if c["metadata"].get("node_type") == "class"]
     assert len(class_chunks) >= 1
-    
+
     # Verify methods are identified
     method_chunks = [c for c in chunks if c["metadata"].get("node_type") == "method"]
     assert len(method_chunks) >= 2
@@ -176,7 +177,7 @@ def another():
     )
 
     chunks = vector_store._chunk_file(test_file)
-    
+
     # Should fall back to line-based chunking
     assert len(chunks) > 0
     assert all(c["metadata"].get("language") == "py" for c in chunks)
@@ -198,7 +199,7 @@ async def test_detect_new_chunks(vector_store, temp_project_dir):
     z = x + y
     return z
 """)
-    
+
     chunks1 = vector_store._chunk_file(file1)
     existing_ids = {c["id"] for c in chunks1}
 
@@ -210,7 +211,7 @@ async def test_detect_new_chunks(vector_store, temp_project_dir):
     z = x + y
     return z
 """)
-    
+
     chunks2 = vector_store._chunk_file(file2)
     new_ids = {c["id"] for c in chunks2}
 
@@ -252,7 +253,7 @@ async def test_content_hash_stability(vector_store, temp_project_dir):
     """Test that same content produces same hash."""
     test_file = temp_project_dir / "test.py"
     content = "def func(): pass\n"
-    
+
     test_file.write_text(content)
     chunks1 = vector_store._chunk_file(test_file)
     ids1 = {c["id"] for c in chunks1}
@@ -327,7 +328,7 @@ async def test_exclude_node_modules(vector_store, temp_project_dir):
 async def test_include_code_extensions(vector_store, temp_project_dir):
     """Test that various code extensions are included."""
     extensions = {".py", ".js", ".ts", ".go", ".rs"}
-    
+
     for ext in extensions:
         (temp_project_dir / f"test{ext}").write_text("test code")
 
@@ -403,7 +404,7 @@ async def test_incremental_indexing(vector_store, temp_project_dir, mock_provide
     return z
 """)
     stats2 = await vector_store.index_codebase()
-    
+
     # Should only index new chunks
     assert stats2["indexed"] > 0
     assert stats2["indexed"] < count1 + 10  # Roughly one or two chunks per function
@@ -420,13 +421,13 @@ async def test_force_reindex(vector_store, temp_project_dir, mock_provider):
     z = x + y
     return z
 """)
-    
+
     stats1 = await vector_store.index_codebase()
     original_indexed = stats1["indexed"]
 
     # Force reindex
     stats2 = await vector_store.index_codebase(force=True)
-    
+
     # Should reindex everything
     assert stats2["indexed"] == original_indexed
 
@@ -447,15 +448,15 @@ async def test_delete_file_removes_chunks(vector_store, temp_project_dir, mock_p
     z = x + y
     return z
 """)
-    
+
     await vector_store.index_codebase()
-    
+
     # Delete file
     test_file.unlink()
-    
+
     # Re-index
     stats = await vector_store.index_codebase()
-    
+
     # Should have pruned chunks
     assert stats["pruned"] > 0
 
@@ -478,16 +479,17 @@ async def test_delete_directory_removes_chunks(vector_store, temp_project_dir, m
     z = x + y
     return z
 """)
-    
+
     await vector_store.index_codebase()
-    
+
     # Delete directory
     import shutil
+
     shutil.rmtree(subdir)
-    
+
     # Re-index
     stats = await vector_store.index_codebase()
-    
+
     # Should have pruned chunks
     assert stats["pruned"] > 0
 
@@ -502,9 +504,9 @@ async def test_embedding_service_unavailable(vector_store, mock_provider):
     """Test graceful handling when embedding service unavailable."""
     # Mark provider as unavailable
     mock_provider._available = False
-    
+
     stats = await vector_store.index_codebase()
-    
+
     # Should return error, not crash
     assert "error" in stats
     assert "Embedding service not available" in stats["error"]
@@ -565,15 +567,16 @@ async def test_search_finds_indexed_content(vector_store, temp_project_dir, mock
 
     # Check if any result contains "auth.py" in the file path
     files_found = [r.get("file", "") for r in results]
-    assert any("auth.py" in f for f in files_found), \
+    assert any("auth.py" in f for f in files_found), (
         f"Expected 'auth.py' in results, got files: {files_found}"
+    )
 
 
 @pytest.mark.asyncio
 async def test_search_empty_index(vector_store):
     """Test search on empty index."""
     results = await vector_store.search("something")
-    
+
     # Should return error about no documents
     assert len(results) > 0
     assert "error" in results[0] or "No documents" in results[0].get("hint", "")
@@ -598,7 +601,7 @@ async def test_many_small_files(vector_store, temp_project_dir, mock_provider):
 """)
 
     stats = await vector_store.index_codebase()
-    
+
     assert stats["indexed"] > 0
     assert stats["total_files"] == 50
 
@@ -612,7 +615,7 @@ async def test_large_file(vector_store, temp_project_dir, mock_provider):
     large_file.write_text(content)
 
     stats = await vector_store.index_codebase()
-    
+
     assert stats["indexed"] > 0
     assert stats["total_files"] == 1
 
@@ -632,11 +635,11 @@ async def test_get_stats(vector_store, temp_project_dir, mock_provider):
     z = x + y
     return z
 """)
-    
+
     await vector_store.index_codebase()
-    
+
     stats = vector_store.get_stats()
-    
+
     assert stats["chunks_indexed"] > 0
     assert stats["embedding_provider"] == "mock"
     assert stats["embedding_dimension"] == 768
@@ -647,7 +650,7 @@ async def test_get_stats(vector_store, temp_project_dir, mock_provider):
 async def test_embedding_provider_factory(temp_project_dir):
     """Test getting store with different providers."""
     from mcp_bridge.tools.semantic_search import get_store
-    
+
     # Mock provider assignment
     store = get_store(str(temp_project_dir), "ollama")
     assert store.provider_name == "ollama"

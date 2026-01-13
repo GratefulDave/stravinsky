@@ -1026,16 +1026,26 @@ class CodebaseVectorStore:
         # Not a git repo or git not available, use resolved path
         return resolved
 
-    def __init__(self, project_path: str, provider: EmbeddingProvider = "ollama"):
+    def __init__(
+        self,
+        project_path: str,
+        provider: EmbeddingProvider = "ollama",
+        base_path: Path | None = None,
+    ):
         self.project_path = self._normalize_project_path(project_path)
-        self.project_hash = hashlib.md5(str(self.project_path).encode()).hexdigest()[:12]
+        self.repo_name = self.project_path.name
 
         # Initialize embedding provider
         self.provider_name = provider
         self.provider = get_embedding_provider(provider)
 
-        # Store in user's home directory, separate by provider to avoid dimension mismatch
-        self.db_path = Path.home() / ".stravinsky" / "vectordb" / f"{self.project_hash}_{provider}"
+        # Store in provided base_path or user's home directory
+        # Separate by provider to avoid dimension mismatch
+        if base_path:
+            self.db_path = base_path / f"{self.repo_name}_{provider}"
+        else:
+            self.db_path = Path.home() / ".stravinsky" / "vectordb" / f"{self.repo_name}_{provider}"
+
         self.db_path.mkdir(parents=True, exist_ok=True)
 
         # File lock for single-process access to ChromaDB (prevents corruption)
@@ -2218,16 +2228,16 @@ def delete_index(
         except Exception as e:
             return f"❌ Error deleting all indexes: {e}"
 
-    # Generate project hash
+    # Generate repo name
     project_path_resolved = Path(project_path).resolve()
-    project_hash = hashlib.md5(str(project_path_resolved).encode()).hexdigest()[:12]
+    repo_name = project_path_resolved.name
 
     deleted = []
     errors = []
 
     if provider:
         # Delete specific provider index for this project
-        index_path = vectordb_base / f"{project_hash}_{provider}"
+        index_path = vectordb_base / f"{repo_name}_{provider}"
         if index_path.exists():
             try:
                 shutil.rmtree(index_path)
@@ -2240,7 +2250,7 @@ def delete_index(
         # Delete all provider indexes for this project
         providers: list[EmbeddingProvider] = ["ollama", "mxbai", "gemini", "openai", "huggingface"]
         for prov in providers:
-            index_path = vectordb_base / f"{project_hash}_{prov}"
+            index_path = vectordb_base / f"{repo_name}_{prov}"
             if index_path.exists():
                 try:
                     shutil.rmtree(index_path)
@@ -2249,7 +2259,7 @@ def delete_index(
                     errors.append(f"{prov}: {e}")
 
     if not deleted and not errors:
-        return f"⚠️  No indexes found for project: {project_path_resolved}\nProject hash: {project_hash}"
+        return f"⚠️  No indexes found for project: {project_path_resolved}\nRepo name: {repo_name}"
 
     result = []
     if deleted:

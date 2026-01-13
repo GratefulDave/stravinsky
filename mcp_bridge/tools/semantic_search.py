@@ -1533,6 +1533,38 @@ class CodebaseVectorStore:
         with self._cancel_lock:
             return self._cancel_indexing
 
+    def _get_manifest_path(self) -> Path:
+        """Get the path to the incremental indexing manifest."""
+        return self.db_path / "manifest.json"
+
+    def _load_manifest(self) -> dict:
+        """Load the indexing manifest."""
+        manifest_path = self._get_manifest_path()
+        if not manifest_path.exists():
+            return {}
+        try:
+            import json
+
+            with open(manifest_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            logger.warning(f"Failed to load manifest: {e}")
+            return {}
+
+    def _save_manifest(self, manifest: dict) -> None:
+        """Save the indexing manifest."""
+        manifest_path = self._get_manifest_path()
+        try:
+            import json
+
+            # Atomic write
+            temp_path = manifest_path.with_suffix(".tmp")
+            with open(temp_path, "w", encoding="utf-8") as f:
+                json.dump(manifest, f, indent=2)
+            temp_path.replace(manifest_path)
+        except Exception as e:
+            logger.warning(f"Failed to save manifest: {e}")
+
     async def index_codebase(self, force: bool = False) -> dict:
         """
         Index the entire codebase into the vector store.
@@ -1557,7 +1589,7 @@ class CodebaseVectorStore:
         print(f"🔍 SEMANTIC-INDEX: {self.project_path}", file=sys.stderr)
 
         # Notify reindex start (non-blocking)
-        notifier = None  # Initialize to avoid NameError in error handlers
+        notifier = None
         try:
             from mcp_bridge.notifications import get_notification_manager
 
@@ -1569,7 +1601,6 @@ class CodebaseVectorStore:
         try:
             if not await self.check_embedding_service():
                 error_msg = "Embedding service not available"
-                # Notify error
                 try:
                     if notifier:
                         await notifier.notify_reindex_error(error_msg)
@@ -1586,25 +1617,74 @@ class CodebaseVectorStore:
             except Exception:
                 pass
 
+            manifest = {}
             if force:
-                # Clear existing collection
+                # Clear existing collection and manifest
                 try:
                     self.client.delete_collection("codebase")
                     self._collection = None
                     existing_ids = set()
                 except Exception:
                     pass
+            else:
+                manifest = self._load_manifest()
 
             files = self._get_files_to_index()
             all_chunks = []
             current_chunk_ids = set()
 
+            # Track manifest updates
+            new_manifest = {}
+
+            # Stats
+            reused_files = 0
+
             # Mark: Generate all chunks for current codebase
             for file_path in files:
+                str_path = str(file_path.resolve())
+
+                # Get file stats
+                try:
+                    stat = file_path.stat()
+                    mtime = stat.st_mtime
+                    size = stat.st_size
+                except OSError:
+                    continue  # File might have been deleted during iteration
+
+                # Check manifest
+                manifest_entry = manifest.get(str_path)
+
+                # Reuse chunks if file hasn't changed AND chunks exist in DB
+                if (
+                    not force
+                    and manifest_entry
+                    and manifest_entry.get("mtime") == mtime
+                    and manifest_entry.get("size") == size
+                ):
+                    chunk_ids = manifest_entry.get("chunk_ids", [])
+
+                    # Verify all chunks actually exist in DB (integrity check)
+                    if chunk_ids and all(cid in existing_ids for cid in chunk_ids):
+                        current_chunk_ids.update(chunk_ids)
+                        new_manifest[str_path] = manifest_entry
+                        reused_files += 1
+                        continue
+
+                # If we get here: file changed, new, or chunks missing from DB
                 chunks = self._chunk_file(file_path)
                 all_chunks.extend(chunks)
+
+                new_chunk_ids = []
                 for c in chunks:
-                    current_chunk_ids.add(c["id"])
+                    cid = c["id"]
+                    current_chunk_ids.add(cid)
+                    new_chunk_ids.append(cid)
+
+                # Update manifest
+                new_manifest[str_path] = {"mtime": mtime, "size": size, "chunk_ids": new_chunk_ids}
+
+            # Save updated manifest
+            self._save_manifest(new_manifest)
 
             # Sweep: Identify stale chunks to remove
             to_delete = existing_ids - current_chunk_ids
@@ -1623,10 +1703,10 @@ class CodebaseVectorStore:
                     "indexed": 0,
                     "pruned": len(to_delete),
                     "total_files": len(files),
-                    "message": "No new chunks to index",
+                    "reused_files": reused_files,
+                    "message": f"No new chunks to index (reused {reused_files} files)",
                     "time_taken": round(time.time() - start_time, 1),
                 }
-                # Notify completion
                 try:
                     if notifier:
                         await notifier.notify_reindex_complete(stats)
@@ -1651,7 +1731,6 @@ class CodebaseVectorStore:
                         "cancelled": True,
                         "message": f"Cancelled after {total_indexed}/{len(chunks_to_add)} chunks",
                     }
-                    # Notify cancellation
                     try:
                         if notifier:
                             await notifier.notify_reindex_error(
@@ -1679,11 +1758,11 @@ class CodebaseVectorStore:
                 "indexed": total_indexed,
                 "pruned": len(to_delete),
                 "total_files": len(files),
+                "reused_files": reused_files,
                 "db_path": str(self.db_path),
                 "time_taken": round(time.time() - start_time, 1),
             }
 
-            # Notify completion
             try:
                 if notifier:
                     await notifier.notify_reindex_complete(stats)
@@ -1695,14 +1774,11 @@ class CodebaseVectorStore:
         except Exception as e:
             error_msg = str(e)
             logger.error(f"Reindexing failed: {error_msg}")
-
-            # Notify error
             try:
                 if notifier:
                     await notifier.notify_reindex_error(error_msg)
             except Exception as notify_error:
                 logger.warning(f"Failed to send reindex error notification: {notify_error}")
-
             raise
 
     async def search(
@@ -2392,9 +2468,11 @@ def get_file_watcher(project_path: str) -> "CodebaseFileWatcher | None":
     Returns:
         The CodebaseFileWatcher if active, None otherwise
     """
-    path = str(Path(project_path).resolve())
+    normalized_path = CodebaseVectorStore._normalize_project_path(project_path)
+    path_key = str(normalized_path)
+
     with _watchers_lock:
-        watcher = _watchers.get(path)
+        watcher = _watchers.get(path_key)
         if watcher is not None and watcher.is_running():
             return watcher
         return None

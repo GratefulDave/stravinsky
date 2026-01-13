@@ -14,11 +14,6 @@
       "deps": [],
       "independent": true,
       "parallel_safe": true
-    },
-    "4": {
-      "deps": [],
-      "independent": true,
-      "parallel_safe": true
     }
   }
 }

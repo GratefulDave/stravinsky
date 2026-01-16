@@ -11,6 +11,14 @@ from unittest.mock import Mock, patch
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def mock_native_search():
+    """Disable native search for these tests to ensure CLI fallback is tested."""
+    with patch("mcp_bridge.tools.code_search.native_grep_search", return_value=None), \
+         patch("mcp_bridge.tools.code_search.native_glob_files", return_value=None):
+        yield
+
+
 @pytest.fixture
 def temp_code_dir(tmp_path):
     """Create temp directory with sample code files for testing."""

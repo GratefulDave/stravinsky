@@ -196,9 +196,12 @@ async def ast_grep_search(pattern: str, directory: str = ".", language: str = ""
         return f"Error: {str(e)}"
 
 
+from mcp_bridge.native_search import native_glob_files, native_grep_search
+
+
 async def grep_search(pattern: str, directory: str = ".", file_pattern: str = "") -> str:
     """
-    Fast text search using ripgrep.
+    Fast text search using ripgrep (or native Rust implementation if available).
 
     Args:
         pattern: Search pattern (supports regex)
@@ -212,6 +215,23 @@ async def grep_search(pattern: str, directory: str = ".", file_pattern: str = ""
     import sys
     glob_info = f" glob={file_pattern}" if file_pattern else ""
     print(f"🔎 GREP: pattern='{pattern[:50]}'{glob_info} dir={directory}", file=sys.stderr)
+
+    # Try native implementation first (currently doesn't support file_pattern filter in the same way)
+    # If file_pattern is provided, we still use rg for now as it's more flexible with globs
+    if not file_pattern:
+        native_results = native_grep_search(pattern, directory)
+        if native_results is not None:
+            if not native_results:
+                return "No matches found"
+            
+            lines = []
+            for r in native_results[:50]:
+                lines.append(f"{r['path']}:{r['line']}: {r['content']}")
+            
+            if len(native_results) > 50:
+                lines.append(f"... and more (showing first 50 matches)")
+            
+            return "\n".join(lines)
 
     try:
         cmd = ["rg", "--line-number", "--max-count=50", pattern, directory]
@@ -247,7 +267,7 @@ async def grep_search(pattern: str, directory: str = ".", file_pattern: str = ""
 
 async def glob_files(pattern: str, directory: str = ".") -> str:
     """
-    Find files matching a glob pattern.
+    Find files matching a glob pattern (uses native Rust implementation if available).
 
     Args:
         pattern: Glob pattern (e.g., "**/*.py", "src/**/*.ts")
@@ -259,6 +279,20 @@ async def glob_files(pattern: str, directory: str = ".") -> str:
     # USER-VISIBLE NOTIFICATION
     import sys
     print(f"📁 GLOB: pattern='{pattern}' dir={directory}", file=sys.stderr)
+
+    # Try native implementation first
+    native_results = native_glob_files(pattern, directory)
+    if native_results is not None:
+        if not native_results:
+            return "No files found"
+        
+        # Limit output
+        lines = native_results
+        if len(lines) > 100:
+            lines = lines[:100]
+            lines.append(f"... and {len(native_results) - 100} more files")
+        
+        return "\n".join(lines)
 
     try:
         cmd = ["fd", "--type", "f", "--glob", pattern, directory]

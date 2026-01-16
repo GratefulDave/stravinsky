@@ -5,7 +5,7 @@
     - [x] Initialize Cargo workspace.
     - [x] Configure `maturin` for PyO3 Python bindings.
     - [x] Create initial dummy function to verify Python importability.
-- [~] Task: Conductor - User Manual Verification 'Environment & Scaffolding' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Environment & Scaffolding' (Protocol in workflow.md) [checkpoint: 5949e1f]
 
 ## Phase 2: Search Tools Migration
 - [ ] Task: Implement `grep_search` and `glob_files` in Rust.

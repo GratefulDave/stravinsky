@@ -1,6 +1,6 @@
 # Implementation Plan - Track: rust_migration_20260116
 
-## Phase 1: Environment & Scaffolding
+## Phase 1: Environment & Scaffolding [checkpoint: 9c72088]
 - [x] Task: Set up Rust project structure (`stravinsky_native`) within the repo. 0259431
     - [x] Initialize Cargo workspace.
     - [x] Configure `maturin` for PyO3 Python bindings.

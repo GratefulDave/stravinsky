@@ -98,3 +98,8 @@ testpaths = ["tests"]
 markers = [
     "benchmark: marks tests as benchmarks (deselect with '-m \"not benchmark\"')",
 ]
+
+[dependency-groups]
+dev = [
+    "maturin>=1.11.5",
+]

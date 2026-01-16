@@ -224,6 +224,19 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 directory=arguments.get("directory", "."),
             )
 
+        elif name == "tool_search":
+            from .tools.tool_search import search_tools
+            from .server_tools import get_tool_definitions
+
+            # Get all registered tool definitions to search through
+            all_tools = get_tool_definitions()
+
+            result_content = search_tools(
+                query=arguments["query"],
+                tools=all_tools,
+                top_k=arguments.get("top_k", 5),
+            )
+
         # --- SESSION DISPATCH ---
         elif name == "session_list":
             from .tools.session_manager import list_sessions
@@ -483,6 +496,18 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 project_path=arguments.get("project_path", "."),
                 n_results=arguments.get("n_results", 10),
                 language=arguments.get("language"),
+                provider=arguments.get("provider", "ollama"),
+            )
+
+        elif name == "find_code":
+            from .tools.find_code import find_code
+
+            result_content = await find_code(
+                query=arguments["query"],
+                search_type=arguments.get("search_type", "auto"),
+                project_path=arguments.get("project_path", "."),
+                language=arguments.get("language"),
+                n_results=arguments.get("n_results", 10),
                 provider=arguments.get("provider", "ollama"),
             )
 

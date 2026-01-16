@@ -14,6 +14,7 @@ from .model_invoke import invoke_gemini, invoke_gemini_agentic, invoke_openai
 from .query_classifier import QueryCategory, QueryClassification, classify_query
 from .session_manager import get_session_info, list_sessions, read_session, search_sessions
 from .skill_loader import create_skill, get_skill, list_skills
+from .tool_search import format_search_results, search_tool_names, search_tools
 
 __all__ = [
     "QueryCategory",
@@ -30,6 +31,7 @@ __all__ = [
     "create_skill",
     "disable_ralph_loop",
     "enable_ralph_loop",
+    "format_search_results",
     "get_session_info",
     "get_skill",
     "glob_files",
@@ -42,6 +44,8 @@ __all__ = [
     "lsp_diagnostics",
     "read_session",
     "search_sessions",
+    "search_tool_names",
+    "search_tools",
     "task_list",
     "task_spawn",
     "task_status",

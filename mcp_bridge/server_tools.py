@@ -11,6 +11,7 @@ def get_tool_definitions() -> list[Tool]:
                 "type": "object",
                 "properties": {},
             },
+                    meta={"defer_loading": True},
         ),
         Tool(
             name="system_restart",
@@ -18,6 +19,30 @@ def get_tool_definitions() -> list[Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {},
+            },
+            meta={"defer_loading": True},
+        ),
+        Tool(
+            name="tool_search",
+            description="Search for tools by name, description, or category. Returns matching tools with their descriptions and parameters. Use this to discover available tools before using them.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Search query to match against tool names, descriptions, and categories",
+                    },
+                    "category": {
+                        "type": "string",
+                        "description": "Optional category filter (e.g., 'semantic', 'lsp', 'agent', 'git')",
+                    },
+                    "top_k": {
+                        "type": "integer",
+                        "description": "Maximum number of results to return",
+                        "default": 5,
+                    },
+                },
+                "required": ["query"],
             },
         ),
         Tool(
@@ -76,6 +101,7 @@ def get_tool_definitions() -> list[Tool]:
                 },
                 "required": ["prompt"],
             },
+                    meta={"defer_loading": True},
         ),
         Tool(
             name="invoke_gemini_agentic",
@@ -185,6 +211,7 @@ def get_tool_definitions() -> list[Tool]:
                 },
                 "required": ["prompt"],
             },
+                    meta={"defer_loading": True},
         ),
         Tool(
             name="get_project_context",
@@ -195,6 +222,7 @@ def get_tool_definitions() -> list[Tool]:
                     "project_path": {"type": "string", "description": "Path to the project root"},
                 },
             },
+                    meta={"defer_loading": True},
         ),
         Tool(
             name="get_system_health",
@@ -203,6 +231,7 @@ def get_tool_definitions() -> list[Tool]:
                 "type": "object",
                 "properties": {},
             },
+            meta={"defer_loading": True},
         ),
         Tool(
             name="lsp_diagnostics",
@@ -219,6 +248,7 @@ def get_tool_definitions() -> list[Tool]:
                 },
                 "required": ["file_path"],
             },
+            meta={"defer_loading": True},
         ),
         Tool(
             name="ast_grep_search",
@@ -280,6 +310,7 @@ def get_tool_definitions() -> list[Tool]:
                     "limit": {"type": "integer", "description": "Max sessions", "default": 20},
                 },
             },
+                    meta={"defer_loading": True},
         ),
         Tool(
             name="session_read",
@@ -292,6 +323,7 @@ def get_tool_definitions() -> list[Tool]:
                 },
                 "required": ["session_id"],
             },
+                    meta={"defer_loading": True},
         ),
         Tool(
             name="session_search",
@@ -305,6 +337,7 @@ def get_tool_definitions() -> list[Tool]:
                 },
                 "required": ["query"],
             },
+                    meta={"defer_loading": True},
         ),
         Tool(
             name="skill_list",
@@ -315,6 +348,7 @@ def get_tool_definitions() -> list[Tool]:
                     "project_path": {"type": "string", "description": "Project directory"},
                 },
             },
+                    meta={"defer_loading": True},
         ),
         Tool(
             name="skill_get",
@@ -327,6 +361,7 @@ def get_tool_definitions() -> list[Tool]:
                 },
                 "required": ["name"],
             },
+                    meta={"defer_loading": True},
         ),
         Tool(
             name="task_spawn",
@@ -349,6 +384,7 @@ def get_tool_definitions() -> list[Tool]:
                 },
                 "required": ["prompt"],
             },
+                    meta={"defer_loading": True},
         ),
         Tool(
             name="task_status",
@@ -360,6 +396,7 @@ def get_tool_definitions() -> list[Tool]:
                 },
                 "required": ["task_id"],
             },
+                    meta={"defer_loading": True},
         ),
         Tool(
             name="task_list",
@@ -368,6 +405,7 @@ def get_tool_definitions() -> list[Tool]:
                 "type": "object",
                 "properties": {},
             },
+            meta={"defer_loading": True},
         ),
         Tool(
             name="agent_spawn",
@@ -435,6 +473,7 @@ def get_tool_definitions() -> list[Tool]:
                 },
                 "required": ["task_id"],
             },
+                    meta={"defer_loading": True},
         ),
         Tool(
             name="agent_output",
@@ -462,6 +501,7 @@ def get_tool_definitions() -> list[Tool]:
                 },
                 "required": ["task_id"],
             },
+                    meta={"defer_loading": True},
         ),
         Tool(
             name="agent_list",
@@ -476,6 +516,7 @@ def get_tool_definitions() -> list[Tool]:
                     },
                 },
             },
+                    meta={"defer_loading": True},
         ),
         Tool(
             name="agent_cleanup",
@@ -495,6 +536,7 @@ def get_tool_definitions() -> list[Tool]:
                     },
                 },
             },
+                    meta={"defer_loading": True},
         ),
         Tool(
             name="agent_progress",
@@ -511,6 +553,7 @@ def get_tool_definitions() -> list[Tool]:
                 },
                 "required": ["task_id"],
             },
+                    meta={"defer_loading": True},
         ),
         Tool(
             name="lsp_hover",
@@ -527,6 +570,7 @@ def get_tool_definitions() -> list[Tool]:
                 },
                 "required": ["file_path", "line", "character"],
             },
+                    meta={"defer_loading": True},
         ),
         Tool(
             name="lsp_goto_definition",
@@ -543,6 +587,7 @@ def get_tool_definitions() -> list[Tool]:
                 },
                 "required": ["file_path", "line", "character"],
             },
+                    meta={"defer_loading": True},
         ),
         Tool(
             name="lsp_find_references",
@@ -564,6 +609,7 @@ def get_tool_definitions() -> list[Tool]:
                 },
                 "required": ["file_path", "line", "character"],
             },
+                    meta={"defer_loading": True},
         ),
         Tool(
             name="lsp_document_symbols",
@@ -575,6 +621,7 @@ def get_tool_definitions() -> list[Tool]:
                 },
                 "required": ["file_path"],
             },
+                    meta={"defer_loading": True},
         ),
         Tool(
             name="lsp_workspace_symbols",
@@ -594,6 +641,7 @@ def get_tool_definitions() -> list[Tool]:
                 },
                 "required": ["query"],
             },
+                    meta={"defer_loading": True},
         ),
         Tool(
             name="lsp_prepare_rename",
@@ -610,6 +658,7 @@ def get_tool_definitions() -> list[Tool]:
                 },
                 "required": ["file_path", "line", "character"],
             },
+                    meta={"defer_loading": True},
         ),
         Tool(
             name="lsp_rename",
@@ -632,6 +681,7 @@ def get_tool_definitions() -> list[Tool]:
                 },
                 "required": ["file_path", "line", "character", "new_name"],
             },
+                    meta={"defer_loading": True},
         ),
         Tool(
             name="lsp_code_actions",
@@ -648,6 +698,7 @@ def get_tool_definitions() -> list[Tool]:
                 },
                 "required": ["file_path", "line", "character"],
             },
+                    meta={"defer_loading": True},
         ),
         Tool(
             name="lsp_code_action_resolve",
@@ -667,6 +718,7 @@ def get_tool_definitions() -> list[Tool]:
                 },
                 "required": ["file_path", "action_code"],
             },
+                    meta={"defer_loading": True},
         ),
         Tool(
             name="lsp_extract_refactor",
@@ -697,6 +749,7 @@ def get_tool_definitions() -> list[Tool]:
                     "new_name",
                 ],
             },
+                    meta={"defer_loading": True},
         ),
         Tool(
             name="lsp_servers",
@@ -705,6 +758,7 @@ def get_tool_definitions() -> list[Tool]:
                 "type": "object",
                 "properties": {},
             },
+            meta={"defer_loading": True},
         ),
         Tool(
             name="ast_grep_replace",
@@ -737,6 +791,7 @@ def get_tool_definitions() -> list[Tool]:
                 },
                 "required": ["pattern", "replacement"],
             },
+                    meta={"defer_loading": True},
         ),
         # --- SEMANTIC SEARCH ---
         Tool(
@@ -781,6 +836,7 @@ def get_tool_definitions() -> list[Tool]:
                 },
                 "required": ["query"],
             },
+                    meta={"defer_loading": True},
         ),
         Tool(
             name="hybrid_search",
@@ -839,6 +895,53 @@ def get_tool_definitions() -> list[Tool]:
                 },
                 "required": ["query"],
             },
+                    meta={"defer_loading": True},
+        ),
+        Tool(
+            name="find_code",
+            description=(
+                "Smart code search with automatic routing to optimal search strategy. "
+                "Automatically detects whether query is AST pattern (e.g., 'class $X'), "
+                "natural language (e.g., 'auth logic'), or complex query (e.g., 'JWT AND middleware'). "
+                "Routes to ast_grep, semantic_search, hybrid_search, or grep based on pattern detection. "
+                "**PREFERRED TOOL**: Use this instead of calling individual search tools directly."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Search query (AST pattern, natural language, or text)",
+                    },
+                    "search_type": {
+                        "type": "string",
+                        "description": "Search strategy: 'auto' (default), 'ast', 'semantic', 'hybrid', 'grep', 'exact'",
+                        "enum": ["auto", "ast", "semantic", "hybrid", "grep", "exact"],
+                        "default": "auto",
+                    },
+                    "project_path": {
+                        "type": "string",
+                        "description": "Path to the project root",
+                        "default": ".",
+                    },
+                    "language": {
+                        "type": "string",
+                        "description": "Filter by language (e.g., 'py', 'ts', 'js')",
+                    },
+                    "n_results": {
+                        "type": "integer",
+                        "description": "Maximum number of results to return",
+                        "default": 10,
+                    },
+                    "provider": {
+                        "type": "string",
+                        "description": "Embedding provider for semantic search: ollama (default), gemini, openai",
+                        "default": "ollama",
+                    },
+                },
+                "required": ["query"],
+            },
+                    meta={"defer_loading": True},
         ),
         Tool(
             name="semantic_index",
@@ -867,6 +970,7 @@ def get_tool_definitions() -> list[Tool]:
                     },
                 },
             },
+                    meta={"defer_loading": True},
         ),
         Tool(
             name="semantic_stats",
@@ -887,6 +991,7 @@ def get_tool_definitions() -> list[Tool]:
                     },
                 },
             },
+                    meta={"defer_loading": True},
         ),
         Tool(
             name="start_file_watcher",
@@ -916,6 +1021,7 @@ def get_tool_definitions() -> list[Tool]:
                     },
                 },
             },
+                    meta={"defer_loading": True},
         ),
         Tool(
             name="stop_file_watcher",
@@ -930,6 +1036,7 @@ def get_tool_definitions() -> list[Tool]:
                     },
                 },
             },
+                    meta={"defer_loading": True},
         ),
         Tool(
             name="cancel_indexing",
@@ -953,6 +1060,7 @@ def get_tool_definitions() -> list[Tool]:
                     },
                 },
             },
+                    meta={"defer_loading": True},
         ),
         Tool(
             name="delete_index",
@@ -980,6 +1088,7 @@ def get_tool_definitions() -> list[Tool]:
                     },
                 },
             },
+                    meta={"defer_loading": True},
         ),
         Tool(
             name="list_file_watchers",
@@ -988,6 +1097,7 @@ def get_tool_definitions() -> list[Tool]:
                 "type": "object",
                 "properties": {},
             },
+            meta={"defer_loading": True},
         ),
         Tool(
             name="multi_query_search",
@@ -1036,6 +1146,7 @@ def get_tool_definitions() -> list[Tool]:
                 },
                 "required": ["query"],
             },
+                    meta={"defer_loading": True},
         ),
         Tool(
             name="decomposed_search",
@@ -1079,6 +1190,7 @@ def get_tool_definitions() -> list[Tool]:
                 },
                 "required": ["query"],
             },
+                    meta={"defer_loading": True},
         ),
         Tool(
             name="enhanced_search",
@@ -1128,6 +1240,7 @@ def get_tool_definitions() -> list[Tool]:
                 },
                 "required": ["query"],
             },
+                    meta={"defer_loading": True},
         ),
     ]
 

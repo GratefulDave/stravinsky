@@ -47,6 +47,11 @@
             "type": "command",
             "command": "python3 ~/.claude/hooks/stravinsky_mode.py",
             "description": "Hard blocking of direct tools in stravinsky mode"
+          },
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/hooks/pre_tool/agent_spawn_validator.py",
+            "description": "Blocks sequential tool usage when parallel delegation is required"
           }
         ]
       }
@@ -111,6 +116,11 @@
             "type": "command",
             "command": "python3 ~/.claude/hooks/todo_delegation.py",
             "description": "Parallel execution enforcer after TodoWrite"
+          },
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/hooks/post_tool/parallel_validation.py",
+            "description": "Tracks pending tasks for hard enforcement"
           }
         ]
       }
@@ -139,7 +149,9 @@
     "execution_control": {
       "parallel_execution.py": "Detects implementation tasks and injects parallel execution instructions before response generation. Activates stravinsky mode on /stravinsky invocation.",
       "stravinsky_mode.py": "Blocks native file tools (Read, Grep, Bash, Edit) when stravinsky mode is active, forcing Task delegation.",
-      "todo_delegation.py": "Hard blocks response completion after TodoWrite if 2+ pending items exist without spawning Task agents."
+      "todo_delegation.py": "Hard blocks response completion after TodoWrite if 2+ pending items exist without spawning Task agents.",
+      "parallel_validation.py": "Tracks pending tasks count after TodoWrite to enable hard enforcement state.",
+      "agent_spawn_validator.py": "Blocks sequential tool usage (Read, Grep, etc.) if parallel delegation is required and enabled."
     },
     "context_management": {
       "context.py": "Auto-injects CLAUDE.md, README.md, or AGENTS.md content into prompts for project-specific context.",
@@ -166,10 +178,11 @@
   "state_files": {
     "~/.stravinsky_mode": "Marker file indicating stravinsky orchestrator mode is active (enables hard blocking)",
     "~/.claude/state/compaction.jsonl": "Audit log of context compaction events with preserved items",
-    ".claude/todo_state.json": "Cached todo state for continuation enforcement"
+    ".claude/todo_state.json": "Cached todo state for continuation enforcement",
+    ".claude/parallel_state.json": "Transient state tracking pending tasks for hard enforcement"
   },
   
-  "version": "0.2.63",
+  "version": "0.2.64",
   "package": "stravinsky",
   "documentation": "https://github.com/GratefulDave/stravinsky"
 }

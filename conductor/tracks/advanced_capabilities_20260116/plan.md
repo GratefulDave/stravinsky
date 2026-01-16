@@ -1,12 +1,12 @@
 # Implementation Plan - Implement Hard Enforcement and Advanced Capabilities
 
 ## Phase 1: Hard Parallel Enforcement
-- [ ] Task: Implement `mcp_bridge/hooks/post_tool/parallel_validation.py` to track pending tasks after `TodoWrite`.
-- [ ] Task: Implement `mcp_bridge/hooks/pre_tool/agent_spawn_validator.py` to block sequential execution when independent tasks are pending.
-- [ ] Task: Add `enforce_parallel_delegation` configuration toggle to `.stravinsky/model_config.yaml`.
-- [ ] Task: Implement the `{"parallel": false}` override in `TodoWrite` and `STRAVINSKY_ALLOW_SEQUENTIAL` environment variable.
-- [ ] Task: Write comprehensive tests for hard enforcement (3 pending -> must spawn, 1 pending -> allow next tool).
-- [ ] Task: Conductor - User Manual Verification 'Phase 1: Hard Parallel Enforcement' (Protocol in workflow.md)
+- [x] Task: Implement `mcp_bridge/hooks/post_tool/parallel_validation.py` to track pending tasks after `TodoWrite`.
+- [x] Task: Implement `mcp_bridge/hooks/pre_tool/agent_spawn_validator.py` to block sequential execution when independent tasks are pending.
+- [x] Task: Add `enforce_parallel_delegation` configuration toggle to `.stravinsky/model_config.yaml`.
+- [x] Task: Implement the `{"parallel": false}` override in `TodoWrite` and `STRAVINSKY_ALLOW_SEQUENTIAL` environment variable.
+- [x] Task: Write comprehensive tests for hard enforcement (3 pending -> must spawn, 1 pending -> allow next tool).
+- [~] Task: Conductor - User Manual Verification 'Phase 1: Hard Parallel Enforcement' (Protocol in workflow.md)
 
 ## Phase 2: Core Capability Enhancements
 - [ ] Task: Integrate `thinking_budget` support in `stravinsky.md` and `delphi.md` agent configurations.

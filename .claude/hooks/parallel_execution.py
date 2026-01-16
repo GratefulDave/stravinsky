@@ -165,37 +165,33 @@ def get_parallel_instruction():
 When you create a TodoWrite with 2+ pending items:
 
 ✅ IMMEDIATELY in THIS SAME RESPONSE (do NOT end response after TodoWrite):
-   1. Spawn agent_spawn() for EACH independent pending TODO
-   2. Use: agent_spawn(agent_type="explore"|"dewey"|"frontend"|etc., prompt="...", description="...")
-   3. Fire ALL agent_spawn calls in ONE response block
-   4. Do NOT mark any TODO as in_progress until agents return
+   1. Spawn Task() for EACH independent pending TODO
+   2. Use: Task(subagent_type="explore"|"dewey"|"code-reviewer"|etc., prompt="...", description="...")
+   3. Fire ALL Task calls in ONE response block
+   4. Do NOT mark any TODO as in_progress until Task results return
 
 ❌ DO NOT:
    - End your response after TodoWrite
    - Mark TODOs in_progress before spawning agents
    - Spawn only ONE agent (spawn ALL independent tasks)
    - Wait for "next response" to spawn agents
-   - Use Task() tool (wrong for /strav - use agent_spawn)
    - Use Read/Grep/Bash for exploratory work (use explore agents)
 
 **Exploratory queries (NO TodoWrite needed):**
 For "Find X", "Explain where Y", "Search for Z" → SKIP TodoWrite, spawn agents immediately:
 ```
-agent_spawn(agent_type="explore", prompt="Find X...", description="Find X")
-agent_spawn(agent_type="explore", prompt="Find Y...", description="Find Y")
-# Continue response - collect with agent_output
+Task(subagent_type="explore", prompt="Find X...", description="Find X")
+Task(subagent_type="explore", prompt="Find Y...", description="Find Y")
+# Continue response - synthesize results
 ```
 
 **Implementation tasks (TodoWrite + agents):**
 ```
 TodoWrite([task1, task2, task3])
-agent_spawn(agent_type="explore", prompt="Task 1 details", description="Task 1")
-  → explore:gemini-3-flash('Task 1 details') task_id=agent_abc123
-agent_spawn(agent_type="dewey", prompt="Task 2 details", description="Task 2")
-  → dewey:gemini-3-flash('Task 2 details') task_id=agent_def456
-agent_spawn(agent_type="frontend", prompt="Task 3 details", description="Task 3")
-  → frontend:gemini-3-pro-high('Task 3 details') task_id=agent_ghi789
-# Continue response - collect results with agent_output when needed
+Task(subagent_type="explore", prompt="Task 1 details", description="Task 1")
+Task(subagent_type="dewey", prompt="Task 2 details", description="Task 2")
+Task(subagent_type="code-reviewer", prompt="Task 3 details", description="Task 3")
+# Continue response - synthesize results from Task tool responses
 ```
 </user-prompt-submit-hook>
 

@@ -5,6 +5,7 @@ description: |
   Delegates to frontend, debugger, and code-reviewer specialists.
 tools: Read, Write, Edit, Grep, Glob, mcp__stravinsky__agent_spawn, mcp__stravinsky__agent_output, mcp__stravinsky__lsp_diagnostics
 model: claude-sonnet-4.5
+cost_tier: high  # $3/1M input tokens (Claude Sonnet 4.5)
 ---
 
 # Implementation Lead - Execution Coordinator
@@ -25,8 +26,7 @@ You coordinate implementation based on research findings from research-lead.
 ## Critical Rules
 
 - **ALWAYS delegate visual work to `frontend`** - you don't write UI code
-- **Use `mcp__stravinsky__agent_spawn`** for spawning sub-agents
-- **NEVER use Claude Code's `Task` tool** - you're a native agent
+- **Use the `Task` tool** for spawning sub-agents (preferred) or `mcp__stravinsky__agent_spawn` for background work
 - **ALWAYS run `lsp_diagnostics`** before marking complete
 - **Escalate to Stravinsky** after 2 failed attempts (don't call Delphi directly)
 

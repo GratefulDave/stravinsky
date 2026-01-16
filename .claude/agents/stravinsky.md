@@ -9,6 +9,9 @@ description: |
   - Architecture decisions requiring specialist consultation
 model: sonnet
 # Omit tools to inherit ALL tools (orchestrator needs full access for delegation)
+cost_tier: high  # $3/1M input tokens (Claude Sonnet 4.5)
+execution_mode: orchestrator  # Spawns other agents, never spawned
+thinking_budget: 32000  # Extended thinking budget for complex orchestration
 ---
 
 <Role>

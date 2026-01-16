@@ -3,10 +3,13 @@
 PostToolUse hook for TodoWrite: CRITICAL parallel execution enforcer.
 
 This hook fires AFTER TodoWrite completes. If there are 2+ pending items,
-it outputs a STRONG reminder that Task agents must be spawned immediately.
+it outputs a STRONG reminder that Task tool must be used for delegation.
 
 Exit code 2 is used to signal a HARD BLOCK - Claude should see this as
 a failure condition requiring immediate correction.
+
+NOTE: This hook enforces the NATIVE SUBAGENT PATTERN.
+Use Task() tool for Claude Code native agents, not agent_spawn (legacy MCP tool).
 
 Works in tandem with:
 - parallel_execution.py (UserPromptSubmit): Pre-emptive instruction injection
@@ -51,13 +54,13 @@ def main():
     # Check if stravinsky mode is active
     stravinsky_active = is_stravinsky_mode()
 
-    # CRITICAL: Output urgent reminder for parallel agent spawning
-    # Use agent_spawn for /strav (MCP skill), Task for native subagents
+    # CRITICAL: Output urgent reminder for parallel delegation via Task tool
+    # Native subagent pattern: Always use Task() for delegation
     mode_warning = ""
     if stravinsky_active:
         mode_warning = """
 ⚠️ STRAVINSKY MODE ACTIVE - Direct tools (Read, Grep, Bash) are BLOCKED.
-   You MUST use agent_spawn(agent_type="explore", ...) for ALL file operations.
+   You MUST use Task(subagent_type="explore", ...) for ALL file operations.
 """
 
     error_message = f"""
@@ -65,22 +68,22 @@ def main():
 
 TodoWrite created {pending_count} pending items.
 {mode_warning}
-You MUST spawn agents for ALL independent TODOs in THIS SAME RESPONSE.
+You MUST delegate to Task tool for ALL independent TODOs in THIS SAME RESPONSE.
 
 Required pattern (IMMEDIATELY after this message):
-agent_spawn(agent_type="explore", prompt="TODO 1...", description="TODO 1")
-  → explore:gemini-3-flash('TODO 1...') task_id=agent_abc123
-agent_spawn(agent_type="dewey", prompt="TODO 2...", description="TODO 2")
-  → dewey:gemini-3-flash('TODO 2...') task_id=agent_def456
+Task(subagent_type="explore", prompt="TODO 1...", description="TODO 1")
+Task(subagent_type="dewey", prompt="TODO 2...", description="TODO 2")
+Task(subagent_type="code-reviewer", prompt="TODO 3...", description="TODO 3")
 ...
 
 DO NOT:
-- End your response without spawning agents
-- Mark TODOs in_progress before spawning agents
+- End your response without Task() calls
+- Mark TODOs in_progress before delegating
 - Use Read/Grep/Bash directly (BLOCKED in stravinsky mode)
-- Use Task() tool (wrong for /strav - use agent_spawn)
+- Work on TODOs sequentially yourself
 
-Your NEXT action MUST be multiple agent_spawn() calls, one for each independent TODO.
+Your NEXT action MUST be multiple Task() calls, one for each independent TODO.
+Task tool returns results directly - synthesize and mark complete.
 """
     print(error_message)
 

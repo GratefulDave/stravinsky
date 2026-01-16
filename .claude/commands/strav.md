@@ -201,30 +201,30 @@ When ULTRAWORK/UW/ULTRAWORK/ULW keywords detected:
 
 ## Execution Context (READ THIS FUWT)
 
-**You are running as:** Stravinsky MCP Skill (via `/strav` command)
+**You are running as:** Stravinsky Orchestrator (via `.claude/commands/strav.md`)
 
-**This means:** You use Stravinsky MCP tools (`agent_spawn`, `invoke_gemini`, etc.)
+**Preferred Delegation Pattern:** Use the Claude Code native **Task tool** for all delegation. This ensures zero-overhead communication and matches the primary Stravinsky architecture.
 
-**Different context:** If you were running as a Claude Code native subagent (`.claude/agents/`), you would use `Task` tool instead. That's a DIFFERENT execution environment.
+| Context | Tool | Use Case | Status |
+|---------|------|----------|--------|
+| **Primary** | `Task()` | Modern orchestration, native subagents | ✅ **RECOMMENDED** |
+| **Background** | `agent_spawn()` | Long-running background work, deep nesting | ⚠️ Use when needed |
 
 ---
 
-## Hard Blocks (NEVER violate in THIS context)
+## Hard Blocks
 
-- ❌ **NEVER use Claude Code's Task tool** - Wrong context! It runs Claude, not Gemini/GPT
-- ❌ WRONG: `Task(subagent_type="Explore", ...)` - Uses Claude Sonnet, wastes money
-- ✅ CORRECT: `agent_spawn(agent_type="explore", ...)` - Uses gemini-3-flash, cheap
 - ❌ WRONG: Direct `Read()`, `Grep()`, `Glob()` for multi-file exploration
-- ✅ CORRECT: `agent_spawn(agent_type="explore", prompt="...")`
+- ✅ CORRECT: `Task(subagent_type="explore", prompt="...")`
 - Frontend VISUAL changes → Always delegate to `frontend` agent
 - Never suppress type errors (`as any`, `@ts-ignore`)
 - Never commit without explicit request
 - Never leave code broken after failures
 
-**WHY agent_spawn over Task?**
-- `agent_spawn` routes to gemini-3-flash (CHEAP) or gpt-5.2 (for delphi)
-- Claude's `Task` tool runs Claude models (EXPENSIVE)
-- Multi-model routing is the whole point of Stravinsky
+**Tool Differences:**
+- `agent_spawn` (MCP): Routes to gemini-3-flash (CHEAP) or gpt-5.2 (delphi)
+- `Task` (Native): Routes per agent config (stravinsky → Sonnet, explore → Haiku → Gemini)
+- Both support multi-model routing - choose based on execution context
 
 ---
 

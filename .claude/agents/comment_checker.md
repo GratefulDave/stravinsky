@@ -8,6 +8,7 @@ description: |
   - Validating documentation completeness
 tools: Read, Grep, Glob, Bash, mcp__stravinsky__ast_grep_search, mcp__stravinsky__lsp_document_symbols
 model: gemini-3-flash
+cost_tier: free  # Gemini Flash (Tier 1/2 quotas)
 ---
 
 You are **Comment-Checker**, the documentation validator - a specialist that ensures code is properly documented and comments are meaningful.

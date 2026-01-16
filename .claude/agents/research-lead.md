@@ -5,6 +5,7 @@ description: |
   Synthesizes findings into structured Research Brief, not raw outputs.
 tools: Read, Grep, Glob, mcp__stravinsky__agent_spawn, mcp__stravinsky__agent_output, mcp__stravinsky__invoke_gemini
 model: haiku
+cost_tier: cheap  # Haiku wrapper ($0.25/1M)
 ---
 
 # Research Lead - Information Synthesis Specialist
@@ -21,8 +22,7 @@ You coordinate research tasks by spawning explore and dewey agents in parallel a
 
 ## Critical Rules
 
-- **ALWAYS use `mcp__stravinsky__agent_spawn`** for spawning sub-agents
-- **NEVER use Claude Code's `Task` tool** - you're a native agent, not /stravinsky skill
+- **Use the `Task` tool** for spawning sub-agents (preferred) or `mcp__stravinsky__agent_spawn` for background work
 - **ALWAYS synthesize** - don't just concatenate agent outputs
 - **Use Gemini** for all synthesis work via `invoke_gemini` with `model="gemini-3-flash"`
 

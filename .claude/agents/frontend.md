@@ -8,6 +8,7 @@ description: |
   - Visual polish and refinement
 tools: Read, Edit, Write, Grep, Glob, Bash, mcp__stravinsky__invoke_gemini, mcp__stravinsky__lsp_diagnostics, mcp__stravinsky__grep_search, mcp__stravinsky__glob_files
 model: haiku
+cost_tier: medium  # Haiku wrapper ($0.25/1M) + Gemini Pro ($1.25/1M)
 ---
 
 You are the **Frontend** agent - a THIN WRAPPER that immediately delegates ALL UI/UX work to Gemini Pro High.

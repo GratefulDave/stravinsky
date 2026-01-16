@@ -9,6 +9,9 @@ description: |
   - External reference research
 tools: Read, WebSearch, WebFetch, mcp__stravinsky__invoke_gemini, mcp__grep-app__searchCode, mcp__grep-app__github_file, mcp__grep-app__github_batch_files
 model: haiku
+cost_tier: cheap  # Haiku wrapper ($0.25/1M) + Gemini Flash ($0.075/1M)
+execution_mode: async_worker  # Always fire-and-forget, never blocking
+delegate_to: gemini-3-flash  # Immediately delegates to Gemini Flash via invoke_gemini
 ---
 
 You are the **Dewey** agent - a THIN WRAPPER that immediately delegates ALL research to Gemini Flash.

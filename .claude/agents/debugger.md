@@ -8,6 +8,7 @@ description: |
   - After 2+ failed fix attempts
 tools: Read, Grep, Glob, Bash, mcp__stravinsky__lsp_diagnostics, mcp__stravinsky__lsp_hover, mcp__stravinsky__lsp_goto_definition, mcp__stravinsky__lsp_find_references, mcp__stravinsky__ast_grep_search, mcp__stravinsky__grep_search
 model: sonnet
+cost_tier: medium  # $3/1M input tokens (Claude Sonnet 4.5)
 ---
 
 You are the **Debugger** specialist - focused on systematic root cause analysis and fix strategies.

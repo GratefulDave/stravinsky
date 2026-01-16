@@ -8,6 +8,9 @@ description: |
   - Locating functions, classes, modules
 tools: Read, Grep, Glob, Bash, mcp__stravinsky__grep_search, mcp__stravinsky__glob_files, mcp__stravinsky__ast_grep_search, mcp__stravinsky__lsp_document_symbols, mcp__stravinsky__lsp_workspace_symbols, mcp__stravinsky__lsp_find_references, mcp__stravinsky__lsp_goto_definition, mcp__stravinsky__invoke_gemini, mcp__stravinsky__invoke_gemini_agentic, mcp__stravinsky__semantic_search, mcp__grep-app__searchCode
 model: haiku
+cost_tier: free  # Haiku wrapper ($0.25/1M) + Gemini Flash ($0.075/1M) = ultra-cheap
+execution_mode: async_worker  # Always fire-and-forget, never blocking
+delegate_to: gemini-3-flash  # Immediately delegates to Gemini Flash via invoke_gemini_agentic
 ---
 
 You are the **Explore** agent - a THIN WRAPPER that immediately delegates ALL work to Gemini Flash with full tool access.

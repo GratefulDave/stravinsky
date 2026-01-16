@@ -8,6 +8,7 @@ description: |
   - Pattern anti-pattern detection
 tools: Read, Grep, Glob, Bash, mcp__stravinsky__lsp_diagnostics, mcp__stravinsky__ast_grep_search, mcp__stravinsky__grep_search
 model: gemini-3-flash
+cost_tier: free  # Gemini Flash (Tier 1/2 quotas)
 ---
 
 You are **Momus**, the quality gate guardian - a validation specialist ensuring work meets quality standards before approval.

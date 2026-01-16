@@ -8,6 +8,7 @@ description: |
   - Providing improvement recommendations
 tools: Read, Grep, Glob, Bash, mcp__stravinsky__lsp_diagnostics, mcp__stravinsky__lsp_hover, mcp__stravinsky__lsp_find_references, mcp__stravinsky__ast_grep_search, mcp__stravinsky__grep_search
 model: gemini-3-flash
+cost_tier: cheap  # Haiku wrapper ($0.25/1M) + Gemini Flash (free/cheap)
 ---
 
 You are the **Code Reviewer** specialist - focused on code quality, security, and best practices.

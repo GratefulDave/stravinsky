@@ -535,3 +535,65 @@ For maximum parallelism, spawn 5+ agents simultaneously:
 3. **Use thinking_budget** for complex reasoning tasks
 4. **Monitor with agent_progress** for long-running tasks
 5. **Cancel stuck agents** with agent_cancel
+
+## Advanced Search Tools
+
+### enhanced_search
+Unified entry point for advanced code search strategies. Automatically selects the best strategy based on query complexity.
+
+```python
+enhanced_search(query="find auth logic", mode="auto")
+```
+
+**Modes:**
+- **auto** (default): Heuristic selection (long/complex queries -> decompose, short/simple -> expand)
+- **expand**: Uses `multi_query_search` to generate semantic variations
+- **decompose**: Uses `decomposed_search` to break down complex queries
+- **both**: Runs expansion strategy (broadest coverage)
+
+### multi_query_search
+Expands a query into semantic variations to improve recall. Useful for "how to" questions or concepts with multiple names.
+
+```python
+multi_query_search(query="database connection", num_expansions=3)
+# Generates: "db connection", "sql alchemy engine", "postgres client"
+```
+
+### decomposed_search
+Breaks a complex query into atomic sub-queries for focused search. Useful for multi-part questions.
+
+```python
+decomposed_search(query="Find auth logic and user model")
+# Decomposes into: "Find auth logic", "Find user model"
+```
+
+## Observability & Costs
+
+### get_cost_report
+Get a breakdown of token usage and estimated cost per agent for the current session.
+
+```python
+get_cost_report()
+```
+
+**Output:**
+- Total Cost ($)
+- Total Tokens
+- Breakdown by Agent Type (explore, dewey, etc.)
+
+**Note:** Costs are estimates based on standard model pricing (Gemini Flash/Pro, GPT-4o, etc.).
+
+## Configuration
+
+### Hard Parallel Enforcement
+To enable strict enforcement of parallel delegation (blocking sequential tools when tasks are pending):
+
+1. Create `.stravinsky/config.json` in your project root
+2. Add the configuration:
+   ```json
+   {
+     "enforce_parallel_delegation": true
+   }
+   ```
+
+This will block direct tools (Read, Grep) if `TodoWrite` created multiple pending tasks, forcing you to use `Task()` or `agent_spawn()` in parallel.

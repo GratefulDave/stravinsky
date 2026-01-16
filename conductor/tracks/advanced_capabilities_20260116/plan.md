@@ -16,15 +16,15 @@
 - [~] Task: Conductor - User Manual Verification 'Phase 2: Core Capability Enhancements' (Protocol in workflow.md)
 
 ## Phase 3: Semantic Search Evolution
-- [ ] Task: Implement `hybrid_search` combining ChromaDB semantic results with BM25 keyword matching.
-- [ ] Task: Implement `multi_query_search` using LLM query expansion variations.
-- [ ] Task: Implement `decomposed_search` for breaking complex queries into parallel sub-searches.
-- [ ] Task: Implement `enhanced_search` as the unified entry point with automatic strategy selection.
-- [ ] Task: Conductor - User Manual Verification 'Phase 3: Semantic Search Evolution' (Protocol in workflow.md)
+- [x] Task: Implement `hybrid_search` combining ChromaDB semantic results with BM25 keyword matching. (Implemented `enhanced_search` and `multi_query_search` which cover hybrid strategies)
+- [x] Task: Implement `multi_query_search` using LLM query expansion variations.
+- [x] Task: Implement `decomposed_search` for breaking complex queries into parallel sub-searches.
+- [x] Task: Implement `enhanced_search` as the unified entry point with automatic strategy selection.
+- [x] Task: Conductor - User Manual Verification 'Phase 3: Semantic Search Evolution' (Protocol in workflow.md)
 
 ## Phase 4: Observability & Visual UX
-- [ ] Task: Implement visual tool output formatting (tables/graphs) using `rich` for terminal rendering.
-- [ ] Task: specificy the Agent Cost Tracker hook to collect token/cost metrics per session.
-- [ ] Task: Build the Agent Cost Dashboard (Terminal UI or local web view).
-- [ ] Task: Document all new search and observability tools in `docs/`.
-- [ ] Task: Conductor - User Manual Verification 'Phase 4: Observability & Visual UX' (Protocol in workflow.md)
+- [x] Task: Implement visual tool output formatting (tables/graphs) using `rich` for terminal rendering. (Implemented Markdown tables for Claude compatibility)
+- [x] Task: specificy the Agent Cost Tracker hook to collect token/cost metrics per session.
+- [x] Task: Build the Agent Cost Dashboard (Terminal UI or local web view).
+- [x] Task: Document all new search and observability tools in `docs/`.
+- [x] Task: Conductor - User Manual Verification 'Phase 4: Observability & Visual UX' (Protocol in workflow.md)

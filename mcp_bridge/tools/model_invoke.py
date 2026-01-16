@@ -421,6 +421,7 @@ async def _invoke_gemini_with_api_key(
     max_tokens: int = 4096,
     thinking_budget: int = 0,
     image_path: str | None = None,
+    agent_context: dict | None = None,
 ) -> str:
     """
     Invoke Gemini using API key authentication (google-genai library).
@@ -502,6 +503,25 @@ async def _invoke_gemini_with_api_key(
             contents=contents,
             config=config,
         )
+
+        # Track usage
+        try:
+            from mcp_bridge.metrics.cost_tracker import get_cost_tracker
+            tracker = get_cost_tracker()
+            if hasattr(response, "usage_metadata"):
+                usage = response.usage_metadata
+                agent_type = (agent_context or {}).get("agent_type", "unknown")
+                task_id = (agent_context or {}).get("task_id", "")
+                
+                tracker.track_usage(
+                    model=model,
+                    input_tokens=usage.prompt_token_count,
+                    output_tokens=usage.candidates_token_count,
+                    agent_type=agent_type,
+                    task_id=task_id
+                )
+        except Exception:
+            pass
 
         # Extract text from response
         if hasattr(response, "text"):
@@ -649,6 +669,7 @@ async def invoke_gemini(
                 max_tokens=max_tokens,
                 thinking_budget=thinking_budget,
                 image_path=image_path,
+                agent_context=agent_context,
             )
             # Prepend auth header for visibility in logs
             auth_header = f"[Auth: API key (5-min cooldown) | Model: {model}]\n\n"
@@ -840,6 +861,7 @@ async def invoke_gemini(
                     max_tokens=max_tokens,
                     thinking_budget=thinking_budget,
                     image_path=image_path,
+                    agent_context=agent_context,
                 )
                 # Prepend auth header for visibility
                 auth_header = f"[Auth: API key (OAuth 429 fallback) | Model: {model}]\n\n"
@@ -880,6 +902,24 @@ async def invoke_gemini(
 
         response.raise_for_status()
         data = response.json()
+
+        # Track usage
+        try:
+            from mcp_bridge.metrics.cost_tracker import get_cost_tracker
+            tracker = get_cost_tracker()
+            usage = data.get("usageMetadata", {})
+            input_tokens = usage.get("promptTokenCount", 0)
+            output_tokens = usage.get("candidatesTokenCount", 0)
+            
+            tracker.track_usage(
+                model=model,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                agent_type=agent_type,
+                task_id=task_id
+            )
+        except Exception as e:
+            logger.warning(f"Failed to track cost: {e}")
 
         # Extract text from response using thinking-aware parser
         result = _extract_gemini_response(data)
@@ -1696,6 +1736,25 @@ async def invoke_openai(
 
         # Return collected text
         result = "".join(text_chunks)
+        
+        # Track estimated usage
+        try:
+            from mcp_bridge.metrics.cost_tracker import get_cost_tracker
+            tracker = get_cost_tracker()
+            # Estimate: 4 chars per token
+            input_tokens = len(prompt) // 4
+            output_tokens = len(result) // 4
+            
+            tracker.track_usage(
+                model=model,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                agent_type=agent_type,
+                task_id=task_id
+            )
+        except Exception as e:
+            logger.warning(f"Failed to track cost: {e}")
+
         if not result:
             return "No response generated"
         return result

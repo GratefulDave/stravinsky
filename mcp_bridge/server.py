@@ -512,6 +512,51 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 provider=arguments.get("provider", "ollama"),
             )
 
+        elif name == "multi_query_search":
+            from .tools.search_enhancements import multi_query_search
+
+            result_content = await multi_query_search(
+                query=arguments["query"],
+                project_path=arguments.get("project_path", "."),
+                n_results=arguments.get("n_results", 10),
+                num_expansions=arguments.get("num_expansions", 3),
+                language=arguments.get("language"),
+                node_type=arguments.get("node_type"),
+                provider=arguments.get("provider", "ollama"),
+            )
+
+        elif name == "decomposed_search":
+            from .tools.search_enhancements import decomposed_search
+
+            result_content = await decomposed_search(
+                query=arguments["query"],
+                project_path=arguments.get("project_path", "."),
+                n_results=arguments.get("n_results", 10),
+                language=arguments.get("language"),
+                node_type=arguments.get("node_type"),
+                provider=arguments.get("provider", "ollama"),
+            )
+
+        elif name == "enhanced_search":
+            from .tools.search_enhancements import enhanced_search
+
+            result_content = await enhanced_search(
+                query=arguments["query"],
+                project_path=arguments.get("project_path", "."),
+                n_results=arguments.get("n_results", 10),
+                mode=arguments.get("mode", "auto"),
+                language=arguments.get("language"),
+                node_type=arguments.get("node_type"),
+                provider=arguments.get("provider", "ollama"),
+            )
+
+        elif name == "get_cost_report":
+            from .tools.dashboard import get_cost_report
+
+            result_content = await get_cost_report(
+                session_id=arguments.get("session_id"),
+            )
+
         elif name == "semantic_index":
             from .tools.semantic_search import index_codebase
 

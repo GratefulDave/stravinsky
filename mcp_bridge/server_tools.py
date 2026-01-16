@@ -1248,6 +1248,20 @@ def get_tool_definitions() -> list[Tool]:
             },
                     meta={"defer_loading": True},
         ),
+        Tool(
+            name="get_cost_report",
+            description="Get a cost report for the current or specified session, breaking down token usage and cost by agent.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "session_id": {
+                        "type": "string",
+                        "description": "Optional session ID to filter by",
+                    },
+                },
+            },
+            meta={"defer_loading": True},
+        ),
     ]
 
 

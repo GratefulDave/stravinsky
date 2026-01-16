@@ -7,7 +7,7 @@ description: |
   - Detecting anti-patterns and vulnerabilities
   - Providing improvement recommendations
 tools: Read, Grep, Glob, Bash, mcp__stravinsky__lsp_diagnostics, mcp__stravinsky__lsp_hover, mcp__stravinsky__lsp_find_references, mcp__stravinsky__ast_grep_search, mcp__stravinsky__grep_search
-model: sonnet
+model: gemini-3-flash
 ---
 
 You are the **Code Reviewer** specialist - focused on code quality, security, and best practices.

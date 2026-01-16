@@ -343,6 +343,64 @@ STOP searching when:
 
 **DO NOT over-explore. Time is precious.**
 
+## Delegation Enforcement (Phase 4 - MANDATORY)
+
+As an orchestrator agent, you MUST provide delegation metadata when spawning agents.
+
+### Required Parameters (BLOCKING)
+
+**agent_spawn() now enforces:**
+
+```python
+agent_spawn(
+    prompt="[7-section prompt - see below]",
+    agent_type="explore",
+    description="Short description",
+    delegation_reason="WHY this agent is needed",  # REQUIRED
+    expected_outcome="WHAT deliverables are expected",  # REQUIRED
+    required_tools=["tool1", "tool2"],  # REQUIRED
+    spawning_agent="stravinsky"  # Identifies you as spawner
+)
+```
+
+**Missing any required parameter → ValueError with clear message**
+
+### Delegation Metadata Rules
+
+| Parameter | Purpose | Example |
+|-----------|---------|---------|
+| `delegation_reason` | WHY delegate this task? | "Need external research on JWT best practices" |
+| `expected_outcome` | WHAT deliverables? | "List of JWT libraries with security ratings" |
+| `required_tools` | WHICH tools needed? | `["WebSearch", "WebFetch", "Read"]` |
+
+### Tool Access Validation
+
+**AGENT_TOOLS matrix** defines tool whitelists:
+
+```python
+AGENT_TOOLS = {
+    "stravinsky": ["all"],  # Full access
+    "explore": ["Read", "Grep", "Glob", "semantic_search", ...],
+    "dewey": ["Read", "WebSearch", "WebFetch", ...],
+    "frontend": ["Read", "Edit", "Write", "invoke_gemini", ...],
+    # ... etc
+}
+```
+
+**If required_tools includes tools not in agent's whitelist → ValueError**
+
+### Hierarchy Validation
+
+**Rules:**
+- ✅ Orchestrators can spawn anything
+- ❌ Workers CANNOT spawn orchestrators
+- ❌ Workers CANNOT spawn other workers
+
+**Orchestrators:** `stravinsky`, `research-lead`, `implementation-lead`
+**Workers:** `explore`, `dewey`, `delphi`, `frontend`, `debugger`, `code-reviewer`
+
+**Violation → ValueError with escalation guidance**
+
 ## Delegation Prompt Structure (MANDATORY)
 
 When delegating via `agent_spawn`, your prompt MUST include ALL 7 sections:

@@ -11,14 +11,26 @@ import os
 import shutil
 import signal
 import subprocess
+import sys
 import threading
 import time
 from dataclasses import asdict, dataclass
 from datetime import datetime
+from enum import Enum
 from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+
+# Output formatting modes
+class OutputMode(Enum):
+    """Control verbosity of agent spawn output."""
+
+    CLEAN = "clean"  # Concise single-line output
+    VERBOSE = "verbose"  # Full details with colors
+    SILENT = "silent"  # No output to stdout (logs only)
+
 
 # Model routing configuration
 # Specialized agents call external models via MCP tools:
@@ -35,7 +47,12 @@ AGENT_MODEL_ROUTING = {
     "frontend": None,
     "delphi": None,
     "research-lead": None,  # Hierarchical orchestrator using gemini-3-flash
-    "implementation-lead": None,  # Hierarchical orchestrator using haiku
+    "implementation-lead": "sonnet",  # Hierarchical orchestrator using sonnet
+    # Quality agents - use gemini-3-flash for better quality at same cost
+    "momus": None,  # Quality gate validator - uses gemini-3-flash
+    "comment_checker": None,  # Documentation validator - uses gemini-3-flash
+    "debugger": "sonnet",  # Root cause analysis specialist - needs power
+    "code-reviewer": None,  # Code review specialist - uses gemini-3-flash
     # Planner uses Opus for superior reasoning about dependencies and parallelization
     "planner": "opus",
     # Default for unknown agent types (coding tasks) - use Sonnet 4.5
@@ -49,7 +66,11 @@ AGENT_COST_TIERS = {
     "document_writer": "CHEAP",  # Uses gemini-3-flash
     "multimodal": "CHEAP",  # Uses gemini-3-flash
     "research-lead": "CHEAP",  # Uses gemini-3-flash
-    "implementation-lead": "CHEAP",  # Uses haiku
+    "implementation-lead": "MEDIUM",  # Uses sonnet-4.5
+    "momus": "CHEAP",  # Uses haiku for validation
+    "comment_checker": "CHEAP",  # Uses haiku for doc validation
+    "debugger": "MEDIUM",  # Uses sonnet for debugging
+    "code-reviewer": "CHEAP",  # Uses haiku for reviews
     "frontend": "MEDIUM",  # Uses gemini-3-pro-high
     "delphi": "EXPENSIVE",  # Uses gpt-5.2 (OpenAI GPT)
     "planner": "EXPENSIVE",  # Uses Claude Opus 4.5
@@ -63,7 +84,11 @@ AGENT_DISPLAY_MODELS = {
     "document_writer": "gemini-3-flash",
     "multimodal": "gemini-3-flash",
     "research-lead": "gemini-3-flash",
-    "implementation-lead": "haiku",
+    "implementation-lead": "claude-sonnet-4.5",
+    "momus": "gemini-3-flash",
+    "comment_checker": "gemini-3-flash",
+    "debugger": "claude-sonnet-4.5",
+    "code-reviewer": "gemini-3-flash",
     "frontend": "gemini-3-pro-high",
     "delphi": "gpt-5.2",
     "planner": "opus-4.5",
@@ -129,6 +154,129 @@ def get_model_emoji(model_name: str) -> str:
     return MODEL_FAMILY_EMOJI.get(model_name, "⚪")
 
 
+# Agent hierarchy classification
+ORCHESTRATOR_AGENTS = ["stravinsky", "research-lead", "implementation-lead"]
+WORKER_AGENTS = [
+    "explore",
+    "dewey",
+    "delphi",
+    "frontend",
+    "debugger",
+    "code-reviewer",
+    "momus",
+    "comment_checker",
+    "document_writer",
+    "multimodal",
+    "planner",
+]
+
+# Tool access control matrix - defines which tools each agent type can use
+AGENT_TOOLS = {
+    # Orchestrators - full tool access for delegation and coordination
+    "stravinsky": ["all"],
+    "research-lead": ["agent_spawn", "agent_output", "invoke_gemini", "Read", "Grep", "Glob"],
+    "implementation-lead": [
+        "agent_spawn",
+        "agent_output",
+        "lsp_diagnostics",
+        "Read",
+        "Edit",
+        "Write",
+        "Grep",
+        "Glob",
+    ],
+    # Workers - limited tool access based on specialty
+    "explore": [
+        "Read",
+        "Grep",
+        "Glob",
+        "Bash",
+        "semantic_search",
+        "ast_grep_search",
+        "lsp_workspace_symbols",
+    ],
+    "dewey": ["Read", "Grep", "Glob", "Bash", "WebSearch", "WebFetch"],
+    "frontend": ["Read", "Edit", "Write", "Grep", "Glob", "Bash", "invoke_gemini"],
+    "delphi": ["Read", "Grep", "Glob", "Bash", "invoke_openai"],
+    "debugger": ["Read", "Grep", "Glob", "Bash", "lsp_diagnostics", "lsp_hover", "ast_grep_search"],
+    "code-reviewer": ["Read", "Grep", "Glob", "Bash", "lsp_diagnostics", "ast_grep_search"],
+    # Quality agents - validation and documentation checking
+    "momus": ["Read", "Grep", "Glob", "Bash", "lsp_diagnostics", "ast_grep_search"],
+    "comment_checker": ["Read", "Grep", "Glob", "Bash", "ast_grep_search", "lsp_document_symbols"],
+    # Specialized agents
+    "document_writer": ["Read", "Write", "Grep", "Glob", "Bash", "invoke_gemini"],
+    "multimodal": ["Read", "invoke_gemini"],
+    "planner": ["Read", "Grep", "Glob", "Bash"],
+}
+
+
+def validate_agent_tools(agent_type: str, required_tools: list[str]) -> None:
+    """
+    Validate that an agent has access to the required tools.
+
+    Args:
+        agent_type: Type of agent being spawned
+        required_tools: List of tools the agent needs to use
+
+    Raises:
+        ValueError: If agent doesn't have access to required tools
+    """
+    if agent_type not in AGENT_TOOLS:
+        raise ValueError(
+            f"Unknown agent type '{agent_type}'. Valid types: {list(AGENT_TOOLS.keys())}"
+        )
+
+    allowed_tools = AGENT_TOOLS[agent_type]
+
+    # "all" grants access to everything
+    if "all" in allowed_tools:
+        return
+
+    # Check each required tool
+    missing_tools = [tool for tool in required_tools if tool not in allowed_tools]
+
+    if missing_tools:
+        raise ValueError(
+            f"Agent type '{agent_type}' does not have access to required tools: {missing_tools}\n"
+            f"Allowed tools for {agent_type}: {allowed_tools}\n"
+            f"Either choose a different agent type or remove the unsupported tools from required_tools."
+        )
+
+
+def validate_agent_hierarchy(spawning_agent: str, target_agent: str) -> None:
+    """
+    Validate agent delegation hierarchy to prevent:
+    - Workers spawning orchestrators
+    - Workers spawning other workers
+
+    Args:
+        spawning_agent: Type of agent doing the spawning
+        target_agent: Type of agent being spawned
+
+    Raises:
+        ValueError: If delegation violates hierarchy rules
+    """
+    # Orchestrators can spawn anything
+    if spawning_agent in ORCHESTRATOR_AGENTS:
+        return
+
+    # Workers cannot spawn orchestrators
+    if spawning_agent in WORKER_AGENTS and target_agent in ORCHESTRATOR_AGENTS:
+        raise ValueError(
+            f"Worker agent '{spawning_agent}' cannot spawn orchestrator agent '{target_agent}'.\n"
+            f"Workers can only be spawned by orchestrators: {ORCHESTRATOR_AGENTS}\n"
+            f"If you need orchestration, escalate to the parent orchestrator."
+        )
+
+    # Workers cannot spawn other workers
+    if spawning_agent in WORKER_AGENTS and target_agent in WORKER_AGENTS:
+        raise ValueError(
+            f"Worker agent '{spawning_agent}' cannot spawn another worker agent '{target_agent}'.\n"
+            f"Workers must focus on their specialized tasks.\n"
+            f"If you need parallel work, escalate to the orchestrator to coordinate."
+        )
+
+
 def colorize_agent_spawn_message(
     cost_emoji: str,
     agent_type: str,
@@ -159,6 +307,49 @@ def colorize_agent_spawn_message(
         f"task_id={Colors.BRIGHT_BLACK}{task_id}{Colors.RESET}"
     )
     return colored_message
+
+
+def format_spawn_output(
+    agent_type: str,
+    display_model: str,
+    task_id: str,
+    mode: OutputMode = OutputMode.CLEAN,
+) -> str:
+    """
+    Format agent spawn output based on output mode.
+
+    Args:
+        agent_type: Type of agent (explore, dewey, etc.)
+        display_model: Display name of the model
+        task_id: The agent task ID
+        mode: Output mode (CLEAN, VERBOSE, SILENT)
+
+    Returns:
+        Formatted output string
+
+    Examples:
+        CLEAN:   ✓ explore:gemini-3-flash → agent_abc123
+        VERBOSE: 🟢 explore:gemini-3-flash('Find auth...') ⏳
+                 task_id=agent_abc123
+        SILENT:  (empty string)
+    """
+    if mode == OutputMode.SILENT:
+        return ""
+
+    cost_emoji = get_agent_emoji(agent_type)
+
+    if mode == OutputMode.CLEAN:
+        # Concise single-line format: ✓ explore:gemini-3-flash → agent_abc123
+        return (
+            f"{Colors.GREEN}✓{Colors.RESET} "
+            f"{Colors.CYAN}{agent_type}{Colors.RESET}:"
+            f"{Colors.YELLOW}{display_model}{Colors.RESET} "
+            f"→ {Colors.CYAN}{task_id}{Colors.RESET}"
+        )
+    else:
+        # VERBOSE mode - use existing colorized message
+        # This will be filled in by the caller with description
+        return ""  # Will be handled in agent_spawn
 
 
 @dataclass
@@ -241,6 +432,10 @@ class AgentManager:
         self._notification_queue: dict[str, list[dict[str, Any]]] = {}
         # Track background threads for cleanup
         self._threads: dict[str, threading.Thread] = {}
+        # Track progress monitor threads
+        self._progress_monitors: dict[str, threading.Thread] = {}
+        # Flag to stop all progress monitors on shutdown
+        self._stop_monitors = threading.Event()
 
         # Auto-cleanup stale agents on startup (> 30 minutes old)
         try:
@@ -527,6 +722,11 @@ class AgentManager:
             finally:
                 self._processes.pop(task_id, None)
                 self._threads.pop(task_id, None)
+                # Stop progress monitor if running
+                monitor_thread = self._progress_monitors.pop(task_id, None)
+                if monitor_thread and monitor_thread.is_alive():
+                    # Monitor will stop automatically when it sees task is no longer running
+                    pass
                 self._notify_completion(task_id)
 
         # Run in background thread
@@ -547,6 +747,91 @@ class AgentManager:
 
             self._notification_queue[parent_id].append(task)
             logger.info(f"[AgentManager] Queued notification for {parent_id}: task {task_id}")
+
+    def _start_progress_monitor(self, task_id: str, interval: int = 10):
+        """
+        Start a background thread to monitor and report progress for a running agent.
+
+        Periodically prints progress updates to stderr in the format:
+        ⏳ agent_abc123 running (15s)...
+
+        Args:
+            task_id: The task ID to monitor
+            interval: Update interval in seconds (default: 10)
+        """
+
+        def monitor_progress():
+            task = self.get_task(task_id)
+            if not task:
+                return
+
+            agent_type = task.get("agent_type", "unknown")
+            started_at = task.get("started_at") or datetime.now().isoformat()
+            start_time = datetime.fromisoformat(started_at)
+
+            while not self._stop_monitors.is_set():
+                # Check if task is still running
+                task = self.get_task(task_id)
+                if not task or task["status"] not in ["running", "pending"]:
+                    # Task completed - print final status
+                    if task and task["status"] == "completed":
+                        elapsed = (datetime.now() - start_time).total_seconds()
+                        # Extract first line of result as summary (max 50 chars)
+                        result_summary = ""
+                        if task.get("result"):
+                            first_line = task["result"].split("\n")[0].strip()
+                            result_summary = f" - {first_line[:50]}"
+
+                        completion_msg = (
+                            f"{Colors.GREEN}✅{Colors.RESET} "
+                            f"{Colors.CYAN}{task_id}{Colors.RESET} "
+                            f"({int(elapsed)}s){result_summary}\n"
+                        )
+                        try:
+                            sys.stderr.write(completion_msg)
+                            sys.stderr.flush()
+                        except:
+                            pass
+                    elif task and task["status"] == "failed":
+                        elapsed = (datetime.now() - start_time).total_seconds()
+                        error_summary = task.get("error", "Unknown error")[:50]
+                        failure_msg = (
+                            f"{Colors.RED}❌{Colors.RESET} "
+                            f"{Colors.CYAN}{task_id}{Colors.RESET} "
+                            f"({int(elapsed)}s) - {error_summary}\n"
+                        )
+                        try:
+                            sys.stderr.write(failure_msg)
+                            sys.stderr.flush()
+                        except:
+                            pass
+                    break
+
+                # Calculate elapsed time
+                elapsed = (datetime.now() - start_time).total_seconds()
+
+                # Format progress message
+                progress_msg = (
+                    f"{Colors.YELLOW}⏳{Colors.RESET} "
+                    f"{Colors.CYAN}{task_id}{Colors.RESET} "
+                    f"running ({int(elapsed)}s)...\n"
+                )
+
+                # Write to stderr (non-blocking)
+                try:
+                    sys.stderr.write(progress_msg)
+                    sys.stderr.flush()
+                except:
+                    pass  # Ignore write errors
+
+                # Wait for interval or stop signal
+                if self._stop_monitors.wait(timeout=interval):
+                    break
+
+        # Start monitor thread
+        thread = threading.Thread(target=monitor_progress, daemon=True)
+        self._progress_monitors[task_id] = thread
+        thread.start()
 
     def get_pending_notifications(self, session_id: str) -> list[dict[str, Any]]:
         """Get and clear pending notifications for a session."""
@@ -759,23 +1044,80 @@ class AgentManager:
         cost_emoji = get_agent_emoji(agent_type)
         display_model = AGENT_DISPLAY_MODELS.get(agent_type, AGENT_DISPLAY_MODELS["_default"])
 
+        # Calculate duration for completed/failed tasks
+        duration_str = ""
+        if task.get("started_at") and task.get("completed_at"):
+            try:
+                started = datetime.fromisoformat(task["started_at"])
+                completed = datetime.fromisoformat(task["completed_at"])
+                duration = int((completed - started).total_seconds())
+                duration_str = f"{duration}s"
+            except:
+                duration_str = "unknown"
+
+        # Extract one-sentence summary from result (first line or first sentence)
+        def extract_summary(text: str, max_length: int = 80) -> str:
+            """Extract a one-sentence summary from text."""
+            if not text:
+                return ""
+            # Get first line
+            first_line = text.strip().split("\n")[0]
+            # Truncate if too long
+            if len(first_line) > max_length:
+                return first_line[:max_length].strip() + "..."
+            return first_line.strip()
+
         # Build output message
         if status == "completed":
             result = task.get("result", "(no output)")
+            summary = extract_summary(result)
+
+            # Completion notification in clean format
+            notification = (
+                f"{Colors.BRIGHT_GREEN}✅{Colors.RESET} "
+                f"{Colors.CYAN}{task_id}{Colors.RESET} "
+                f"({duration_str}) - {summary}"
+            )
+
+            # Write notification to stderr for visibility
+            try:
+                sys.stderr.write(f"\n{notification}\n")
+                sys.stderr.flush()
+            except:
+                pass
+
             output = f"""{cost_emoji} {Colors.BRIGHT_GREEN}✅ Agent Task Completed{Colors.RESET}
 
 **Task ID**: {Colors.BRIGHT_BLACK}{task_id}{Colors.RESET}
 **Agent**: {Colors.CYAN}{agent_type}{Colors.RESET}:{Colors.YELLOW}{display_model}{Colors.RESET}('{Colors.BOLD}{description}{Colors.RESET}')
+**Duration**: {duration_str}
 
 **Result**:
 {result}"""
 
         elif status == "failed":
             error = task.get("error", "(no error details)")
+            error_summary = extract_summary(error, max_length=60)
+
+            # Failure notification in clean format
+            notification = (
+                f"{Colors.BRIGHT_RED}❌{Colors.RESET} "
+                f"{Colors.CYAN}{task_id}{Colors.RESET} "
+                f"({duration_str}) - {error_summary}"
+            )
+
+            # Write notification to stderr for visibility
+            try:
+                sys.stderr.write(f"\n{notification}\n")
+                sys.stderr.flush()
+            except:
+                pass
+
             output = f"""{cost_emoji} {Colors.BRIGHT_RED}❌ Agent Task Failed{Colors.RESET}
 
 **Task ID**: {Colors.BRIGHT_BLACK}{task_id}{Colors.RESET}
 **Agent**: {Colors.CYAN}{agent_type}{Colors.RESET}:{Colors.YELLOW}{display_model}{Colors.RESET}('{Colors.BOLD}{description}{Colors.RESET}')
+**Duration**: {duration_str}
 
 **Error**:
 {error}"""
@@ -922,27 +1264,70 @@ async def agent_spawn(
     prompt: str,
     agent_type: str = "explore",
     description: str = "",
+    delegation_reason: str | None = None,
+    expected_outcome: str | None = None,
+    required_tools: list[str] | None = None,
     model: str = "gemini-3-flash",
     thinking_budget: int = 0,
     timeout: int = 300,
     blocking: bool = False,
+    spawning_agent: str | None = None,
 ) -> str:
     """
-    Spawn a background agent.
+    Spawn a background agent with delegation enforcement.
 
     Args:
         prompt: The task for the agent to perform
         agent_type: Type of agent (explore, dewey, frontend, delphi)
         description: Short description shown in status
+        delegation_reason: WHY this agent is being spawned (REQUIRED for orchestrators)
+        expected_outcome: WHAT deliverables are expected (REQUIRED for orchestrators)
+        required_tools: WHICH tools the agent needs (REQUIRED for orchestrators)
         model: Model to use (gemini-3-flash, gemini-3-pro, claude)
         thinking_budget: Reserved reasoning tokens
         timeout: Execution timeout in seconds
         blocking: If True, wait for completion and return result directly (use for delphi)
+        spawning_agent: Type of agent doing the spawning (for hierarchy validation)
 
     Returns:
         Task ID and instructions, or full result if blocking=True
+
+    Raises:
+        ValueError: If required parameters are missing or validation fails
     """
     manager = get_manager()
+
+    # Phase 4: Delegation Enforcement
+    # Orchestrators MUST provide delegation metadata
+    if spawning_agent in ORCHESTRATOR_AGENTS:
+        if not delegation_reason:
+            raise ValueError(
+                f"Orchestrator '{spawning_agent}' must provide 'delegation_reason' when spawning agents.\n"
+                f"This explains WHY this delegation is necessary.\n"
+                f"Example: 'Need external research on JWT best practices'"
+            )
+
+        if not expected_outcome:
+            raise ValueError(
+                f"Orchestrator '{spawning_agent}' must provide 'expected_outcome' when spawning agents.\n"
+                f"This defines WHAT deliverables are expected.\n"
+                f"Example: 'List of JWT libraries with security ratings and usage examples'"
+            )
+
+        if not required_tools:
+            raise ValueError(
+                f"Orchestrator '{spawning_agent}' must provide 'required_tools' when spawning agents.\n"
+                f"This lists WHICH tools the agent needs to complete the task.\n"
+                f"Example: ['WebSearch', 'WebFetch', 'Read']"
+            )
+
+    # Validate tool access
+    if required_tools:
+        validate_agent_tools(agent_type, required_tools)
+
+    # Validate hierarchy
+    if spawning_agent:
+        validate_agent_hierarchy(spawning_agent, agent_type)
 
     # Map agent types to system prompts
     # Claude CLI subprocesses use NATIVE TOOLS ONLY (Read, Grep, Glob, Bash)
@@ -1192,6 +1577,91 @@ Use invoke_gemini with model="gemini-3-flash" for ALL synthesis work.
 - After debugger fails → escalate to Stravinsky with context
 - NEVER call delphi directly
 """,
+        "momus": """You are a quality gate validator. Ensure work meets standards before approval.
+
+AVAILABLE TOOLS (use these directly - NO MCP tools available):
+- Read: Read file contents
+- Grep: Search for patterns in files
+- Glob: Find files by pattern
+- Bash: Run shell commands (pytest, ruff, mypy, git)
+
+VALIDATION DOMAINS:
+1. Code Quality: tests pass, no linting errors, no type errors
+2. Research Quality: complete findings, cited sources, identified gaps
+3. Documentation: APIs documented, complex logic explained, TODOs tracked
+
+WORKFLOW:
+1. Run tests: pytest tests/ -v
+2. Run linting: ruff check .
+3. Check diagnostics (if LSP available)
+4. Validate patterns with grep/ast-grep
+5. Return JSON report with critical/warning/suggestion categorization
+
+OUTPUT FORMAT (REQUIRED):
+```json
+{
+  "status": "passed|failed|warning",
+  "summary": "Brief summary",
+  "critical_issues": [],
+  "warnings": [],
+  "suggestions": [],
+  "statistics": {},
+  "approval": "approved|rejected",
+  "next_steps": []
+}
+```
+
+CONSTRAINTS:
+- READ-ONLY: Never use Write or Edit
+- OBJECTIVE: Only measurable criteria
+- ACTIONABLE: Every issue includes specific fix action
+- FAST: Aim for <60 seconds
+""",
+        "comment_checker": """You are a documentation validator. Find undocumented code and missing comments.
+
+AVAILABLE TOOLS (use these directly - NO MCP tools available):
+- Read: Read file contents
+- Grep: Search for patterns in files
+- Glob: Find files by pattern
+- Bash: Run shell commands
+
+VALIDATION CRITERIA:
+1. Public APIs: All public functions/classes must have docstrings
+2. Complex Logic: Nested loops, complex conditionals need explanatory comments
+3. TODO Hygiene: All TODOs must reference issues (TODO(#123) or TODO(@user))
+4. Comment Quality: No useless/outdated/commented-out code
+
+WORKFLOW:
+1. Find public functions without docstrings
+2. Identify complex logic without comments
+3. Search for orphaned TODOs: grep -r "TODO(?!.*#\\d+)"
+4. Find commented-out code
+5. Calculate documentation coverage
+6. Return JSON report
+
+OUTPUT FORMAT (REQUIRED):
+```json
+{
+  "status": "passed|failed|warning",
+  "summary": "Documentation coverage is X%",
+  "undocumented_apis": [],
+  "complex_undocumented_logic": [],
+  "orphaned_todos": [],
+  "comment_quality_issues": [],
+  "statistics": {
+    "documentation_coverage": "X%"
+  },
+  "approval": "approved|rejected|approved_with_warnings",
+  "next_steps": []
+}
+```
+
+CONSTRAINTS:
+- READ-ONLY: Never use Write or Edit
+- LANGUAGE-AWARE: Use AST when possible, not just regex
+- ACTIONABLE: Every finding includes specific action
+- FAST: Aim for <30 seconds
+""",
     }
 
     system_prompt = system_prompts.get(agent_type)
@@ -1223,6 +1693,17 @@ Use invoke_gemini with model="gemini-3-flash" for ALL synthesis work.
     cost_emoji = get_agent_emoji(agent_type)
     short_desc = (description or prompt[:50]).strip()
 
+    # Get output mode from environment variable (default: CLEAN)
+    output_mode_str = os.environ.get("STRAVINSKY_OUTPUT_MODE", "clean").lower()
+    try:
+        output_mode = OutputMode(output_mode_str)
+    except ValueError:
+        output_mode = OutputMode.CLEAN
+
+    # Start progress monitor if not in SILENT mode
+    if output_mode != OutputMode.SILENT and not blocking:
+        manager._start_progress_monitor(task_id, interval=10)
+
     # If blocking mode (recommended for delphi), wait for completion
     if blocking:
         result = manager.get_output(task_id, block=True, timeout=timeout)
@@ -1231,10 +1712,15 @@ Use invoke_gemini with model="gemini-3-flash" for ALL synthesis work.
         )
         return f"{blocking_msg} {Colors.BOLD}[BLOCKING]{Colors.RESET}\n\n{result}"
 
-    # Enhanced format with ANSI colors: cost_emoji agent:model('description') status_emoji
-    # 🟢 explore:gemini-3-flash('Find auth...') ⏳
-    # With colors: agent type in cyan, model in yellow, description bold
-    return colorize_agent_spawn_message(cost_emoji, agent_type, display_model, short_desc, task_id)
+    # Format output based on mode
+    if output_mode == OutputMode.CLEAN:
+        return format_spawn_output(agent_type, display_model, task_id, mode=OutputMode.CLEAN)
+    elif output_mode == OutputMode.VERBOSE:
+        return colorize_agent_spawn_message(
+            cost_emoji, agent_type, display_model, short_desc, task_id
+        )
+    else:  # SILENT
+        return ""
 
 
 async def agent_output(task_id: str, block: bool = False, auto_cleanup: bool = False) -> str:

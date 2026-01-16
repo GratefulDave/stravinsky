@@ -22,6 +22,7 @@ import asyncio
 import atexit
 import hashlib
 import logging
+import signal
 import sys
 import threading
 from abc import ABC, abstractmethod
@@ -1984,6 +1985,87 @@ def _cleanup_watchers():
 atexit.register(_cleanup_watchers)
 
 
+def _check_index_exists(store: "CodebaseVectorStore") -> bool:
+    """Check if semantic index exists for this project."""
+    try:
+        doc_count = store.collection.count()
+        return doc_count > 0
+    except Exception as e:
+        logger.warning(f"Could not check index status: {e}")
+        return False
+
+
+def _prompt_with_timeout(prompt_text: str, timeout: int = 30) -> str:
+    """
+    Prompt user with timeout. Returns 'n' if timeout or non-interactive.
+
+    Args:
+        prompt_text: The prompt to display
+        timeout: Timeout in seconds (default: 30)
+
+    Returns:
+        User response or 'n' if timeout/non-interactive
+    """
+    # Check if stdin is interactive
+    if not sys.stdin.isatty():
+        return "n"  # Non-interactive, skip prompt
+
+    # Windows doesn't support SIGALRM, so we need a different approach
+    if sys.platform == "win32":
+        try:
+            import msvcrt
+            import time
+
+            print(prompt_text, end="", flush=True, file=sys.stderr)
+            start_time = time.time()
+            response = []
+
+            while time.time() - start_time < timeout:
+                if msvcrt.kbhit():
+                    char = msvcrt.getwche()
+                    if char in ("\r", "\n"):
+                        print(file=sys.stderr)  # Newline after input
+                        return "".join(response)
+                    response.append(char)
+                time.sleep(0.1)
+
+            print("\n⏱️  Timeout - skipping index creation", file=sys.stderr)
+            return "n"
+        except (ImportError, Exception):
+            # Fallback: just use input() without timeout on Windows
+            try:
+                return input(prompt_text)
+            except EOFError:
+                return "n"
+
+    # Unix-like systems (Linux, macOS)
+    def timeout_handler(signum, frame):
+        raise TimeoutError()
+
+    try:
+        # Save old handler
+        old_handler = signal.signal(signal.SIGALRM, timeout_handler)
+        signal.alarm(timeout)
+        response = input(prompt_text)
+        signal.alarm(0)  # Cancel alarm
+        # Restore old handler
+        signal.signal(signal.SIGALRM, old_handler)
+        return response
+    except (TimeoutError, EOFError):
+        signal.alarm(0)  # Cancel alarm
+        # Restore old handler
+        try:
+            signal.signal(signal.SIGALRM, old_handler)
+        except Exception:
+            pass
+        print("\n⏱️  Timeout - skipping index creation", file=sys.stderr)
+        return "n"
+    except Exception as e:
+        signal.alarm(0)  # Cancel alarm
+        logger.warning(f"Error during prompt: {e}")
+        return "n"
+
+
 def get_store(project_path: str, provider: EmbeddingProvider = "ollama") -> CodebaseVectorStore:
     """Get or create a vector store for a project.
 
@@ -2031,22 +2113,45 @@ async def semantic_search(
     store = get_store(project_path, provider)
 
     # Check if index exists before searching
-    try:
-        doc_count = store.collection.count()
-        if doc_count == 0:
+    if not _check_index_exists(store):
+        print("\n⚠️  No semantic index found for this project.", file=sys.stderr)
+        print(f"📁 Project: {project_path}", file=sys.stderr)
+        print(f"🔍 Provider: {provider}", file=sys.stderr)
+
+        # Interactive prompt with timeout
+        response = _prompt_with_timeout("\n🤔 Create semantic index now? [Y/n] (30s timeout): ")
+
+        if response.lower() in ["", "y", "yes"]:
+            print("\n📋 Creating semantic index...", file=sys.stderr)
+            try:
+                # Call index_codebase function
+                index_result = await index_codebase(project_path, provider=provider, force=False)
+                print(f"✅ {index_result}", file=sys.stderr)
+
+                # Auto-start file watcher
+                print("🔄 Starting file watcher for auto-updates...", file=sys.stderr)
+                await start_file_watcher(project_path, provider)
+                print("✅ File watcher started - index will auto-update on changes", file=sys.stderr)
+
+            except Exception as e:
+                logger.error(f"Failed to create index: {e}")
+                return (
+                    f"❌ Failed to create index: {e}\n\n"
+                    "**Manual fix:**\n"
+                    "```python\n"
+                    f'index_codebase(project_path="{project_path}", provider="{provider}")\n'
+                    "```"
+                )
+        else:
             return (
-                "⚠️ **Semantic index is empty or not created.**\n\n"
-                "You must run `semantic_index()` before using semantic search.\n\n"
-                "**Quick fix:**\n"
+                "❌ Index required for semantic search.\n\n"
+                "**To create index manually:**\n"
                 "```python\n"
-                f'semantic_index(project_path="{project_path}", provider="{provider}")\n'
+                f'index_codebase(project_path="{project_path}", provider="{provider}")\n'
                 "```\n\n"
                 "This indexes your codebase for natural language search. "
                 "Run it once per project (takes 30s-2min depending on size)."
             )
-    except Exception as e:
-        logger.warning(f"Could not check index status: {e}")
-        # Continue anyway - the search will fail gracefully if no index
 
     results = await store.search(
         query,
@@ -2063,6 +2168,17 @@ async def semantic_search(
 
     if "error" in results[0]:
         return f"Error: {results[0]['error']}\nHint: {results[0].get('hint', 'Check Ollama is running')}"
+
+    # Auto-start file watcher if not already running (index exists and search succeeded)
+    try:
+        active_watcher = get_file_watcher(project_path)
+        if active_watcher is None:
+            # Index exists but no watcher - start it silently in background
+            logger.info(f"Auto-starting file watcher for {project_path}")
+            await start_file_watcher(project_path, provider, debounce_seconds=2.0)
+    except Exception as e:
+        # Don't fail the search if watcher fails to start
+        logger.warning(f"Could not auto-start file watcher: {e}")
 
     lines = [f"Found {len(results)} results for: '{query}'\n"]
     for i, r in enumerate(results, 1):

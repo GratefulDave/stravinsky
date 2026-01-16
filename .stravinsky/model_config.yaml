@@ -1,0 +1,81 @@
+# Stravinsky Model Configuration
+# Defines primary and fallback authentication methods for each model
+
+# Global defaults (can be overridden per-model)
+defaults:
+  primary_auth: oauth  # Try OAuth first
+  fallback_auth: api   # Fall back to API keys
+  timeout: 120         # Request timeout in seconds
+
+# Per-model configuration
+models:
+  # Gemini models (Google)
+  gemini-3-flash:
+    primary_auth: oauth
+    fallback_auth: api
+    max_tokens: 8192
+    temperature: 0.7
+
+  gemini-3-pro:
+    primary_auth: oauth
+    fallback_auth: api
+    max_tokens: 8192
+    temperature: 0.7
+
+  # OpenAI models (GPT)
+  gpt-5.2-codex:
+    primary_auth: oauth
+    fallback_auth: api
+    max_tokens: 4096
+    temperature: 0.7
+
+  gpt-4o:
+    primary_auth: oauth
+    fallback_auth: api
+    max_tokens: 4096
+    temperature: 0.7
+
+  # Claude models (Anthropic)
+  claude-sonnet-4.5:
+    primary_auth: oauth
+    fallback_auth: api
+    max_tokens: 8192
+    temperature: 0.7
+
+  claude-opus-4.5:
+    primary_auth: oauth
+    fallback_auth: api
+    max_tokens: 8192
+    temperature: 0.7
+
+  claude-haiku:
+    primary_auth: oauth
+    fallback_auth: api
+    max_tokens: 4096
+    temperature: 0.7
+
+# Cost tiers (for agent routing decisions)
+cost_tiers:
+  CHEAP:
+    - gemini-3-flash
+    - claude-haiku
+  MEDIUM:
+    - gemini-3-pro
+    - claude-sonnet-4.5
+  EXPENSIVE:
+    - gpt-5.2-codex
+    - claude-opus-4.5
+
+# Agent model preferences (which model to use for each agent type)
+agent_models:
+  explore: gemini-3-flash
+  dewey: gemini-3-flash
+  frontend: gemini-3-pro
+  delphi: gpt-5.2-codex
+  research-lead: gemini-3-flash
+  implementation-lead: claude-sonnet-4.5
+  momus: claude-haiku
+  comment_checker: claude-haiku
+  debugger: claude-sonnet-4.5
+  code-reviewer: claude-sonnet-4.5
+  stravinsky: claude-sonnet-4.5

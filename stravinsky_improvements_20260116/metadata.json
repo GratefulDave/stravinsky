@@ -1,0 +1,29 @@
+{
+  "track_name": "Stravinsky Orchestration & Semantic Search Improvements",
+  "created": "2026-01-16",
+  "status": "ready_for_implementation",
+  "estimated_hours": "16-22",
+  "priority": "high",
+  "phases": 5,
+  "success_criteria": {
+    "semantic_search_auto_index": false,
+    "file_watcher_auto_start": false,
+    "todo_verification_enforced": false,
+    "clean_output_formatting": false,
+    "delegation_enforcement": false,
+    "new_agents_created": false
+  },
+  "files": {
+    "modified": 5,
+    "created": 6,
+    "deleted": 0
+  },
+  "agents": {
+    "existing": ["stravinsky", "explore", "delphi", "dewey", "frontend", "debugger", "code-reviewer", "implementation-lead", "research-lead"],
+    "new": ["momus", "comment_checker"]
+  },
+  "dependencies": {
+    "new": [],
+    "updated": []
+  }
+}

@@ -4,7 +4,7 @@ description: |
   Implementation coordinator that receives Research Brief and produces working code.
   Delegates to frontend, debugger, and code-reviewer specialists.
 tools: Read, Write, Edit, Grep, Glob, mcp__stravinsky__agent_spawn, mcp__stravinsky__agent_output, mcp__stravinsky__lsp_diagnostics
-model: haiku
+model: claude-sonnet-4.5
 ---
 
 # Implementation Lead - Execution Coordinator

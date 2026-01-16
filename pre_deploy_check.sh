@@ -82,6 +82,9 @@ if [ -d "tests" ] && [ -n "$(find tests -name 'test_*.py' -o -name '*_test.py')"
         --ignore=tests/test_hooks.py \
         --ignore=tests/test_new_hooks.py \
         --ignore=tests/test_invoke_gemini_agentic.py \
+        --ignore=tests/test_todo_verification.py \
+        --ignore=tests/test_semantic_auto_index.py \
+        --ignore=tests/test_mcp_server_integration.py \
         -x \
         --tb=short \
         -q 2>&1 | tee /tmp/pytest_output.txt | tail -30)

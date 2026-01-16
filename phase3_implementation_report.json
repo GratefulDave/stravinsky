@@ -1,0 +1,143 @@
+{
+  "objective": "Implement Phase 3 - Clean Output Formatting for agent_manager.py",
+  "files_changed": [
+    "/Users/davidandrews/PycharmProjects/stravinsky/mcp_bridge/tools/agent_manager.py"
+  ],
+  "implementation_details": {
+    "added_components": [
+      {
+        "name": "OutputMode enum",
+        "location": "Line 27-32",
+        "description": "Enum with three modes: CLEAN, VERBOSE, SILENT",
+        "purpose": "Control verbosity of agent spawn output"
+      },
+      {
+        "name": "format_spawn_output() function",
+        "location": "Line 175-215",
+        "description": "Formats agent spawn output based on output mode",
+        "features": [
+          "CLEAN mode: ✓ explore:gemini-3-flash → agent_abc123",
+          "VERBOSE mode: delegates to colorize_agent_spawn_message",
+          "SILENT mode: returns empty string",
+          "Output under 100 chars for CLEAN mode",
+          "ANSI color codes for readability"
+        ]
+      },
+      {
+        "name": "_start_progress_monitor() method",
+        "location": "Line 609-659",
+        "description": "Background thread that monitors and reports progress",
+        "features": [
+          "Runs in daemon thread",
+          "Updates every 10 seconds (configurable)",
+          "Format: ⏳ agent_abc123 running (15s)...",
+          "Writes to stderr for visibility",
+          "Automatically stops when task completes",
+          "Respects _stop_monitors event flag"
+        ]
+      },
+      {
+        "name": "Completion notifications in get_output()",
+        "location": "Line 872-948",
+        "description": "Displays notifications when tasks complete or fail",
+        "features": [
+          "Duration calculation and display",
+          "One-sentence summary extraction",
+          "Completion format: ✅ agent_abc123 (42s) - Summary text",
+          "Failure format: ❌ agent_abc123 (15s) - Error message",
+          "Writes to stderr for visibility",
+          "Includes duration in task output"
+        ]
+      },
+      {
+        "name": "Progress monitor tracking fields",
+        "location": "Line 299-301 (AgentManager.__init__)",
+        "description": "Added fields to track progress monitor threads",
+        "fields": [
+          "_progress_monitors: dict[str, threading.Thread]",
+          "_stop_monitors: threading.Event()"
+        ]
+      },
+      {
+        "name": "Environment variable support",
+        "location": "Line 1337-1341 (agent_spawn)",
+        "description": "Reads STRAVINSKY_OUTPUT_MODE env var",
+        "default": "clean",
+        "valid_values": ["clean", "verbose", "silent"]
+      }
+    ],
+    "modified_components": [
+      {
+        "name": "agent_spawn() function",
+        "changes": [
+          "Added output mode detection from environment variable",
+          "Starts progress monitor for non-blocking, non-silent spawns",
+          "Returns formatted output based on mode (CLEAN/VERBOSE/SILENT)",
+          "Progress monitor starts automatically"
+        ]
+      },
+      {
+        "name": "_execute_agent() cleanup",
+        "location": "Line 585-593",
+        "changes": [
+          "Added cleanup of progress monitor thread",
+          "Monitor stops automatically when task completes"
+        ]
+      },
+      {
+        "name": "get_output() method",
+        "changes": [
+          "Added duration calculation for completed/failed tasks",
+          "Added extract_summary() helper function",
+          "Added completion/failure notifications to stderr",
+          "Includes duration in all output formats"
+        ]
+      }
+    ]
+  },
+  "tests_status": "pass",
+  "test_results": {
+    "test_1_outputmode_enum": "✅ PASS - All 3 modes available",
+    "test_2_clean_output": "✅ PASS - Output under 100 chars (75 chars)",
+    "test_3_silent_output": "✅ PASS - Returns empty string",
+    "test_4_cost_emoji": "✅ PASS - Correct emojis for agent types",
+    "test_5_display_models": "✅ PASS - Correct model names",
+    "syntax_check": "✅ PASS - No Python syntax errors"
+  },
+  "diagnostics": "clean",
+  "blockers": [],
+  "success_criteria_met": {
+    "outputmode_enum": "✅ Created with CLEAN, VERBOSE, SILENT",
+    "format_spawn_output": "✅ Implemented with ANSI colors",
+    "clean_output_length": "✅ 75 chars (under 100 char requirement)",
+    "progress_monitor": "✅ Background thread with 10s interval",
+    "completion_notification": "✅ Shows duration and summary",
+    "failure_notification": "✅ Shows duration and error summary",
+    "env_var_support": "✅ STRAVINSKY_OUTPUT_MODE configurable",
+    "api_compatibility": "✅ No breaking changes to agent_spawn API"
+  },
+  "output_examples": {
+    "clean_spawn": "✓ explore:gemini-3-flash → agent_abc123",
+    "verbose_spawn": "🟢 explore:gemini-3-flash('Find auth...') ⏳\ntask_id=agent_abc123",
+    "progress_update": "⏳ agent_abc123 running (15s)...",
+    "completion": "✅ agent_abc123 (42s) - Summary of results",
+    "failure": "❌ agent_abc123 (15s) - Error description"
+  },
+  "usage_notes": [
+    "Default mode is CLEAN (concise single-line output)",
+    "Set STRAVINSKY_OUTPUT_MODE=verbose for detailed output",
+    "Set STRAVINSKY_OUTPUT_MODE=silent to suppress output",
+    "Progress updates appear on stderr every 10 seconds",
+    "Completion/failure notifications appear on stderr automatically",
+    "Progress monitor runs in background, no blocking",
+    "All existing agent_spawn calls remain compatible"
+  ],
+  "implementation_time": "Approximately 30 minutes",
+  "code_quality": {
+    "type_hints": "✅ All functions properly typed",
+    "documentation": "✅ Comprehensive docstrings",
+    "error_handling": "✅ Try/except blocks for stderr writes",
+    "thread_safety": "✅ Proper cleanup of monitor threads",
+    "ansi_colors": "✅ Consistent color scheme (green=success, red=error, yellow=progress, cyan=ids)"
+  }
+}

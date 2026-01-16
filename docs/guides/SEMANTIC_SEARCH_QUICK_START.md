@@ -321,10 +321,10 @@ flowchart LR
 
 ## Documentation Links
 
-- [Full Test Report](./SEMANTIC_SEARCH_TEST_REPORT.md)
-- [Architecture Overview](./ARCHITECTURE.md)
-- [MCP Tool Flow](./MCP_TOOL_FLOW.md)
-- [File Watcher Design](./FILEWATCHER_ARCHITECTURE.md)
+- [Full Test Report](../reports/SEMANTIC_SEARCH_TEST_REPORT.md)
+- [Architecture Overview](../architecture/ARCHITECTURE.md)
+- [MCP Tool Flow](../architecture/MCP_TOOL_FLOW.md)
+- [File Watcher Design](../architecture/FILEWATCHER_ARCHITECTURE.md)
 
 ---
 

@@ -47,12 +47,12 @@ Stravinsky includes **8 native Claude Code subagents**:
 | stravinsky | Orchestrator | Claude Sonnet 4.5 | Moderate | ✅ Defined |
 | explore | Code search | Gemini Flash | Free | ✅ Defined |
 | dewey | Doc research | Gemini Flash | Cheap | ✅ Defined |
-| code-reviewer | Quality analysis | Claude | Cheap | ✅ Defined |
-| debugger | Root cause | Claude | Medium | ✅ Defined |
+| code-reviewer | Quality analysis | Gemini Flash | Cheap | ✅ Defined |
+| debugger | Root cause | Claude Sonnet | Medium | ✅ Defined |
 | frontend | UI/UX | Gemini 3 Pro High | Medium | ✅ Defined |
 | delphi | Architecture | GPT-5.2 | Expensive | ✅ Defined |
-| research-lead | Research coordinator | Various | Varies | ✅ Defined |
-| implementation-lead | Implementation coordinator | Various | Varies | ✅ Defined |
+| research-lead | Research coordinator | Gemini Flash | Cheap | ✅ Defined |
+| implementation-lead | Implementation coordinator | Claude Sonnet | Medium | ✅ Defined |
 
 **All agents have system prompts defining their roles and tools.**
 

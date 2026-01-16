@@ -109,10 +109,10 @@ This document establishes the **baseline architecture** for gap analysis.
 - `dewey` - Documentation research (Gemini Flash, cheap)
 - `frontend` - UI/UX specialist (Gemini 3 Pro High, medium cost)
 - `delphi` - Strategic advisor (GPT-5.2, expensive)
-- `code-reviewer` - Quality analysis (Claude, cheap)
-- `debugger` - Root cause (Claude, medium)
-- `document_writer` - Doc generation (varies)
-- `multimodal` - Visual analysis (Gemini multimodal)
+- `code-reviewer` - Quality analysis (Gemini Flash, cheap)
+- `debugger` - Root cause (Claude Sonnet, medium)
+- `document_writer` - Doc generation (Gemini Flash)
+- `multimodal` - Visual analysis (Gemini Flash)
 
 **File**: `mcp_bridge/tools/agent_manager.py`
 
@@ -203,12 +203,12 @@ This document establishes the **baseline architecture** for gap analysis.
 | **stravinsky** | stravinsky.md | Sonnet 4.5 | Moderate | Primary | Auto (orchestrator) |
 | **explore** | explore.md | Gemini Flash | Free | Async | Code search, "where is X?" |
 | **dewey** | dewey.md | Gemini Flash + WebSearch | Cheap | Async | Doc research, examples |
-| **code-reviewer** | code-reviewer.md | Claude | Cheap | Async | Code review, security |
-| **debugger** | debugger.md | Claude | Medium | Blocking | After 2+ failures |
+| **code-reviewer** | code-reviewer.md | Gemini Flash | Cheap | Async | Code review, security |
+| **debugger** | debugger.md | Claude Sonnet | Medium | Blocking | After 2+ failures |
 | **frontend** | frontend.md | Gemini 3 Pro High | Medium | Blocking | ALL visual changes |
 | **delphi** | delphi.md | GPT-5.2 | Expensive | Blocking | After 3+ failures, architecture |
-| **research-lead** | research-lead.md | Orchestrator | Varies | Coordinator | Research workflows |
-| **implementation-lead** | implementation-lead.md | Orchestrator | Varies | Coordinator | Implementation workflows |
+| **research-lead** | research-lead.md | Gemini Flash | Cheap | Coordinator | Research workflows |
+| **implementation-lead** | implementation-lead.md | Claude Sonnet | Medium | Coordinator | Implementation workflows |
 
 **Location**: `/Users/davidandrews/PycharmProjects/stravinsky/.claude/agents/`
 
@@ -429,7 +429,7 @@ Stravinsky Flow:
   1. Attempt first solution (orchestrator)
   2. If 3+ failures detected:
      - Task(subagent_type="delphi", blocking=true, prompt="Architecture recommendation")
-     - Delphi uses invoke_openai(model="gpt-5.2-medium") with extended thinking
+     - Delphi uses invoke_openai(model="gpt-5.2") with extended thinking
      - Implement delphi recommendation
 ```
 
@@ -442,16 +442,16 @@ Stravinsky Flow:
 | Tier | Agents | Execution | Budget | Use Case |
 |------|--------|-----------|--------|----------|
 | **Free** | explore | Async | $0 | Code search (always delegate) |
-| **Cheap** | dewey, code-reviewer | Async | $0.075/1M tokens | Research, reviews (always delegate) |
-| **Medium** | debugger, frontend | Blocking | $0.5-2.00 | Visual work, debugging (after threshold) |
-| **Expensive** | delphi, stravinsky | Varies | $4-8.00 | Architecture, orchestration (sparingly) |
+| **Cheap** | dewey, code-reviewer, momus | Async | $0.075/1M tokens | Research, reviews (always delegate) |
+| **Medium** | debugger, frontend, implementation-lead | Blocking | $0.5-2.00 | Visual work, debugging (after threshold) |
+| **Expensive** | delphi, stravinsky, planner | Varies | $4-8.00 | Architecture, orchestration (sparingly) |
 
 ### Extended Thinking Budget
 
 | Agent | Model | Thinking Tokens | Use |
 |-------|-------|-----------------|-----|
 | stravinsky | Claude Sonnet 4.5 | 32,000 | Complex task planning |
-| delphi | GPT-5.2 Medium | N/A (reasoning_effort) | Strategic architectural decisions |
+| delphi | GPT-5.2 | N/A (reasoning_effort) | Strategic architectural decisions |
 
 ---
 
@@ -548,60 +548,42 @@ mcp_bridge/
 6. **Hook Python Infrastructure**: 30+ hook implementations in mcp_bridge/hooks/
 7. **Prompts**: System prompts for all agents ready
 8. **OAuth**: Google (Gemini) and OpenAI (ChatGPT) authentication complete
+9. **Native Claude Code Hooks**: 10+ hooks implemented and registered in `.claude/settings.json`
+   - `stravinsky_mode.py`, `context.py`, `todo_delegation.py`, etc.
+10. **Delegation Enforcement**: PreToolUse hooks blocking Read/Grep/Bash implemented
 
 ### NOT Implemented ❌
 
-1. **Native Claude Code Hooks**:
-   - [ ] PreToolUse hook script (.claude/agents/hooks/pre_tool_use.sh)
-   - [ ] PostToolUse hook script (.claude/agents/hooks/post_tool_use.sh)
-   - [ ] UserPromptSubmit hook script (.claude/agents/hooks/user_prompt_submit.sh)
-   - [ ] Hook registration in `.claude/settings.json`
+1. **Advanced Hook Patterns**:
+   - SessionEnd cleanup hooks not fully implemented
+   - PreCompact state preservation hooks pending refinement
 
-2. **Hook-Based Delegation Control**:
-   - [ ] PreToolUse to block Read/Grep/Bash and force Task() delegation
-   - [ ] Hard boundaries (exit code 2 blocking) not wired to orchestrator
-
-3. **Automatic Delegation Enforcement**:
-   - Currently requires orchestrator to manually decide when to delegate
-   - Hooks could automate this based on tool type and complexity
-
-4. **Research-Lead & Implementation-Lead**:
-   - Definitions exist but may need integration testing
-   - Workflow coordination not fully validated
-
-5. **Advanced Hook Patterns**:
-   - SessionEnd cleanup hooks not implemented
-   - PreCompact state preservation hooks pending
+2. **Research-Lead & Implementation-Lead**:
+   - Definitions exist but workflow coordination needs further validation
 
 ---
 
 ## Part 10: Recommendations
 
-### Phase 1: Hook Activation (CRITICAL)
+### Phase 1: Hook Activation (COMPLETED)
 **Goal**: Enable automatic delegation control via native Claude Code hooks
 
-1. **Implement PreToolUse Hook** (.claude/agents/hooks/pre_tool_use.sh)
+✅ **Implement PreToolUse Hook** (`stravinsky_mode.py`)
    - Intercept Read, Grep, Bash, Glob calls
-   - Complex search → Block, delegate to explore via Task()
-   - Simple lookups → Allow native execution
-   - Return exit code 2 to block
+   - Blocks complex searches in orchestrator mode
 
-2. **Implement PostToolUse Hook** (.claude/agents/hooks/post_tool_use.sh)
-   - Detect Task() completion from specialist agents
-   - Log agent_type + result
-   - Signal orchestrator when all parallel tasks complete
+✅ **Implement PostToolUse Hook** (`tool_messaging.py`, `todo_delegation.py`)
+   - User-friendly messages
+   - Enforced parallel delegation
 
-3. **Implement UserPromptSubmit Hook** (.claude/agents/hooks/user_prompt_submit.sh)
-   - Inject CLAUDE.md rules before orchestrator receives request
-   - Add project context (git status, todos)
-   - Auto-enable semantic search if available
+✅ **Implement UserPromptSubmit Hook** (`context.py`, `parallel_execution.py`)
+   - Inject context and rules
+   - Detect implementation intent
 
-4. **Register Hooks in `.claude/settings.json`**
-   - Hook command paths
-   - Execution order
-   - Conditions for firing
+✅ **Register Hooks in `.claude/settings.json`**
+   - Done via `stravinsky-install-hooks`
 
-**Impact**: Enforce "never work alone" pattern - orchestrator cannot execute Read/Grep/Bash directly, must delegate
+**Impact**: "Never work alone" pattern is now enforced by default.
 
 ---
 

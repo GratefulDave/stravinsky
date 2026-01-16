@@ -30,7 +30,7 @@ install_hooks()
 
 ## What Gets Installed
 
-### Hook Files (11 total)
+### Hook Files (15 total)
 
 All hooks are installed to `~/.claude/hooks/`:
 
@@ -42,9 +42,13 @@ All hooks are installed to `~/.claude/hooks/`:
 6. **todo_delegation.py** - Hard blocks sequential work when 2+ pending todos exist
 7. **stravinsky_mode.py** - Blocks direct tools (Read/Grep/Bash) in orchestrator mode
 8. **tool_messaging.py** - User-friendly tool usage messages
-9. **notification_hook.py** - Agent spawn notifications
+9. **notification_hook_v2.py** - Enhanced agent spawn notifications with colors
 10. **subagent_stop.py** - Subagent completion tracking
 11. **pre_compact.py** - Context preservation before compaction
+12. **dependency_tracker.py** - Tracks task dependencies
+13. **execution_state_tracker.py** - Tracks execution state
+14. **parallel_reinforcement_v2.py** - Smart parallel reminders
+15. **ralph_loop.py** - Auto-continuation loop
 
 ### Settings.json Updates
 

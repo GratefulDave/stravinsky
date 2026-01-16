@@ -354,4 +354,4 @@ Potential improvements:
 
 - [Watchdog Documentation](https://watchdog.readthedocs.io/)
 - [ChromaDB Vector Store](https://docs.trychroma.com/)
-- [CodebaseVectorStore Implementation](./SEMANTIC_SEARCH.md)
+- [Semantic Search Guide](./SEMANTIC_SEARCH_QUICK_START.md)

@@ -8,6 +8,7 @@ Supplements Claude Code's native LSP support with advanced operations.
 import asyncio
 import json
 import logging
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -66,6 +67,41 @@ def _get_language_for_file(file_path: str) -> str:
     return mapping.get(suffix, "unknown")
 
 
+def _find_project_root(file_path: str) -> str | None:
+    """
+    Find project root by looking for marker files.
+
+    Markers:
+    - Python: pyproject.toml, setup.py, requirements.txt, .git
+    - JS/TS: package.json, tsconfig.json, .git
+    - General: .git
+    """
+    path = Path(file_path).resolve()
+    if path.is_file():
+        path = path.parent
+
+    markers = {
+        "pyproject.toml",
+        "setup.py",
+        "requirements.txt",
+        "package.json",
+        "tsconfig.json",
+        ".git",
+    }
+
+    # Walk up the tree
+    current = path
+    for _ in range(20):  # Limit depth
+        for marker in markers:
+            if (current / marker).exists():
+                return str(current)
+        if current.parent == current:  # Root reached
+            break
+        current = current.parent
+
+    return None
+
+
 async def _get_client_and_params(
     file_path: str, needs_open: bool = True
 ) -> tuple[Any | None, str | None, str]:
@@ -80,8 +116,14 @@ async def _get_client_and_params(
         return None, None, "unknown"
 
     lang = _get_language_for_file(file_path)
+    root_path = _find_project_root(file_path)
+
+    # Use found root or fallback to file's parent directory
+    # Passing root_path allows the manager to initialize/restart server with correct context
+    server_root = root_path if root_path else str(path.parent)
+
     manager = get_lsp_manager()
-    client = await manager.get_server(lang)
+    client = await manager.get_server(lang, root_path=server_root)
 
     if not client:
         return None, None, lang
@@ -956,6 +998,10 @@ async def lsp_servers() -> str:
     # USER-VISIBLE NOTIFICATION
     print("🖥️ LSP-SERVERS: listing installed servers", file=sys.stderr)
 
+    # Check env var overrides
+    py_cmd = os.environ.get("LSP_CMD_PYTHON", "jedi-language-server")
+    ts_cmd = os.environ.get("LSP_CMD_TYPESCRIPT", "typescript-language-server")
+
     servers = [
         ("python", "jedi", "pip install jedi"),
         ("python", "jedi-language-server", "pip install jedi-language-server"),
@@ -965,12 +1011,21 @@ async def lsp_servers() -> str:
         ("rust", "rust-analyzer", "rustup component add rust-analyzer"),
     ]
 
-    lines = ["| Language | Server | Status | Install |", "|----------|--------|--------|---------|"]
+    lines = [
+        "**LSP Configuration (Env Vars):**",
+        f"- `LSP_CMD_PYTHON`: `{py_cmd}`",
+        f"- `LSP_CMD_TYPESCRIPT`: `{ts_cmd}`",
+        "",
+        "**Installation Status:**",
+        "| Language | Server | Status | Install |",
+        "|----------|--------|--------|---------|",
+    ]
 
     for lang, server, install in servers:
         # Check if installed
         try:
-            subprocess.run([server, "--version"], capture_output=True, timeout=2)
+            cmd = server.split()[0]  # simple check for command
+            subprocess.run([cmd, "--version"], capture_output=True, timeout=2)
             status = "✅ Installed"
         except FileNotFoundError:
             status = "❌ Not installed"

@@ -177,6 +177,74 @@ Stravinsky uses a sophisticated hook system to enhance Claude Code's behavior:
 
 ---
 
+### 15. dependency_tracker.py
+
+**Type**: UserPromptSubmit, PostToolUse  
+**Purpose**: Track dependencies between TODO items to enable smart parallel execution  
+**Location**: `~/.claude/hooks/dependency_tracker.py`
+
+**Features**:
+- Parses TodoWrite input for dependency keywords ("after", "depends on", "requires")
+- Identifies independent tasks suitable for parallel execution
+- Maintains dependency graph in `.claude/task_dependencies.json`
+
+---
+
+### 16. execution_state_tracker.py
+
+**Type**: UserPromptSubmit, PostToolUse  
+**Purpose**: Track execution state to detect sequential fallbacks  
+**Location**: `~/.claude/hooks/execution_state_tracker.py`
+
+**Features**:
+- Tracks last 10 tools used
+- Monitors pending TODO counts
+- Records last Task() spawn timestamp
+- Persists state to `.claude/execution_state.json`
+
+---
+
+### 17. parallel_reinforcement_v2.py
+
+**Type**: UserPromptSubmit  
+**Purpose**: Smart reinforcement of parallel delegation based on execution state  
+**Location**: `~/.claude/hooks/parallel_reinforcement_v2.py`
+
+**Features**:
+- Reads state from `execution_state_tracker.py`
+- Detects if Stravinsky is falling back to sequential execution
+- Injects targeted reminders ONLY when degradation is detected
+- Replaces legacy `parallel_reinforcement.py`
+
+---
+
+### 18. ralph_loop.py
+
+**Type**: PostAssistantMessage (simulated via UserPromptSubmit/PostToolUse)  
+**Purpose**: Relentless Autonomous Labor Protocol with Hardening Loop  
+**Location**: `~/.claude/hooks/ralph_loop.py`
+
+**Features**:
+- Automatically continues work if TODOs are incomplete
+- Prevents "lazy stopping" by the model
+- Enforces completion of all pending tasks
+- Includes safety limits (max 10 continuations)
+
+---
+
+### 19. notification_hook_v2.py
+
+**Type**: Notification  
+**Purpose**: Enhanced agent spawn notifications with colors and formatting  
+**Location**: `~/.claude/hooks/notification_hook_v2.py`
+
+**Features**:
+- Parses agent spawn messages
+- Applies color coding per agent type (Blue=Explore, Green=Frontend, etc.)
+- Formats output for better readability in the console
+
+---
+
 ## Configuration
 
 Hooks are configured in `~/.claude/settings.json`:

@@ -14,6 +14,7 @@ Architecture:
 
 import asyncio
 import logging
+import os
 import threading
 import time
 from dataclasses import dataclass, field
@@ -46,6 +47,7 @@ class LSPServer:
     initialized: bool = False
     process: asyncio.subprocess.Process | None = None
     pid: int | None = None  # Track subprocess PID for explicit cleanup
+    root_path: str | None = None  # Track root path server was started with
     last_used: float = field(default_factory=time.time)  # Timestamp of last usage
     created_at: float = field(default_factory=time.time)  # Timestamp of server creation
 
@@ -83,17 +85,24 @@ class LSPManager:
 
     def _register_servers(self):
         """Register available LSP server configurations."""
-        self._servers["python"] = LSPServer(name="python", command=["jedi-language-server"])
-        self._servers["typescript"] = LSPServer(
-            name="typescript", command=["typescript-language-server", "--stdio"]
-        )
+        # Allow overriding commands via environment variables
+        python_cmd = os.environ.get("LSP_CMD_PYTHON", "jedi-language-server").split()
+        ts_cmd = os.environ.get(
+            "LSP_CMD_TYPESCRIPT", "typescript-language-server --stdio"
+        ).split()
 
-    async def get_server(self, language: str) -> JsonRPCClient | None:
+        self._servers["python"] = LSPServer(name="python", command=python_cmd)
+        self._servers["typescript"] = LSPServer(name="typescript", command=ts_cmd)
+
+    async def get_server(
+        self, language: str, root_path: str | None = None
+    ) -> JsonRPCClient | None:
         """
         Get or start a persistent LSP server for the given language.
 
         Args:
             language: Language identifier (e.g., "python", "typescript")
+            root_path: Project root path (optional, but recommended)
 
         Returns:
             JsonRPCClient instance or None if server unavailable
@@ -103,6 +112,20 @@ class LSPManager:
             return None
 
         server = self._servers[language]
+
+        # Check if we need to restart due to root path change
+        # (Simple implementation: if root_path differs, restart)
+        # In multi-root workspaces, this might be too aggressive, but safe for now.
+        restart_needed = False
+        if root_path and server.root_path and root_path != server.root_path:
+            logger.info(
+                f"Restarting {language} LSP server: root path changed ({server.root_path} -> {root_path})"
+            )
+            restart_needed = True
+
+        if restart_needed:
+            async with self._lock:
+                await self._shutdown_single_server(language, server)
 
         # Return existing initialized server
         if server.initialized and server.client:
@@ -123,7 +146,7 @@ class LSPManager:
                 return server.client
 
             try:
-                await self._start_server(server)
+                await self._start_server(server, root_path)
                 # Start health monitor on first server creation
                 if self._health_monitor_task is None or self._health_monitor_task.done():
                     self._health_monitor_task = asyncio.create_task(self._background_health_monitor())
@@ -132,7 +155,7 @@ class LSPManager:
                 logger.error(f"Failed to start {language} LSP server: {e}")
                 return None
 
-    async def _start_server(self, server: LSPServer):
+    async def _start_server(self, server: LSPServer, root_path: str | None = None):
         """
         Start a persistent LSP server process.
 
@@ -144,6 +167,7 @@ class LSPManager:
 
         Args:
             server: LSPServer metadata object
+            root_path: Project root path
         """
         try:
             # Create pygls client
@@ -152,7 +176,9 @@ class LSPManager:
             logger.info(f"Starting {server.name} LSP server: {' '.join(server.command)}")
 
             # Start server process (start_io expects cmd as first arg, then *args)
-            await client.start_io(server.command[0], *server.command[1:])
+            # Use cwd=root_path if available to help server find config
+            cwd = root_path if root_path and os.path.isdir(root_path) else None
+            await client.start_io(server.command[0], *server.command[1:], cwd=cwd)
 
             # Brief delay for process startup
             await asyncio.sleep(0.2)
@@ -174,8 +200,9 @@ class LSPManager:
                 )
 
             # Perform LSP initialization handshake
+            root_uri = f"file://{root_path}" if root_path else None
             init_params = InitializeParams(
-                process_id=None, root_uri=None, capabilities=ClientCapabilities()
+                process_id=None, root_uri=root_uri, capabilities=ClientCapabilities()
             )
 
             try:
@@ -195,6 +222,7 @@ class LSPManager:
             # Store client reference (GC protection)
             server.client = client
             server.initialized = True
+            server.root_path = root_path
             server.created_at = time.time()
             server.last_used = time.time()
 
@@ -215,6 +243,7 @@ class LSPManager:
             server.initialized = False
             server.process = None
             server.pid = None
+            server.root_path = None
             raise
 
     async def _restart_with_backoff(self, server: LSPServer):

@@ -435,7 +435,7 @@ REQUEST COMPLEXITY → DELEGATION ROUTING
     (after 3+ failures)
          │
          ├─ Delegate to: delphi (EXPENSIVE blocking)
-         │  └─ Uses GPT-5.2 + extended thinking (32k tokens)
+         │  └─ Uses GPT-5.2 + extended thinking
          └─ Cost: High, but prevents infinite loops
 
 
@@ -482,7 +482,7 @@ STRAVINSKY (Orchestrator)      EXPLORE (Code Search)
 │ Execution: Primary      │    │ ├─ Code snippets        │
 │ Model: Sonnet 4.5       │    │ └─ Pattern analysis     │
 │ Cost: Moderate          │    │                         │
-│                         │    │ Model: Gemini Flash     │
+│                         │    │ Model: Gemini 3 Flash   │
 │ Blocked from:           │    │ Cost: FREE              │
 │ └─ Doing work directly  │    │ Execution: Async        │
 │    (delegates instead)  │    │ Model: Haiku wrapper    │
@@ -504,7 +504,7 @@ DEWEY (Research)                FRONTEND (UI/UX)
 │ ├─ Best practices       │    │ ├─ Styling (CSS/Tailwind)
 │ └─ Recommendations      │    │ ├─ Layout templates     │
 │                         │    │ └─ UX patterns          │
-│ Model: Gemini Flash     │    │                         │
+│ Model: Gemini 3 Flash   │    │                         │
 │ Cost: CHEAP             │    │ Model: Gemini 3 Pro High
 │ Execution: Async        │    │ Cost: MEDIUM            │
 │ Has: WebSearch access   │    │ Execution: BLOCKING     │
@@ -527,7 +527,7 @@ CODE-REVIEWER (Quality)          DEBUGGER (Root Cause)
 │ ├─ Improvement ideas    │    │ ├─ Debugging steps      │
 │ └─ Code examples        │    │ └─ Fix recommendations  │
 │                         │    │                         │
-│ Model: Claude           │    │ Model: Claude           │
+│ Model: Gemini 3 Flash   │    │ Model: Claude Sonnet    │
 │ Cost: CHEAP             │    │ Cost: MEDIUM            │
 │ Execution: Async        │    │ Execution: BLOCKING     │
 │                         │    │ (after 2+ failures)     │
@@ -550,7 +550,7 @@ DELPHI (Architecture)
 │ ├─ Risk assessment      │
 │ └─ Alternatives analysis│
 │                         │
-│ Model: GPT-5.2 Medium   │
+│ Model: GPT-5.2          │
 │ Cost: EXPENSIVE         │
 │ Execution: BLOCKING     │
 │ (after 3+ failures)     │
@@ -580,13 +580,13 @@ WITH HOOKS (Specialized delegation):
 ──────────────────────────────────────
 Orchestrator plan:       2k tokens × $0.003 = $0.006  ← Cheap
 Explore (find):          3k tokens × FREE   = $0.000  ← Free
-Code-reviewer (test):    5k tokens × CHEAP  = $0.001  ← Cheap
+Code-reviewer (test):    5k tokens × FREE   = $0.000  ← Free
 Dewey (document):        6k tokens × CHEAP  = $0.001  ← Cheap
 Orchestrator synthesis:  2k tokens × $0.003 = $0.006
                         ────────────────────────────
-Total:                   18k tokens = $0.014 per request
+Total:                   18k tokens = $0.013 per request
 
-SAVINGS: 73% cheaper (3.6x cost reduction)
+SAVINGS: 75% cheaper (4x cost reduction)
 ADDITIONAL BENEFIT: Parallel execution (faster response)
 ```
 

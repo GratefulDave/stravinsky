@@ -1,4 +1,4 @@
-# Stravinsky - MCP Bridge (Claude Code Bridge)
+d# Stravinsky - MCP Bridge (Claude Code Bridge)
 
 **Claude Code MCP server** for multi-model orchestration with OAuth authentication.
 

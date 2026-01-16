@@ -8,13 +8,14 @@ Stravinsky uses a **three-layer enforcement system** combining Claude Code's nat
 
 ## Quick Reference: Hook and Agent Types
 
-### Hook Types (11 hooks)
+### Hook Types (15 hooks)
 | Hook File | Type | Trigger | Exit Codes | Purpose |
 |-----------|------|---------|-----------|----------|
 | `parallel_execution.py` | UserPromptSubmit | Before response | 0 | Inject parallel instructions, activate stravinsky mode |
 | `context.py` | UserPromptSubmit | Before response | 0 | Inject project context |
 | `todo_continuation.py` | UserPromptSubmit | Before response | 0 | Inject incomplete TODO reminders |
-| `notification_hook.py` | Notification | On notifications | 0 | Agent spawn messages |
+| `notification_hook.py` | Notification | On notifications | 0 | Agent spawn messages (Legacy) |
+| `notification_hook_v2.py` | Notification | On notifications | 0 | Enhanced agent spawn messages with colors |
 | `stravinsky_mode.py` | PreToolUse | Before tool execution | 0=Allow, 2=Block | Block direct tool usage in stravinsky mode |
 | `pre_compact.py` | PreCompact | Before compaction | 0 | Context preservation |
 | `todo_delegation.py` | PostToolUse | After TodoWrite | 0=OK, 1=Warn, 2=Block | Enforce parallel Task spawning |
@@ -22,18 +23,22 @@ Stravinsky uses a **three-layer enforcement system** combining Claude Code's nat
 | `edit_recovery.py` | PostToolUse | After Edit/MultiEdit | 0 | Edit failure recovery guidance |
 | `truncator.py` | PostToolUse | After tool execution | 0 | Truncate large outputs (>30k chars) |
 | `subagent_stop.py` | SubagentStop | On agent completion | 0=OK, 2=Block | Agent completion handling |
+| `dependency_tracker.py` | UserPromptSubmit | Before response | 0 | Track task dependencies for smart parallelization |
+| `execution_state_tracker.py` | UserPromptSubmit | Before response | 0 | Track execution state to detect sequential fallback |
+| `parallel_reinforcement_v2.py`| UserPromptSubmit | Before response | 0 | Smart reinforcement of parallel delegation |
+| `ralph_loop.py` | PostAssistantMessage | After response | 0 | Auto-continue incomplete work |
 
 
 ### Agent Types (7 agents)
 | Agent | Model | Cost | Execution | Use For |
 |-------|-------|------|-----------|---------|
 | **stravinsky** | Claude Sonnet 4.5 | Moderate | Primary orchestrator | Multi-step tasks, delegation coordination |
-| **explore** | Claude Sonnet | Free | Async | Code search, file reading, pattern finding |
-| **dewey** | Claude Sonnet | Cheap | Async | Documentation research, OSS examples |
-| **code-reviewer** | Claude Sonnet | Cheap | Async | Quality analysis, security scanning |
+| **explore** | Gemini 3 Flash | Free | Async | Code search, file reading, pattern finding |
+| **dewey** | Gemini 3 Flash | Cheap | Async | Documentation research, OSS examples |
+| **code-reviewer** | Gemini 3 Flash | Cheap | Async | Quality analysis, security scanning |
 | **debugger** | Claude Sonnet | Medium | Blocking (2+ failures) | Root cause analysis |
-| **frontend** | Claude Sonnet + Gemini 3 Pro High | Medium | Blocking (ALL visual) | UI/UX implementation |
-| **delphi** | Claude Sonnet + GPT-5.2 Medium | Expensive | Blocking (3+ failures) | Strategic architecture, hard debugging |
+| **frontend** | Gemini 3 Pro High | Medium | Blocking (ALL visual) | UI/UX implementation |
+| **delphi** | Claude Sonnet + GPT-5.2 | Expensive | Blocking (3+ failures) | Strategic architecture, hard debugging |
 
 ---
 
@@ -127,9 +132,9 @@ flowchart TD
 flowchart TD
     Agents[Sub-agents Running<br/>in Background] --> Types{Agent Type}
 
-    Types --> Explore[explore:<br/>Code search<br/>Read/Grep/Glob]
-    Types --> Dewey[dewey:<br/>Documentation<br/>WebSearch/WebFetch]
-    Types --> Reviewer[code-reviewer:<br/>Quality analysis<br/>lsp_diagnostics]
+    Types --> Explore[explore:<br/>gemini-3-flash<br/>Code search]
+    Types --> Dewey[dewey:<br/>gemini-3-flash<br/>Documentation]
+    Types --> Reviewer[code-reviewer:<br/>gemini-3-flash<br/>Quality analysis]
 
     Explore --> Complete1[Agent Completes]
     Dewey --> Complete2[Agent Completes]
@@ -557,14 +562,14 @@ User Request Submitted
 
 ```
 ASYNC (Non-Blocking) - Fire and forget, cheap:
-├─ explore       (FREE - Claude Sonnet + local search)
-├─ dewey         (CHEAP - Claude Sonnet + WebSearch)
-└─ code-reviewer (CHEAP - Claude Sonnet + static analysis)
+├─ explore       (FREE - Gemini 3 Flash)
+├─ dewey         (CHEAP - Gemini 3 Flash)
+└─ code-reviewer (CHEAP - Gemini 3 Flash)
 
 BLOCKING (Wait for results) - Expensive or critical:
-├─ debugger      (MEDIUM - After failures, need results first)
-├─ frontend      (MEDIUM - ALL visual, Gemini 3 Pro High)
-└─ delphi        (EXPENSIVE - GPT-5.2 Medium, strategic advisor)
+├─ debugger      (MEDIUM - Claude Sonnet)
+├─ frontend      (MEDIUM - Gemini 3 Pro High)
+└─ delphi        (EXPENSIVE - GPT-5.2, strategic advisor)
 ```
 
 ---

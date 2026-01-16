@@ -416,7 +416,7 @@ spawned explore:gemini-3-flash('task delegated')
 🟢 FRONTEND → gemini-3-pro-high
    Task: Implement login UI with dark mode support
    
-🟠 DELPHI → gpt-5.2-medium
+🟠 DELPHI → gpt-5.2
    Task: Analyze auth architecture trade-offs
 ```
 

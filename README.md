@@ -152,7 +152,7 @@ cat ~/.config/python_keyring/keyringrc.cfg
 stravinsky-auth login gemini
 ```
 
-This configuration stores tokens in encrypted files at `~/.stravinsky/tokens/` instead of macOS Keychain, eliminating password prompts across terminal sessions. See [docs/KEYRING_AUTH_FIX.md](docs/KEYRING_AUTH_FIX.md) for detailed information.
+This configuration stores tokens in encrypted files at `~/.stravinsky/tokens/` instead of macOS Keychain, eliminating password prompts across terminal sessions. See [docs/reports/KEYRING_AUTH_FIX.md](docs/reports/KEYRING_AUTH_FIX.md) for detailed information.
 
 ### Slash Commands
 

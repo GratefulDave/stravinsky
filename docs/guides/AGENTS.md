@@ -1,4 +1,4 @@
-# Stravinsky Agent Types
+d# Stravinsky Agent Types
 
 Detailed guide to specialized agent configurations.
 
@@ -46,11 +46,17 @@ A thin wrapper agent uses a cheap model (Haiku) to:
 |-------|---------------|-------------------|-----------|
 | `explore` | Haiku | gemini-3-flash | Cheap |
 | `dewey` | Haiku | gemini-3-flash | Cheap |
+| `document_writer` | Haiku | gemini-3-flash | Cheap |
+| `multimodal` | Haiku | gemini-3-flash | Cheap |
+| `research-lead` | Haiku | gemini-3-flash | Cheap |
+| `momus` | Haiku | gemini-3-flash | Cheap |
+| `comment_checker` | Haiku | gemini-3-flash | Cheap |
+| `code-reviewer` | Haiku | gemini-3-flash | Cheap |
 | `frontend` | Haiku | gemini-3-pro-high | Medium |
-| `delphi` | Sonnet | gpt-5.2-medium | Expensive |
-| `code-reviewer` | Sonnet | Claude native | Medium |
+| `implementation-lead` | Sonnet | Claude native | Medium |
 | `debugger` | Sonnet | Claude native | Medium |
 | `stravinsky` | Sonnet | Claude native | Medium |
+| `delphi` | Sonnet | gpt-5.2 | Expensive |
 | `planner` | Opus | Claude native | Expensive |
 
 ### How It Works
@@ -135,7 +141,7 @@ agent_spawn(
 
 **Purpose:** Strategic technical advice, architecture review, hard debugging
 
-**Model:** Sonnet wrapper -> gpt-5.2-medium
+**Model:** Sonnet wrapper -> gpt-5.2
 
 **Best for:**
 - Architecture decisions
@@ -260,6 +266,73 @@ agent_spawn(
   "A11y analysis"
 )
 ```
+
+### momus (Quality Gate)
+
+**Purpose:** Quality gate guardian - validates code, research, and docs before approval.
+
+**Model:** Haiku wrapper -> gemini-3-flash
+
+**Best for:**
+- Pre-commit validation (tests, linting)
+- Research quality assessment
+- Documentation completeness checks
+- Pattern/anti-pattern detection
+
+**Example:**
+```
+agent_spawn(
+  "Validate the quality of the recent auth implementation changes",
+  "momus",
+  "Quality check"
+)
+```
+
+**Cost:** Cheap - uses Gemini Flash.
+
+### research-lead (Research Coordinator)
+
+**Purpose:** Coordinates research tasks by spawning explore/dewey agents and synthesizing findings.
+
+**Model:** Haiku wrapper -> gemini-3-flash
+
+**Best for:**
+- Complex research topics requiring multiple sources
+- Decomposing research goals into sub-tasks
+- Synthesizing findings from multiple agents into a coherent brief
+
+**Example:**
+```
+agent_spawn(
+  "Research how to implement OAuth2 with PKCE in FastAPI",
+  "research-lead",
+  "OAuth research"
+)
+```
+
+**Cost:** Cheap - uses Gemini Flash for synthesis.
+
+### implementation-lead (Execution Coordinator)
+
+**Purpose:** Coordinates implementation based on research briefs.
+
+**Model:** Sonnet 4.5 (native)
+
+**Best for:**
+- Taking a research brief and producing working code
+- Delegating specific tasks to frontend, debugger, and code-reviewer
+- Verifying implementation with diagnostics
+
+**Example:**
+```
+agent_spawn(
+  "Implement the OAuth2 flow based on the research brief",
+  "implementation-lead",
+  "OAuth implementation"
+)
+```
+
+**Cost:** Medium - uses Claude Sonnet for coordination.
 
 ---
 

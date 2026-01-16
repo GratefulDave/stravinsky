@@ -114,7 +114,7 @@ From Delphi (GPT-5.2 strategic analysis):
 
 ### Current Hook Inventory
 
-#### Native Hooks (5)
+#### Native Hooks (10+)
 
 1. **stravinsky_mode.py** (PreToolUse)
    - Blocks Read/Grep/Bash when orchestrator mode active
@@ -135,6 +135,21 @@ From Delphi (GPT-5.2 strategic analysis):
 5. **todo_delegation.py** (PostToolUse)
    - Reminds to use parallel agent spawning after TodoWrite
    - Orchestration guidance
+
+6. **dependency_tracker.py** (UserPromptSubmit)
+   - Tracks task dependencies to enable smart parallelization suggestions
+
+7. **execution_state_tracker.py** (UserPromptSubmit)
+   - Monitors execution patterns to detect sequential fallback
+
+8. **parallel_reinforcement_v2.py** (UserPromptSubmit)
+   - Injects smart reminders when parallel execution degrades
+
+9. **ralph_loop.py** (PostAssistantMessage)
+   - Automatically continues work if TODOs are incomplete (RALPH Loop)
+
+10. **notification_hook_v2.py** (Notification)
+    - Enhanced agent spawn notifications with colors and formatting
 
 #### MCP Hooks (17+, 5 tiers)
 
@@ -511,7 +526,7 @@ Stravinsky's architecture **matches and exceeds** oh-my-opencode's design patter
 | **code-reviewer** | Cheap | Async (Task tool parallel) | Always for quality checks |
 | **debugger** | Medium | Blocking | After 2+ failed fixes |
 | **frontend** | Medium | Blocking | ALL visual changes |
-| **delphi** | Expensive | Blocking | After 3+ failures, architecture |
+| delphi | GPT-5.2 | N/A (reasoning_effort) | Strategic architectural decisions |
 ```
 
 #### 2. Todo Continuation Enforcer

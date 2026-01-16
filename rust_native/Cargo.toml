@@ -10,4 +10,19 @@ name = "stravinsky_native"
 crate-type = ["cdylib"]
 
 [dependencies]
+
 pyo3 = { version = "0.21.0", features = ["extension-module"] }
+
+ignore = "0.4.22"
+
+globset = "0.4.14"
+
+walkdir = "2.5.0"
+
+
+
+[dev-dependencies]
+
+tempfile = "3.10.1"
+
+

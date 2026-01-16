@@ -1,11 +1,11 @@
 # Implementation Plan - Refactor MCP Tools and Documentation for Bridge Alignment
 
 ## Phase 1: Configuration Clarity & Standardization
-- [ ] Task: Update `.claude/commands/stravinsky.md` to remove "NEVER use Task" warning and align with native subagent pattern.
-- [ ] Task: Update native subagent configurations in `.claude/agents/` to explicitly endorse the Task tool for delegation.
-- [ ] Task: Update `todo_delegation.py` hook messaging to consistently recommend the Task tool.
-- [ ] Task: Document agent cost classification (free/cheap/expensive) in agent YAML frontmatter.
-- [ ] Task: Conductor - User Manual Verification 'Phase 1: Configuration Clarity & Standardization' (Protocol in workflow.md)
+- [x] Task: Update `.claude/commands/stravinsky.md` to remove "NEVER use Task" warning and align with native subagent pattern. [b7703bd]
+- [x] Task: Update native subagent configurations in `.claude/agents/` to explicitly endorse the Task tool for delegation. [b7703bd]
+- [x] Task: Update `todo_delegation.py` hook messaging to consistently recommend the Task tool. [b7703bd]
+- [x] Task: Document agent cost classification (free/cheap/expensive) in agent YAML frontmatter. [b7703bd]
+- [~] Task: Conductor - User Manual Verification 'Phase 1: Configuration Clarity & Standardization' (Protocol in workflow.md)
 
 ## Phase 2: Hook Unification Layer
 - [ ] Task: Create `mcp_bridge/hooks/events.py` defining the `ToolCallEvent` dataclass and `HookPolicy` abstract base class.

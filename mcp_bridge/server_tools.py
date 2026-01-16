@@ -190,6 +190,12 @@ def get_tool_definitions() -> list[Tool]:
                         "description": "Tokens reserved for internal reasoning (e.g. o1 / o3)",
                         "default": 0,
                     },
+                    "reasoning_effort": {
+                        "type": "string",
+                        "description": "Reasoning effort for reasoning models (o1, o3): low, medium, high",
+                        "enum": ["low", "medium", "high"],
+                        "default": "medium",
+                    },
                     "agent_context": {
                         "type": "object",
                         "description": "Optional agent metadata for logging (agent_type, task_id, description)",

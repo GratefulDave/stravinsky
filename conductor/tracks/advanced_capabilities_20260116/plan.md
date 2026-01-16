@@ -9,11 +9,11 @@
 - [~] Task: Conductor - User Manual Verification 'Phase 1: Hard Parallel Enforcement' (Protocol in workflow.md)
 
 ## Phase 2: Core Capability Enhancements
-- [ ] Task: Integrate `thinking_budget` support in `stravinsky.md` and `delphi.md` agent configurations.
-- [ ] Task: Implement `reasoning_effort` for GPT models and extended thinking for Claude/Gemini in `invoke_` tools.
-- [ ] Task: Finalize agent session isolation logic to ensure strict separation of local state files.
-- [ ] Task: Write verification tests for session isolation and extended thinking.
-- [ ] Task: Conductor - User Manual Verification 'Phase 2: Core Capability Enhancements' (Protocol in workflow.md)
+- [x] Task: Integrate `thinking_budget` support in `stravinsky.md` and `delphi.md` agent configurations.
+- [x] Task: Implement `reasoning_effort` for GPT models and extended thinking for Claude/Gemini in `invoke_` tools.
+- [x] Task: Finalize agent session isolation logic to ensure strict separation of local state files.
+- [x] Task: Write verification tests for session isolation and extended thinking.
+- [~] Task: Conductor - User Manual Verification 'Phase 2: Core Capability Enhancements' (Protocol in workflow.md)
 
 ## Phase 3: Semantic Search Evolution
 - [ ] Task: Implement `hybrid_search` combining ChromaDB semantic results with BM25 keyword matching.

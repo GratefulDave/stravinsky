@@ -160,6 +160,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 temperature=arguments.get("temperature", 0.7),
                 max_tokens=arguments.get("max_tokens", 4096),
                 thinking_budget=arguments.get("thinking_budget", 0),
+                reasoning_effort=arguments.get("reasoning_effort", "medium"),
             )
 
         # --- CONTEXT DISPATCH ---

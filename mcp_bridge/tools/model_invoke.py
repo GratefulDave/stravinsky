@@ -1538,6 +1538,7 @@ async def invoke_openai(
     temperature: float = 0.7,
     max_tokens: int = 4096,
     thinking_budget: int = 0,
+    reasoning_effort: str = "medium",
 ) -> str:
     """
     Invoke an OpenAI model with the given prompt.
@@ -1548,6 +1549,8 @@ async def invoke_openai(
         model: OpenAI model to use
         temperature: Sampling temperature (0.0-2.0)
         max_tokens: Maximum tokens in response
+        thinking_budget: Legacy parameter for high reasoning
+        reasoning_effort: Effort level for reasoning models (low, medium, high)
 
     Returns:
         The model's response text.
@@ -1563,6 +1566,7 @@ async def invoke_openai(
         "temperature": temperature,
         "max_tokens": max_tokens,
         "thinking_budget": thinking_budget,
+        "reasoning_effort": reasoning_effort,
         "token_store": token_store,  # Pass for hooks that need model access
         "provider": "openai",  # Identify which provider is being called
     }
@@ -1575,6 +1579,7 @@ async def invoke_openai(
     temperature = params["temperature"]
     max_tokens = params["max_tokens"]
     thinking_budget = params["thinking_budget"]
+    reasoning_effort = params.get("reasoning_effort", "medium")
 
     # Extract agent context for logging (may be passed via params or original call)
     agent_context = params.get("agent_context", {})
@@ -1629,6 +1634,10 @@ async def invoke_openai(
     if account_id:
         headers["x-openai-account-id"] = account_id
 
+    # Determine final effort
+    # Legacy: thinking_budget > 0 implies high effort
+    effort = "high" if thinking_budget > 0 else reasoning_effort
+
     # Request body matching opencode transformation
     payload = {
         "model": model,
@@ -1636,7 +1645,7 @@ async def invoke_openai(
         "stream": True,  # Always stream (handler converts to non-stream if needed)
         "instructions": instructions,
         "input": [{"role": "user", "content": prompt}],
-        "reasoning": {"effort": "high" if thinking_budget > 0 else "medium", "summary": "auto"},
+        "reasoning": {"effort": effort, "summary": "auto"},
         "text": {"verbosity": "medium"},
         "include": ["reasoning.encrypted_content"],
     }

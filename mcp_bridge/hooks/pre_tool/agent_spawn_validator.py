@@ -27,7 +27,11 @@ def get_project_dir() -> Path:
 
 
 def get_state_file() -> Path:
-    return get_project_dir() / ".claude/parallel_state.json"
+    cwd = get_project_dir()
+    session_id = os.environ.get("CLAUDE_SESSION_ID", "default")
+    # Sanitize session ID
+    session_id = "".join(c for c in session_id if c.isalnum() or c in "-_")
+    return cwd / ".claude" / f"parallel_state_{session_id}.json"
 
 
 def load_state() -> Dict[str, Any]:

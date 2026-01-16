@@ -7,19 +7,25 @@ delegation is required. This state is consumed by the PreToolUse validator.
 """
 
 import json
+import os
 import sys
 import time
 from pathlib import Path
 from typing import Any, Dict
 
-# State file location
-STATE_FILE = Path(".claude/parallel_state.json")
+# State file base location (will be suffixed with session ID)
+STATE_DIR = Path(".claude")
 
 
 def get_state_file() -> Path:
-    """Get path to state file, respecting CLAUDE_CWD if set."""
-    cwd = Path(sys.modules[__name__].__dict__.get("CLAUDE_CWD", "."))
-    return cwd / ".claude/parallel_state.json"
+    """Get path to state file, respecting CLAUDE_CWD and CLAUDE_SESSION_ID."""
+    # Use environment variable passed by Claude Code
+    cwd = Path(os.environ.get("CLAUDE_CWD", "."))
+    session_id = os.environ.get("CLAUDE_SESSION_ID", "default")
+    # Sanitize session ID
+    session_id = "".join(c for c in session_id if c.isalnum() or c in "-_")
+    
+    return cwd / ".claude" / f"parallel_state_{session_id}.json"
 
 
 def save_state(state: Dict[str, Any]) -> None:

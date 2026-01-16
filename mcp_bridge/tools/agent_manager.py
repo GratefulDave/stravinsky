@@ -618,6 +618,11 @@ class AgentManager:
                     cmd.extend(["--model", cli_model])
                     logger.info(f"[AgentManager] Using --model {cli_model} for {agent_type} agent")
 
+                # Add thinking budget if provided (requires model support, e.g., sonnet 3.7+)
+                if thinking_budget and thinking_budget > 0:
+                    cmd.extend(["--thinking-budget", str(thinking_budget)])
+                    logger.info(f"[AgentManager] Using --thinking-budget {thinking_budget}")
+
                 # Add system prompt file if we have one
                 if system_prompt:
                     system_file = self.agents_dir / f"{task_id}.system"

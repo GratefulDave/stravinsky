@@ -71,6 +71,23 @@ class TestParallelValidation:
         state = json.loads(mock_cwd.read_text())
         assert state["delegation_required"] is False
 
+    def test_session_isolation(self, tmp_path):
+        """Verify different sessions use different state files."""
+        # Unpatch get_state_file to test the logic (only patch sys/os if needed, but we used os.environ)
+        
+        # We need to reload the module to unpatch or just import the function and test logic directly
+        from mcp_bridge.hooks.post_tool.parallel_validation import get_state_file
+        
+        with patch.dict(os.environ, {"CLAUDE_CWD": str(tmp_path), "CLAUDE_SESSION_ID": "session1"}):
+            path1 = get_state_file()
+            assert path1.name == "parallel_state_session1.json"
+            
+        with patch.dict(os.environ, {"CLAUDE_CWD": str(tmp_path), "CLAUDE_SESSION_ID": "session2"}):
+            path2 = get_state_file()
+            assert path2.name == "parallel_state_session2.json"
+            
+        assert path1 != path2
+
 
 class TestAgentSpawnValidator:
     """Tests for pre_tool/agent_spawn_validator.py logic."""

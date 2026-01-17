@@ -117,9 +117,9 @@ Return ONLY the variations, one per line. No numbering, no preamble."""
     for i, entry in enumerate(top_results, 1):
         r = entry["item"]
         lines.append(f"{i}. {r['file']}:{r['lines']} (score: {entry['score']:.4f})")
-        lines.append(f"```{r['language']}")
+        lines.append(f"`{{r['language']}}`")
         lines.append(r["code_preview"])
-        lines.append("```\n")
+        lines.append("`\n`")
 
     return "\n".join(lines)
 
@@ -200,9 +200,9 @@ Return ONLY the sub-queries, one per line. No numbering."""
         # Just show top 3-5 per subquery to save tokens
         for i, r in enumerate(results[:5], 1):
             lines.append(f"{i}. {r['file']}:{r['lines']} (relevance: {r['relevance']})")
-            lines.append(f"```{r['language']}")
+            lines.append(f"`{{r['language']}}`")
             lines.append(r["code_preview"])
-            lines.append("```\n")
+            lines.append("`\n`")
             
     return "\n".join(lines)
 
@@ -237,28 +237,111 @@ async def enhanced_search(
     return await semantic_search(query, project_path, n_results, language, node_type, provider=provider)
 
 async def git_context_search(
+    
     target_file: str,
+    
     project_path: str = ".",
+    
     limit: int = 10,
+    
 ) -> str:
+    
     """
-    Find files that frequently change together with the target file using git history.
+    
+    Find files that frequently change together with the target file using git history and static analysis.
+    
+    Uses 'stravinsky_native.get_hybrid_context' for scoring.
+    
     """
+    
+    # 1. Check Configuration
+    
     try:
-        import stravinsky_native
-    except ImportError:
-        return "Error: stravinsky_native extension not available."
-
-    try:
-        related_files = stravinsky_native.get_related_files(target_file, project_path, limit)
-        if not related_files:
-            return f"No related files found for '{target_file}' in git history."
-            
-        lines = [f"Files frequently modified with '{target_file}' (based on git history):\n"]
-        for i, f in enumerate(related_files, 1):
-            lines.append(f"{i}. {f}")
-            
-        return "\n".join(lines)
+    
+        import yaml
+    
+        from pathlib import Path
+    
+        config_path = Path(".stravinsky/model_config.yaml")
+    
+        if config_path.exists():
+    
+            config = yaml.safe_load(config_path.read_text())
+    
+            features = config.get("features", {}).get("context_graph", {})
+    
+            if not features.get("enabled", True):
+    
+                return "Context graph search is disabled in configuration."
+    
+            threshold = features.get("threshold_score", 0.4)
+    
+        else:
+    
+            threshold = 0.4
+    
     except Exception as e:
-        logger.error(f"Git context search failed: {e}")
-        return f"Error performing git context search: {e}"
+    
+        logger.warning(f"Failed to read context graph config: {e}")
+    
+        threshold = 0.4
+    
+
+    
+    
+    try:
+    
+        import stravinsky_native
+    
+    except ImportError:
+    
+        return "Error: stravinsky_native extension not available."
+    
+
+    
+    
+    try:
+    
+        # 2. Call Hybrid Logic (Git + Import Verification)
+    
+        # Returns list of (file, score, reasons)
+    
+        related_files = stravinsky_native.get_hybrid_context(
+    
+            target_file, 
+    
+            project_path, 
+    
+            limit, 
+    
+            float(threshold)
+    
+        )
+    
+        
+    
+        if not related_files:
+    
+            return f"No related files found for '{target_file}' (threshold={threshold})."
+    
+            
+    
+        lines = [f"Files related to '{target_file}' (Hybrid Context Graph):\n"]
+    
+        lines.append(f"threshold: {threshold} | reasons: imported, git-history\n")
+    
+        
+    
+        for i, (f, score, reason) in enumerate(related_files, 1):
+    
+            lines.append(f"{i}. {f} (score: {score:.2f}) [{reason}]")
+    
+            
+    
+        return "\n".join(lines)
+    
+    except Exception as e:
+    
+        logger.error(f"Context graph search failed: {e}")
+    
+        return f"Error performing context search: {e}"

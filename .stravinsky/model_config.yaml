@@ -79,3 +79,12 @@ agent_models:
   debugger: claude-sonnet-4.5
   code-reviewer: claude-sonnet-4.5
   stravinsky: claude-sonnet-4.5
+
+# Feature Flags
+features:
+  context_graph:
+    enabled: true
+    threshold_score: 0.4  # Minimum score (0.0-1.0) to include a file
+  parallel_delegation:
+    enabled: true
+    max_workers: 4

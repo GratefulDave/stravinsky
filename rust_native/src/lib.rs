@@ -6,6 +6,8 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use tree_sitter::{Parser, Node};
 
+mod git_analysis;
+
 #[pyfunction]
 fn sum_as_string(a: usize, b: usize) -> PyResult<String> {
     Ok((a + b).to_string())
@@ -198,6 +200,7 @@ fn stravinsky_native(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(glob_files, m)?)?;
     m.add_function(wrap_pyfunction!(grep_search, m)?)?;
     m.add_function(wrap_pyfunction!(chunk_code, m)?)?;
+    m.add_function(wrap_pyfunction!(git_analysis::get_related_files, m)?)?;
     Ok(())
 }
 

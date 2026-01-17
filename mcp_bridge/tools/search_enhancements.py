@@ -235,3 +235,30 @@ async def enhanced_search(
         return await multi_query_search(query, project_path, n_results, 3, language, node_type, provider)
         
     return await semantic_search(query, project_path, n_results, language, node_type, provider=provider)
+
+async def git_context_search(
+    target_file: str,
+    project_path: str = ".",
+    limit: int = 10,
+) -> str:
+    """
+    Find files that frequently change together with the target file using git history.
+    """
+    try:
+        import stravinsky_native
+    except ImportError:
+        return "Error: stravinsky_native extension not available."
+
+    try:
+        related_files = stravinsky_native.get_related_files(target_file, project_path, limit)
+        if not related_files:
+            return f"No related files found for '{target_file}' in git history."
+            
+        lines = [f"Files frequently modified with '{target_file}' (based on git history):\n"]
+        for i, f in enumerate(related_files, 1):
+            lines.append(f"{i}. {f}")
+            
+        return "\n".join(lines)
+    except Exception as e:
+        logger.error(f"Git context search failed: {e}")
+        return f"Error performing git context search: {e}"

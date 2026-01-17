@@ -13,9 +13,10 @@ from typing import Literal
 # Import search tools
 from mcp_bridge.tools.code_search import ast_grep_search, grep_search
 from mcp_bridge.tools.semantic_search import semantic_search, hybrid_search
+from mcp_bridge.tools.search_enhancements import git_context_search
 
 
-SearchType = Literal["auto", "exact", "semantic", "hybrid", "ast", "grep"]
+SearchType = Literal["auto", "exact", "semantic", "hybrid", "ast", "grep", "context"]
 
 
 def has_ast_pattern(query: str) -> bool:
@@ -248,8 +249,15 @@ async def find_code(
             file_pattern=file_pattern,
         )
 
+    elif search_type == "context":
+        # Git context search
+        return await git_context_search(
+            target_file=query,
+            project_path=project_path,
+        )
+
     else:
-        return f"Error: Unknown search_type '{search_type}'. Use 'auto', 'ast', 'semantic', 'hybrid', or 'grep'."
+        return f"Error: Unknown search_type '{search_type}'. Use 'auto', 'ast', 'semantic', 'hybrid', 'grep', or 'context'."
 
 
 # Example usage and testing

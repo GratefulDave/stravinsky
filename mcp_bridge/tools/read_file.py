@@ -3,6 +3,8 @@ from pathlib import Path
 from typing import Optional
 from mcp_bridge.utils.truncation import truncate_output, TruncationStrategy
 
+from mcp_bridge.utils.cache import IOCache
+
 async def read_file(
     path: str, 
     offset: int = 0, 
@@ -11,16 +13,17 @@ async def read_file(
 ) -> str:
     """
     Read the contents of a file with smart truncation and log-awareness.
-    
-    Args:
-        path: Path to the file.
-        offset: Line number to start reading from (0-indexed).
-        limit: Max number of lines to read.
-        max_chars: Max characters to return (universal cap).
     """
     # USER-VISIBLE NOTIFICATION
     import sys
     print(f"📖 READ: {path} (offset={offset}, limit={limit})", file=sys.stderr)
+
+    cache = IOCache.get_instance()
+    cache_key = f"read_file:{os.path.abspath(path)}:{offset}:{limit}:{max_chars}"
+    
+    cached_result = cache.get(cache_key)
+    if cached_result:
+        return cached_result
 
     file_path = Path(path)
     if not file_path.exists():
@@ -71,6 +74,9 @@ async def read_file(
         # but we have log-based guidance, add it manually
         if guidance and guidance not in result:
             result = f"{result}\n\n[{guidance}]"
+            
+        # Cache for 5 seconds
+        cache.set(cache_key, result)
             
         return result
 

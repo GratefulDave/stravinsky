@@ -46,6 +46,18 @@ def get_tool_definitions() -> list[Tool]:
             },
         ),
         Tool(
+            name="list_directory",
+            description="List files and directories in a path. Uses caching for faster repeated access.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Directory path to list"}
+                },
+                "required": ["path"],
+            },
+            meta={"defer_loading": True},
+        ),
+        Tool(
             name="read_file",
             description=(
                 "Read the contents of a file. Supports smart truncation and log-awareness. "

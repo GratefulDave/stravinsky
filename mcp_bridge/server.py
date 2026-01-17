@@ -197,6 +197,13 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 file_pattern=arguments.get("file_pattern", ""),
             )
 
+        elif name == "list_directory":
+            from .tools.list_directory import list_directory
+
+            result_content = await list_directory(
+                path=arguments["path"],
+            )
+
         elif name == "ast_grep_search":
             from .tools.code_search import ast_grep_search
 

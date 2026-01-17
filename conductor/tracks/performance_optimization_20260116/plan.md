@@ -1,10 +1,10 @@
 # Implementation Plan - Track: performance_optimization_20260116
 
 ## Phase 1: Smart Truncation & Output Management
-- [ ] Task: Implement core truncation utility.
-    - [ ] Create `mcp_bridge/utils/truncation.py`.
-    - [ ] Write tests for middle-truncation and tail-truncation logic.
-    - [ ] Implement `truncate_output(text, limit, strategy)` with agent-facing guidance messages.
+- [x] Task: Implement core truncation utility. [ee5092d]
+    - [x] Create `mcp_bridge/utils/truncation.py`.
+    - [x] Write tests for middle-truncation and tail-truncation logic.
+    - [x] Implement `truncate_output(text, limit, strategy)` with agent-facing guidance messages.
 - [ ] Task: Enhance `read_file` with Log-Awareness.
     - [ ] Update `read_file` to detect log files and default to `tail` mode.
     - [ ] Write tests verifying `.log` files are read from the end.

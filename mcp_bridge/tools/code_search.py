@@ -7,9 +7,9 @@ supplementary utilities for advanced operations.
 """
 
 import json
-import subprocess
+import asyncio
 from pathlib import Path
-
+from mcp_bridge.utils.process import async_execute
 
 async def lsp_diagnostics(file_path: str, severity: str = "all") -> str:
     """
@@ -38,11 +38,9 @@ async def lsp_diagnostics(file_path: str, severity: str = "all") -> str:
     try:
         if suffix in (".ts", ".tsx", ".js", ".jsx"):
             # Use TypeScript compiler for diagnostics
-            result = subprocess.run(
+            result = await async_execute(
                 ["npx", "tsc", "--noEmit", "--pretty", str(path)],
-                capture_output=True,
-                text=True,
-                timeout=30,
+                timeout=30
             )
             output = result.stdout + result.stderr
             if not output.strip():
@@ -51,11 +49,9 @@ async def lsp_diagnostics(file_path: str, severity: str = "all") -> str:
             
         elif suffix == ".py":
             # Use ruff for Python diagnostics
-            result = subprocess.run(
+            result = await async_execute(
                 ["ruff", "check", str(path), "--output-format=concise"],
-                capture_output=True,
-                text=True,
-                timeout=30,
+                timeout=30
             )
             output = result.stdout + result.stderr
             if not output.strip():
@@ -67,7 +63,7 @@ async def lsp_diagnostics(file_path: str, severity: str = "all") -> str:
             
     except FileNotFoundError as e:
         return f"Tool not found: {e.filename}. Install required tools."
-    except subprocess.TimeoutExpired:
+    except asyncio.TimeoutError:
         return "Diagnostics timed out"
     except Exception as e:
         return f"Error: {str(e)}"
@@ -161,12 +157,7 @@ async def ast_grep_search(pattern: str, directory: str = ".", language: str = ""
             cmd.extend(["--lang", language])
         cmd.append("--json")
         
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=60,
-        )
+        result = await async_execute(cmd, timeout=60)
         
         if result.returncode != 0 and not result.stdout:
             return result.stderr or "No matches found"
@@ -190,7 +181,7 @@ async def ast_grep_search(pattern: str, directory: str = ".", language: str = ""
             
     except FileNotFoundError:
         return "ast-grep (sg) not found. Install with: npm install -g @ast-grep/cli"
-    except subprocess.TimeoutExpired:
+    except asyncio.TimeoutError:
         return "Search timed out"
     except Exception as e:
         return f"Error: {str(e)}"
@@ -238,12 +229,7 @@ async def grep_search(pattern: str, directory: str = ".", file_pattern: str = ""
         if file_pattern:
             cmd.extend(["--glob", file_pattern])
         
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
+        result = await async_execute(cmd, timeout=30)
         
         output = result.stdout
         if not output.strip():
@@ -259,7 +245,7 @@ async def grep_search(pattern: str, directory: str = ".", file_pattern: str = ""
         
     except FileNotFoundError:
         return "ripgrep (rg) not found. Install with: brew install ripgrep"
-    except subprocess.TimeoutExpired:
+    except asyncio.TimeoutError:
         return "Search timed out"
     except Exception as e:
         return f"Error: {str(e)}"
@@ -297,12 +283,7 @@ async def glob_files(pattern: str, directory: str = ".") -> str:
     try:
         cmd = ["fd", "--type", "f", "--glob", pattern, directory]
         
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
+        result = await async_execute(cmd, timeout=30)
         
         output = result.stdout
         if not output.strip():
@@ -318,7 +299,7 @@ async def glob_files(pattern: str, directory: str = ".") -> str:
         
     except FileNotFoundError:
         return "fd not found. Install with: brew install fd"
-    except subprocess.TimeoutExpired:
+    except asyncio.TimeoutError:
         return "Search timed out"
     except Exception as e:
         return f"Error: {str(e)}"
@@ -362,12 +343,7 @@ async def ast_grep_replace(
         if dry_run:
             # Show what would change
             cmd.append("--json")
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=60,
-            )
+            result = await async_execute(cmd, timeout=60)
             
             if result.returncode != 0 and not result.stdout:
                 return result.stderr or "No matches found"
@@ -399,12 +375,7 @@ async def ast_grep_replace(
             if language:
                 cmd_apply.extend(["--lang", language])
             
-            result = subprocess.run(
-                cmd_apply,
-                capture_output=True,
-                text=True,
-                timeout=60,
-            )
+            result = await async_execute(cmd_apply, timeout=60)
             
             if result.returncode == 0:
                 return f"✅ Successfully applied replacement:\n- Pattern: `{pattern}`\n- Replacement: `{replacement}`\n\n{result.stdout}"
@@ -413,8 +384,7 @@ async def ast_grep_replace(
             
     except FileNotFoundError:
         return "ast-grep (sg) not found. Install with: npm install -g @ast-grep/cli"
-    except subprocess.TimeoutExpired:
+    except asyncio.TimeoutError:
         return "Replacement timed out"
     except Exception as e:
         return f"Error: {str(e)}"
-

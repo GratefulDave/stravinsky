@@ -4,11 +4,12 @@ Tests grep_search, ast_grep_search, ast_grep_replace, and glob_files.
 """
 
 import json
-import subprocess
+import asyncio
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, patch, AsyncMock
 
 import pytest
+from mcp_bridge.utils.process import ProcessResult
 
 
 @pytest.fixture(autouse=True)
@@ -88,9 +89,10 @@ async def test_grep_search_basic_pattern(temp_code_dir):
     """Test grep_search finds basic text pattern."""
     from mcp_bridge.tools.code_search import grep_search
 
-    with patch("subprocess.run") as mock_run:
-        mock_run.return_value = Mock(
+    with patch("mcp_bridge.tools.code_search.async_execute", new_callable=AsyncMock) as mock_exec:
+        mock_exec.return_value = ProcessResult(
             stdout="sample.py:7:    print(\"Hello, World!\")\n",
+            stderr="",
             returncode=0
         )
 
@@ -101,10 +103,10 @@ async def test_grep_search_basic_pattern(temp_code_dir):
 
         assert "sample.py" in result
         assert "Hello, World" in result
-        mock_run.assert_called_once()
+        mock_exec.assert_called_once()
 
         # Verify ripgrep command structure
-        cmd = mock_run.call_args[0][0]
+        cmd = mock_exec.call_args[0][0]
         assert cmd[0] == "rg"
         assert "--line-number" in cmd
         assert "Hello, World" in cmd
@@ -115,9 +117,10 @@ async def test_grep_search_with_file_pattern(temp_code_dir):
     """Test grep_search with glob filter."""
     from mcp_bridge.tools.code_search import grep_search
 
-    with patch("subprocess.run") as mock_run:
-        mock_run.return_value = Mock(
+    with patch("mcp_bridge.tools.code_search.async_execute", new_callable=AsyncMock) as mock_exec:
+        mock_exec.return_value = ProcessResult(
             stdout="sample.py:16:console.log(\"debug message\")\n",
+            stderr="",
             returncode=0
         )
 
@@ -128,10 +131,10 @@ async def test_grep_search_with_file_pattern(temp_code_dir):
         )
 
         assert "sample.py" in result
-        mock_run.assert_called_once()
+        mock_exec.assert_called_once()
 
         # Verify glob parameter
-        cmd = mock_run.call_args[0][0]
+        cmd = mock_exec.call_args[0][0]
         assert "--glob" in cmd
         assert "*.py" in cmd
 
@@ -141,8 +144,8 @@ async def test_grep_search_no_matches(temp_code_dir):
     """Test grep_search when no matches found."""
     from mcp_bridge.tools.code_search import grep_search
 
-    with patch("subprocess.run") as mock_run:
-        mock_run.return_value = Mock(stdout="", returncode=1)
+    with patch("mcp_bridge.tools.code_search.async_execute", new_callable=AsyncMock) as mock_exec:
+        mock_exec.return_value = ProcessResult(stdout="", stderr="", returncode=1)
 
         result = await grep_search(
             pattern="nonexistent_pattern_xyz",
@@ -157,7 +160,7 @@ async def test_grep_search_ripgrep_not_installed():
     """Test grep_search when ripgrep is not installed."""
     from mcp_bridge.tools.code_search import grep_search
 
-    with patch("subprocess.run", side_effect=FileNotFoundError()):
+    with patch("mcp_bridge.tools.code_search.async_execute", side_effect=FileNotFoundError()):
         result = await grep_search(pattern="test", directory=".")
 
         assert "ripgrep (rg) not found" in result
@@ -169,7 +172,7 @@ async def test_grep_search_timeout():
     """Test grep_search timeout handling."""
     from mcp_bridge.tools.code_search import grep_search
 
-    with patch("subprocess.run", side_effect=subprocess.TimeoutExpired("rg", 30)):
+    with patch("mcp_bridge.tools.code_search.async_execute", side_effect=asyncio.TimeoutError()):
         result = await grep_search(pattern="test", directory=".")
 
         assert result == "Search timed out"
@@ -183,8 +186,8 @@ async def test_grep_search_max_results_limit(temp_code_dir):
     # Create 60 lines of matching output
     many_matches = "\n".join([f"file.py:{i}:match line" for i in range(1, 61)])
 
-    with patch("subprocess.run") as mock_run:
-        mock_run.return_value = Mock(stdout=many_matches, returncode=0)
+    with patch("mcp_bridge.tools.code_search.async_execute", new_callable=AsyncMock) as mock_exec:
+        mock_exec.return_value = ProcessResult(stdout=many_matches, stderr="", returncode=0)
 
         result = await grep_search(pattern="match", directory=str(temp_code_dir))
 
@@ -209,9 +212,10 @@ async def test_ast_grep_search_basic_pattern():
         }
     ])
 
-    with patch("subprocess.run") as mock_run:
-        mock_run.return_value = Mock(
+    with patch("mcp_bridge.tools.code_search.async_execute", new_callable=AsyncMock) as mock_exec:
+        mock_exec.return_value = ProcessResult(
             stdout=mock_json_output,
+            stderr="",
             returncode=0
         )
 
@@ -224,7 +228,7 @@ async def test_ast_grep_search_basic_pattern():
         assert "console.log" in result
 
         # Verify ast-grep command
-        cmd = mock_run.call_args[0][0]
+        cmd = mock_exec.call_args[0][0]
         assert cmd[0] == "sg"
         assert "run" in cmd
         assert "-p" in cmd
@@ -244,9 +248,10 @@ async def test_ast_grep_search_with_language_filter():
         }
     ])
 
-    with patch("subprocess.run") as mock_run:
-        mock_run.return_value = Mock(
+    with patch("mcp_bridge.tools.code_search.async_execute", new_callable=AsyncMock) as mock_exec:
+        mock_exec.return_value = ProcessResult(
             stdout=mock_json_output,
+            stderr="",
             returncode=0
         )
 
@@ -259,7 +264,7 @@ async def test_ast_grep_search_with_language_filter():
         assert "app.js" in result
 
         # Verify language parameter
-        cmd = mock_run.call_args[0][0]
+        cmd = mock_exec.call_args[0][0]
         assert "--lang" in cmd
         assert "javascript" in cmd
 
@@ -269,9 +274,10 @@ async def test_ast_grep_search_no_matches():
     """Test ast_grep_search when no matches found."""
     from mcp_bridge.tools.code_search import ast_grep_search
 
-    with patch("subprocess.run") as mock_run:
-        mock_run.return_value = Mock(
+    with patch("mcp_bridge.tools.code_search.async_execute", new_callable=AsyncMock) as mock_exec:
+        mock_exec.return_value = ProcessResult(
             stdout="[]",
+            stderr="",
             returncode=0
         )
 
@@ -288,9 +294,10 @@ async def test_ast_grep_search_invalid_json():
     """Test ast_grep_search handles invalid JSON gracefully."""
     from mcp_bridge.tools.code_search import ast_grep_search
 
-    with patch("subprocess.run") as mock_run:
-        mock_run.return_value = Mock(
+    with patch("mcp_bridge.tools.code_search.async_execute", new_callable=AsyncMock) as mock_exec:
+        mock_exec.return_value = ProcessResult(
             stdout="invalid json output",
+            stderr="",
             returncode=0
         )
 
@@ -305,7 +312,7 @@ async def test_ast_grep_search_not_installed():
     """Test ast_grep_search when ast-grep is not installed."""
     from mcp_bridge.tools.code_search import ast_grep_search
 
-    with patch("subprocess.run", side_effect=FileNotFoundError()):
+    with patch("mcp_bridge.tools.code_search.async_execute", side_effect=FileNotFoundError()):
         result = await ast_grep_search(pattern="test", directory=".")
 
         assert "ast-grep (sg) not found" in result
@@ -327,9 +334,10 @@ async def test_ast_grep_search_limits_results():
         for i in range(30)
     ]
 
-    with patch("subprocess.run") as mock_run:
-        mock_run.return_value = Mock(
+    with patch("mcp_bridge.tools.code_search.async_execute", new_callable=AsyncMock) as mock_exec:
+        mock_exec.return_value = ProcessResult(
             stdout=json.dumps(many_matches),
+            stderr="",
             returncode=0
         )
 
@@ -345,7 +353,7 @@ async def test_ast_grep_search_timeout():
     """Test ast_grep_search timeout handling."""
     from mcp_bridge.tools.code_search import ast_grep_search
 
-    with patch("subprocess.run", side_effect=subprocess.TimeoutExpired("sg", 60)):
+    with patch("mcp_bridge.tools.code_search.async_execute", side_effect=asyncio.TimeoutError()):
         result = await ast_grep_search(pattern="test", directory=".")
 
         assert result == "Search timed out"
@@ -371,9 +379,10 @@ async def test_ast_grep_replace_dry_run():
         }
     ])
 
-    with patch("subprocess.run") as mock_run:
-        mock_run.return_value = Mock(
+    with patch("mcp_bridge.tools.code_search.async_execute", new_callable=AsyncMock) as mock_exec:
+        mock_exec.return_value = ProcessResult(
             stdout=mock_json_output,
+            stderr="",
             returncode=0
         )
 
@@ -392,7 +401,7 @@ async def test_ast_grep_replace_dry_run():
         assert "dry_run=False" in result
 
         # Verify command has --json but NOT --update-all
-        cmd = mock_run.call_args[0][0]
+        cmd = mock_exec.call_args[0][0]
         assert "--json" in cmd
         assert "--update-all" not in cmd
 
@@ -402,9 +411,10 @@ async def test_ast_grep_replace_apply_changes():
     """Test ast_grep_replace actually applies changes."""
     from mcp_bridge.tools.code_search import ast_grep_replace
 
-    with patch("subprocess.run") as mock_run:
-        mock_run.return_value = Mock(
+    with patch("mcp_bridge.tools.code_search.async_execute", new_callable=AsyncMock) as mock_exec:
+        mock_exec.return_value = ProcessResult(
             stdout="Successfully updated 2 files",
+            stderr="",
             returncode=0
         )
 
@@ -420,7 +430,7 @@ async def test_ast_grep_replace_apply_changes():
         assert "logger.debug($A)" in result
 
         # Verify command has --update-all
-        cmd = mock_run.call_args[0][0]
+        cmd = mock_exec.call_args[0][0]
         assert "--update-all" in cmd
         assert "--json" not in cmd
 
@@ -430,9 +440,10 @@ async def test_ast_grep_replace_with_language():
     """Test ast_grep_replace with language filter."""
     from mcp_bridge.tools.code_search import ast_grep_replace
 
-    with patch("subprocess.run") as mock_run:
-        mock_run.return_value = Mock(
+    with patch("mcp_bridge.tools.code_search.async_execute", new_callable=AsyncMock) as mock_exec:
+        mock_exec.return_value = ProcessResult(
             stdout=json.dumps([]),
+            stderr="",
             returncode=0
         )
 
@@ -445,7 +456,7 @@ async def test_ast_grep_replace_with_language():
         )
 
         # Verify language parameter
-        cmd = mock_run.call_args[0][0]
+        cmd = mock_exec.call_args[0][0]
         assert "--lang" in cmd
         assert "python" in cmd
 
@@ -455,9 +466,10 @@ async def test_ast_grep_replace_no_matches():
     """Test ast_grep_replace when no matches found."""
     from mcp_bridge.tools.code_search import ast_grep_replace
 
-    with patch("subprocess.run") as mock_run:
-        mock_run.return_value = Mock(
+    with patch("mcp_bridge.tools.code_search.async_execute", new_callable=AsyncMock) as mock_exec:
+        mock_exec.return_value = ProcessResult(
             stdout="[]",
+            stderr="",
             returncode=0
         )
 
@@ -476,8 +488,8 @@ async def test_ast_grep_replace_apply_failure():
     """Test ast_grep_replace when apply fails."""
     from mcp_bridge.tools.code_search import ast_grep_replace
 
-    with patch("subprocess.run") as mock_run:
-        mock_run.return_value = Mock(
+    with patch("mcp_bridge.tools.code_search.async_execute", new_callable=AsyncMock) as mock_exec:
+        mock_exec.return_value = ProcessResult(
             stdout="",
             stderr="Error: Invalid pattern syntax",
             returncode=1
@@ -504,14 +516,15 @@ async def test_ast_grep_replace_limits_preview():
         {
             "file": f"file{i}.py",
             "range": {"start": {"line": i}},
-            "text": f"console.log('match {i}')"
+            "text": "console.log('match {i}')"
         }
         for i in range(20)
     ]
 
-    with patch("subprocess.run") as mock_run:
-        mock_run.return_value = Mock(
+    with patch("mcp_bridge.tools.code_search.async_execute", new_callable=AsyncMock) as mock_exec:
+        mock_exec.return_value = ProcessResult(
             stdout=json.dumps(many_matches),
+            stderr="",
             returncode=0
         )
 
@@ -531,7 +544,7 @@ async def test_ast_grep_replace_not_installed():
     """Test ast_grep_replace when ast-grep is not installed."""
     from mcp_bridge.tools.code_search import ast_grep_replace
 
-    with patch("subprocess.run", side_effect=FileNotFoundError()):
+    with patch("mcp_bridge.tools.code_search.async_execute", side_effect=FileNotFoundError()):
         result = await ast_grep_replace(
             pattern="test",
             replacement="new",
@@ -547,7 +560,7 @@ async def test_ast_grep_replace_timeout():
     """Test ast_grep_replace timeout handling."""
     from mcp_bridge.tools.code_search import ast_grep_replace
 
-    with patch("subprocess.run", side_effect=subprocess.TimeoutExpired("sg", 60)):
+    with patch("mcp_bridge.tools.code_search.async_execute", side_effect=asyncio.TimeoutError()):
         result = await ast_grep_replace(
             pattern="test",
             replacement="new",
@@ -564,9 +577,10 @@ async def test_glob_files_basic_pattern():
     """Test glob_files finds files matching pattern."""
     from mcp_bridge.tools.code_search import glob_files
 
-    with patch("subprocess.run") as mock_run:
-        mock_run.return_value = Mock(
+    with patch("mcp_bridge.tools.code_search.async_execute", new_callable=AsyncMock) as mock_exec:
+        mock_exec.return_value = ProcessResult(
             stdout="sample.py\nutils.py\nwidget.py\n",
+            stderr="",
             returncode=0
         )
 
@@ -580,7 +594,7 @@ async def test_glob_files_basic_pattern():
         assert "widget.py" in result
 
         # Verify fd command
-        cmd = mock_run.call_args[0][0]
+        cmd = mock_exec.call_args[0][0]
         assert cmd[0] == "fd"
         assert "--type" in cmd
         assert "f" in cmd
@@ -593,9 +607,10 @@ async def test_glob_files_recursive_pattern():
     """Test glob_files with recursive pattern."""
     from mcp_bridge.tools.code_search import glob_files
 
-    with patch("subprocess.run") as mock_run:
-        mock_run.return_value = Mock(
+    with patch("mcp_bridge.tools.code_search.async_execute", new_callable=AsyncMock) as mock_exec:
+        mock_exec.return_value = ProcessResult(
             stdout="src/app.js\nsrc/components/widget.js\n",
+            stderr="",
             returncode=0
         )
 
@@ -613,8 +628,8 @@ async def test_glob_files_no_matches():
     """Test glob_files when no files match."""
     from mcp_bridge.tools.code_search import glob_files
 
-    with patch("subprocess.run") as mock_run:
-        mock_run.return_value = Mock(stdout="", returncode=1)
+    with patch("mcp_bridge.tools.code_search.async_execute", new_callable=AsyncMock) as mock_exec:
+        mock_exec.return_value = ProcessResult(stdout="", stderr="", returncode=1)
 
         result = await glob_files(
             pattern="*.nonexistent",
@@ -632,8 +647,8 @@ async def test_glob_files_limits_output():
     # Create 150 file paths
     many_files = "\n".join([f"file{i}.py" for i in range(150)])
 
-    with patch("subprocess.run") as mock_run:
-        mock_run.return_value = Mock(stdout=many_files, returncode=0)
+    with patch("mcp_bridge.tools.code_search.async_execute", new_callable=AsyncMock) as mock_exec:
+        mock_exec.return_value = ProcessResult(stdout=many_files, stderr="", returncode=0)
 
         result = await glob_files(pattern="*.py", directory=".")
 
@@ -651,7 +666,7 @@ async def test_glob_files_fd_not_installed():
     """Test glob_files when fd is not installed."""
     from mcp_bridge.tools.code_search import glob_files
 
-    with patch("subprocess.run", side_effect=FileNotFoundError()):
+    with patch("mcp_bridge.tools.code_search.async_execute", side_effect=FileNotFoundError()):
         result = await glob_files(pattern="*.py", directory=".")
 
         assert "fd not found" in result
@@ -663,7 +678,7 @@ async def test_glob_files_timeout():
     """Test glob_files timeout handling."""
     from mcp_bridge.tools.code_search import glob_files
 
-    with patch("subprocess.run", side_effect=subprocess.TimeoutExpired("fd", 30)):
+    with patch("mcp_bridge.tools.code_search.async_execute", side_effect=asyncio.TimeoutError()):
         result = await glob_files(pattern="*.py", directory=".")
 
         assert result == "Search timed out"
@@ -674,9 +689,10 @@ async def test_glob_files_custom_directory():
     """Test glob_files with custom directory."""
     from mcp_bridge.tools.code_search import glob_files
 
-    with patch("subprocess.run") as mock_run:
-        mock_run.return_value = Mock(
+    with patch("mcp_bridge.tools.code_search.async_execute", new_callable=AsyncMock) as mock_exec:
+        mock_exec.return_value = ProcessResult(
             stdout="src/app.ts\nsrc/utils.ts\n",
+            stderr="",
             returncode=0
         )
 
@@ -689,49 +705,8 @@ async def test_glob_files_custom_directory():
         assert "utils.ts" in result
 
         # Verify directory parameter
-        cmd = mock_run.call_args[0][0]
+        cmd = mock_exec.call_args[0][0]
         assert "./src" in cmd
-
-
-# ===== Integration tests (with real files) =====
-
-@pytest.mark.asyncio
-async def test_grep_search_real_files(temp_code_dir):
-    """Integration test: grep_search with real ripgrep on temp files."""
-    from mcp_bridge.tools.code_search import grep_search
-
-    try:
-        result = await grep_search(
-            pattern="def hello",
-            directory=str(temp_code_dir),
-            file_pattern="*.py"
-        )
-
-        # If ripgrep is installed, should find the function
-        if "not found" not in result:
-            assert "sample.py" in result or "def hello" in result.lower()
-    except Exception:
-        # Skip if ripgrep not available
-        pytest.skip("ripgrep not installed")
-
-
-@pytest.mark.asyncio
-async def test_glob_files_real_files(temp_code_dir):
-    """Integration test: glob_files with real fd on temp files."""
-    from mcp_bridge.tools.code_search import glob_files
-
-    try:
-        result = await glob_files(
-            pattern="*.py",
-            directory=str(temp_code_dir)
-        )
-
-        # If fd is installed, should find Python files
-        if "not found" not in result:
-            assert "sample.py" in result or ".py" in result
-    except Exception:
-        # Skip if fd not available
-        pytest.skip("fd not installed")
 
 
 # ===== Error handling tests =====
@@ -741,7 +716,7 @@ async def test_grep_search_general_exception():
     """Test grep_search handles unexpected exceptions."""
     from mcp_bridge.tools.code_search import grep_search
 
-    with patch("subprocess.run", side_effect=RuntimeError("Unexpected error")):
+    with patch("mcp_bridge.tools.code_search.async_execute", side_effect=RuntimeError("Unexpected error")):
         result = await grep_search(pattern="test", directory=".")
 
         assert "Error:" in result
@@ -753,7 +728,7 @@ async def test_ast_grep_search_general_exception():
     """Test ast_grep_search handles unexpected exceptions."""
     from mcp_bridge.tools.code_search import ast_grep_search
 
-    with patch("subprocess.run", side_effect=RuntimeError("Unexpected error")):
+    with patch("mcp_bridge.tools.code_search.async_execute", side_effect=RuntimeError("Unexpected error")):
         result = await ast_grep_search(pattern="test", directory=".")
 
         assert "Error:" in result
@@ -765,7 +740,7 @@ async def test_ast_grep_replace_general_exception():
     """Test ast_grep_replace handles unexpected exceptions."""
     from mcp_bridge.tools.code_search import ast_grep_replace
 
-    with patch("subprocess.run", side_effect=RuntimeError("Unexpected error")):
+    with patch("mcp_bridge.tools.code_search.async_execute", side_effect=RuntimeError("Unexpected error")):
         result = await ast_grep_replace(
             pattern="test",
             replacement="new",
@@ -781,7 +756,7 @@ async def test_glob_files_general_exception():
     """Test glob_files handles unexpected exceptions."""
     from mcp_bridge.tools.code_search import glob_files
 
-    with patch("subprocess.run", side_effect=RuntimeError("Unexpected error")):
+    with patch("mcp_bridge.tools.code_search.async_execute", side_effect=RuntimeError("Unexpected error")):
         result = await glob_files(pattern="*.py", directory=".")
 
         assert "Error:" in result

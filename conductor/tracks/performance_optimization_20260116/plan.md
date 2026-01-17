@@ -5,10 +5,10 @@
     - [x] Create `mcp_bridge/utils/truncation.py`.
     - [x] Write tests for middle-truncation and tail-truncation logic.
     - [x] Implement `truncate_output(text, limit, strategy)` with agent-facing guidance messages.
-- [ ] Task: Enhance `read_file` with Log-Awareness.
-    - [ ] Update `read_file` to detect log files and default to `tail` mode.
-    - [ ] Write tests verifying `.log` files are read from the end.
-    - [ ] Implement `read_file` truncation using the core utility.
+- [x] Task: Enhance `read_file` with Log-Awareness. [93e520b]
+    - [x] Update `read_file` to detect log files and default to `tail` mode.
+    - [x] Write tests verifying `.log` files are read from the end.
+    - [x] Implement `read_file` truncation using the core utility.
 - [ ] Task: Apply Universal Output Cap.
     - [ ] Integrate `truncate_output` into the central tool execution dispatcher (likely `_execute_tool`).
     - [ ] Verify `grep` and `ls` outputs are correctly capped.

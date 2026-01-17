@@ -82,6 +82,53 @@ def get_tool_definitions() -> list[Tool]:
             meta={"defer_loading": True},
         ),
         Tool(
+            name="write_file",
+            description="Write content to a file. Invalidates related cache entries.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Path to the file to write"},
+                    "content": {"type": "string", "description": "Content to write to the file"},
+                },
+                "required": ["path", "content"],
+            },
+            meta={"defer_loading": True},
+        ),
+        Tool(
+            name="replace",
+            description="Replace text in a file. Invalidates related cache entries.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Path to the file to modify"},
+                    "old_string": {"type": "string", "description": "The exact literal text to replace"},
+                    "new_string": {"type": "string", "description": "The exact literal text to replace with"},
+                    "instruction": {"type": "string", "description": "Detailed description of the change"},
+                    "expected_replacements": {
+                        "type": "integer", 
+                        "description": "Number of replacements expected",
+                        "default": 1
+                    },
+                },
+                "required": ["path", "old_string", "new_string", "instruction"],
+            },
+            meta={"defer_loading": True},
+        ),
+        Tool(
+            name="run_shell_command",
+            description="Execute a shell command. Invalidates cache if it looks like a write operation.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "command": {"type": "string", "description": "Exact bash command to execute"},
+                    "description": {"type": "string", "description": "Brief description of the command's purpose"},
+                    "dir_path": {"type": "string", "description": "Optional directory to run the command in"},
+                },
+                "required": ["command", "description"],
+            },
+            meta={"defer_loading": True},
+        ),
+        Tool(
             name="invoke_gemini",
             description=(
                 "Invoke a Gemini model with the given prompt. "

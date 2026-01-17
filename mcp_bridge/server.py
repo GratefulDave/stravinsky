@@ -241,6 +241,34 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 limit=arguments.get("limit"),
             )
 
+        elif name == "write_file":
+            from .tools.write_file import write_file
+
+            result_content = await write_file(
+                path=arguments["path"],
+                content=arguments["content"],
+            )
+
+        elif name == "replace":
+            from .tools.replace import replace
+
+            result_content = await replace(
+                path=arguments["path"],
+                old_string=arguments["old_string"],
+                new_string=arguments["new_string"],
+                instruction=arguments["instruction"],
+                expected_replacements=arguments.get("expected_replacements", 1),
+            )
+
+        elif name == "run_shell_command":
+            from .tools.run_shell_command import run_shell_command
+
+            result_content = await run_shell_command(
+                command=arguments["command"],
+                description=arguments["description"],
+                dir_path=arguments.get("dir_path", "."),
+            )
+
         elif name == "tool_search":
             from .tools.tool_search import search_tools
             from .server_tools import get_tool_definitions

@@ -1,4 +1,5 @@
 import time
+import os
 import threading
 from typing import Any, Dict, Optional, Tuple
 
@@ -59,6 +60,21 @@ class IOCache:
         with self._cache_lock:
             if key in self._cache:
                 del self._cache[key]
+
+    def invalidate_path(self, path: str) -> None:
+        """
+        Invalidate all cache entries related to a specific file path.
+        Matches keys for read_file, list_dir, etc.
+        """
+        # Use realpath to resolve symlinks (crucial for macOS /var -> /private/var)
+        abs_path = os.path.realpath(path)
+        with self._cache_lock:
+            keys_to_del = [
+                k for k in self._cache.keys() 
+                if abs_path in k
+            ]
+            for k in keys_to_del:
+                del self._cache[k]
 
     def clear(self) -> None:
         """Clear all cached entries."""

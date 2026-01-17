@@ -18,7 +18,7 @@
     - [x] Verify `test_code_search.py` passes.
 - [x] Task: Conductor - User Manual Verification 'Search Tools Migration' (Protocol in workflow.md) [checkpoint: 5b21b9c]
 
-## Phase 3: AST Chunking Migration
+## Phase 3: AST Chunking Migration [checkpoint: 1d0a050]
 - [x] Task: Implement `tree-sitter` chunking in Rust. [27914f3]
     - [x] Add `tree-sitter`, `tree-sitter-python`, `tree-sitter-typescript` dependencies.
     - [x] Implement AST traversal and text slicing logic.
@@ -29,7 +29,7 @@
 - [x] Task: Conductor - User Manual Verification 'AST Chunking Migration' (Protocol in workflow.md) [checkpoint: 27914f3]
 
 ## Phase 4: Native File Watcher
-- [ ] Task: Implement File Watcher in Rust.
+- [~] Task: Implement File Watcher in Rust.
     - [ ] Use `notify` crate to watch project root.
     - [ ] Implement debouncing logic.
     - [ ] Define IPC mechanism (likely stdout/stdin or shared file update) to signal Python.

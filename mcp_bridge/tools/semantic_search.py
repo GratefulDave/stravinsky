@@ -38,6 +38,7 @@ from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_ex
 from mcp_bridge.auth.token_store import TokenStore
 from mcp_bridge.tools.query_classifier import QueryCategory, classify_query
 from mcp_bridge.native_search import native_chunk_code
+from mcp_bridge.native_watcher import NativeFileWatcher
 
 logger = logging.getLogger(__name__)
 
@@ -3258,6 +3259,9 @@ class CodebaseFileWatcher:
         # Observer and handler for watchdog
         self._observer = None
         self._event_handler = None
+        
+        # Native watcher
+        self._native_watcher: NativeFileWatcher | None = None
 
         # Thread safety
         self._lock = threading.Lock()
@@ -3285,6 +3289,20 @@ class CodebaseFileWatcher:
             try:
                 # Start indexing worker first (must be running before file events arrive)
                 self._indexing_worker.start()
+
+                # Try native watcher first
+                try:
+                    self._native_watcher = NativeFileWatcher(
+                        str(self.project_path),
+                        on_change=lambda type, path: self._on_file_changed(Path(path))
+                    )
+                    self._native_watcher.start()
+                    self._running = True
+                    logger.info(f"Native file watcher started for {self.project_path}")
+                    return
+                except (FileNotFoundError, Exception) as e:
+                    logger.info(f"Native watcher not available, falling back to watchdog: {e}")
+                    self._native_watcher = None
 
                 watchdog = get_watchdog()
                 Observer = watchdog["Observer"]
@@ -3321,13 +3339,20 @@ class CodebaseFileWatcher:
         Cancels any pending reindex timers, stops the observer, and shuts down the indexing worker.
         """
         with self._lock:
-            # Cancel pending reindex
-            if self._pending_reindex_timer is not None:
-                self._pending_reindex_timer.cancel()
-                self._pending_reindex_timer = None
+            # Cancel pending reindex timer
+            with self._pending_lock:
+                if self._pending_reindex_timer:
+                    self._pending_reindex_timer.cancel()
+                    self._pending_reindex_timer = None
+                self._pending_files.clear()
+
+            # Stop native watcher
+            if self._native_watcher:
+                self._native_watcher.stop()
+                self._native_watcher = None
 
             # Stop observer
-            if self._observer is not None:
+            if self._observer:
                 self._observer.stop()
                 self._observer.join(timeout=5)  # Wait up to 5 seconds for shutdown
                 self._observer = None

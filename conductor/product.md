@@ -22,11 +22,15 @@ The goal is to transform Stravinsky from a model-invocation bridge into a compre
 *   **Gap Analysis:** Conduct a thorough analysis of tools in `oh-my-opencode` (specifically around file manipulation and system introspection) and port those that fill functional gaps.
 *   **Native Integration:** Ensure all new tools are seamlessly integrated into Stravinsky's multi-model backbone, leveraging Gemini or GPT-4o as needed for high-complexity operations.
 
-### 4. Configuration & Standards
+### 4. Performance & Context Management
+*   **Smart Truncation:** Automatic, intelligent truncation of large tool outputs (20k chars) with "auto-tail" logic for logs to prevent context window bloat.
+*   **I/O Caching:** Thread-safe, TTL-based caching for high-frequency read operations (`list_directory`, `read_file`) with write-through invalidation to ensure zero stale data.
+
+### 5. Configuration & Standards
 *   **Unified Settings:** Move towards a standardized configuration structure (e.g., `settings.json` and agent manifests) that aligns with modern Claude Code orchestration conventions.
 *   **OAuth Backbone:** Maintain and further stabilize Stravinsky's secure OAuth flow and token management as the underlying infrastructure for all external model interactions.
 
-### 5. Native Performance Layer
+### 6. Native Performance Layer
 *   **Rust Migration:** Migrate latency-sensitive operations (Search, AST parsing, File Watching) to a native Rust module to ensure sub-microsecond overhead and robust concurrency.
 
 ## Target User

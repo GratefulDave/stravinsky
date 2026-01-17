@@ -1,6 +1,6 @@
-import subprocess
 import os
 from mcp_bridge.utils.cache import IOCache
+from mcp_bridge.utils.process import async_execute
 
 async def run_shell_command(command: str, description: str, dir_path: str = ".") -> str:
     """
@@ -11,15 +11,8 @@ async def run_shell_command(command: str, description: str, dir_path: str = ".")
     print(f"🐚 BASH: {command} ({description})", file=sys.stderr)
 
     try:
-        # Run command
-        result = subprocess.run(
-            command,
-            shell=True,
-            capture_output=True,
-            text=True,
-            cwd=dir_path,
-            timeout=300 # 5 minute timeout
-        )
+        # Run command asynchronously
+        result = await async_execute(command, cwd=dir_path, timeout=300)
         
         # Check if it looks like a write command (simplistic heuristic)
         write_keywords = ["git commit", "git push", "rm ", "mv ", "cp ", "touch ", "> ", ">> ", "sed ", "chmod "]

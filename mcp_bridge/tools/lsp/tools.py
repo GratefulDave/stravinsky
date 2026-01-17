@@ -9,11 +9,11 @@ import asyncio
 import json
 import logging
 import os
-import subprocess
 import sys
 from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlparse
+from mcp_bridge.utils.process import async_execute
 
 # Use lsprotocol for types
 try:
@@ -190,7 +190,7 @@ async def lsp_hover(file_path: str, line: int, character: int) -> str:
     try:
         if lang == "python":
             # Use jedi for Python hover info
-            result = subprocess.run(
+            result = await async_execute(
                 [
                     "python",
                     "-c",
@@ -199,14 +199,12 @@ import jedi
 script = jedi.Script(path='{file_path}')
 completions = script.infer({line}, {character})
 for c in completions[:1]:
-    logger.info(f"Type: {{c.type}}")
-    logger.info(f"Name: {{c.full_name}}")
+    print(f"Type: {{c.type}}")
+    print(f"Name: {{c.full_name}}")
     if c.docstring():
-        logger.info(f"\\nDocstring:\\n{{c.docstring()[:500]}}")
+        print(f"\\nDocstring:\\n{{c.docstring()[:500]}}")
 """,
                 ],
-                capture_output=True,
-                text=True,
                 timeout=10,
             )
             output = result.stdout.strip()
@@ -222,7 +220,7 @@ for c in completions[:1]:
 
     except FileNotFoundError as e:
         return f"Tool not found: {e.filename}. Install jedi: pip install jedi"
-    except subprocess.TimeoutExpired:
+    except asyncio.TimeoutError:
         return "Hover lookup timed out"
     except Exception as e:
         return f"Error: {str(e)}"
@@ -282,7 +280,7 @@ async def lsp_goto_definition(file_path: str, line: int, character: int) -> str:
 
     try:
         if lang == "python":
-            result = subprocess.run(
+            result = await async_execute(
                 [
                     "python",
                     "-c",
@@ -291,11 +289,9 @@ import jedi
 script = jedi.Script(path='{file_path}')
 definitions = script.goto({line}, {character})
 for d in definitions:
-    logger.info(f"{{d.module_path}}:{{d.line}}:{{d.column}} - {{d.full_name}}")
+    print(f"{{d.module_path}}:{{d.line}}:{{d.column}} - {{d.full_name}}")
 """,
                 ],
-                capture_output=True,
-                text=True,
                 timeout=10,
             )
             output = result.stdout.strip()
@@ -311,7 +307,7 @@ for d in definitions:
 
     except FileNotFoundError:
         return "Tool not found: Install jedi: pip install jedi"
-    except subprocess.TimeoutExpired:
+    except asyncio.TimeoutError:
         return "Definition lookup timed out"
     except Exception as e:
         return f"Error: {str(e)}"
@@ -370,7 +366,7 @@ async def lsp_find_references(
 
     try:
         if lang == "python":
-            result = subprocess.run(
+            result = await async_execute(
                 [
                     "python",
                     "-c",
@@ -379,13 +375,11 @@ import jedi
 script = jedi.Script(path='{file_path}')
 references = script.get_references({line}, {character}, include_builtins=False)
 for r in references[:30]:
-    logger.info(f"{{r.module_path}}:{{r.line}}:{{r.column}}")
+    print(f"{{r.module_path}}:{{r.line}}:{{r.column}}")
 if len(references) > 30:
-    logger.info(f"... and {{len(references) - 30}} more")
+    print(f"... and {{len(references) - 30}} more")
 """,
                 ],
-                capture_output=True,
-                text=True,
                 timeout=15,
             )
             output = result.stdout.strip()
@@ -396,7 +390,7 @@ if len(references) > 30:
         else:
             return f"Find references not available for language: {lang}"
 
-    except subprocess.TimeoutExpired:
+    except asyncio.TimeoutError:
         return "Reference search timed out"
     except Exception as e:
         return f"Error: {str(e)}"
@@ -467,7 +461,7 @@ async def lsp_document_symbols(file_path: str) -> str:
 
     try:
         if lang == "python":
-            result = subprocess.run(
+            result = await async_execute(
                 [
                     "python",
                     "-c",
@@ -477,11 +471,9 @@ script = jedi.Script(path='{file_path}')
 names = script.get_names(all_scopes=True, definitions=True)
 for n in names:
     indent = "  " * (n.get_line_code().count("    ") if n.get_line_code() else 0)
-    logger.info(f"{{n.line:4d}} | {{indent}}{{n.type:10}} {{n.name}}")
+    print(f"{{n.line:4d}} | {{indent}}{{n.type:10}} {{n.name}}")
 """,
                 ],
-                capture_output=True,
-                text=True,
                 timeout=10,
             )
             output = result.stdout.strip()
@@ -491,10 +483,8 @@ for n in names:
 
         else:
             # Fallback: use ctags
-            result = subprocess.run(
+            result = await async_execute(
                 ["ctags", "-x", "--sort=no", str(path)],
-                capture_output=True,
-                text=True,
                 timeout=10,
             )
             output = result.stdout.strip()
@@ -504,7 +494,7 @@ for n in names:
 
     except FileNotFoundError:
         return "Install jedi (pip install jedi) or ctags for symbol lookup"
-    except subprocess.TimeoutExpired:
+    except asyncio.TimeoutError:
         return "Symbol lookup timed out"
     except Exception as e:
         return f"Error: {str(e)}"
@@ -549,10 +539,8 @@ async def lsp_workspace_symbols(query: str, directory: str = ".") -> str:
     # Fallback to legacy grep/ctags
     try:
         # Use ctags to index and grep for symbols
-        result = subprocess.run(
+        result = await async_execute(
             ["rg", "-l", query, directory, "--type", "py", "--type", "ts", "--type", "js"],
-            capture_output=True,
-            text=True,
             timeout=15,
         )
 
@@ -566,10 +554,8 @@ async def lsp_workspace_symbols(query: str, directory: str = ".") -> str:
             if not f:
                 continue
             # Get symbols from each file
-            ctags_result = subprocess.run(
+            ctags_result = await async_execute(
                 ["ctags", "-x", "--sort=no", f],
-                capture_output=True,
-                text=True,
                 timeout=5,
             )
             for line in ctags_result.stdout.split("\n"):
@@ -582,7 +568,7 @@ async def lsp_workspace_symbols(query: str, directory: str = ".") -> str:
 
     except FileNotFoundError:
         return "Install ctags and ripgrep for workspace symbol search"
-    except subprocess.TimeoutExpired:
+    except asyncio.TimeoutError:
         return "Search timed out"
     except Exception as e:
         return f"Error: {str(e)}"
@@ -629,7 +615,7 @@ async def lsp_prepare_rename(file_path: str, line: int, character: int) -> str:
 
     try:
         if lang == "python":
-            result = subprocess.run(
+            result = await async_execute(
                 [
                     "python",
                     "-c",
@@ -638,16 +624,14 @@ import jedi
 script = jedi.Script(path='{file_path}')
 refs = script.get_references({line}, {character})
 if refs:
-    logger.info(f"Symbol: {{refs[0].name}}")
-    logger.info(f"Type: {{refs[0].type}}")
-    logger.info(f"References: {{len(refs)}}")
-    logger.info("✅ Rename is valid")
+    print(f"Symbol: {{refs[0].name}}")
+    print(f"Type: {{refs[0].type}}")
+    print(f"References: {{len(refs)}}")
+    print("✅ Rename is valid")
 else:
-    logger.info("❌ No symbol found at position")
+    print("❌ No symbol found at position")
 """,
                 ],
-                capture_output=True,
-                text=True,
                 timeout=10,
             )
             return result.stdout.strip() or "No symbol found at position"
@@ -731,7 +715,7 @@ async def lsp_rename(
 
     try:
         if lang == "python":
-            result = subprocess.run(
+            result = await async_execute(
                 [
                     "python",
                     "-c",
@@ -740,13 +724,11 @@ import jedi
 script = jedi.Script(path='{file_path}')
 refactoring = script.rename({line}, {character}, new_name='{new_name}')
 for path, changed in refactoring.get_changed_files().items():
-    logger.info(f"File: {{path}}")
-    logger.info(changed[:500])
-    logger.info("---")
+    print(f"File: {{path}}")
+    print(changed[:500])
+    print("---")
 """,
                 ],
-                capture_output=True,
-                text=True,
                 timeout=15,
             )
             output = result.stdout.strip()
@@ -851,10 +833,8 @@ async def lsp_code_actions(file_path: str, line: int, character: int) -> str:
     try:
         if lang == "python":
             # Use ruff to suggest fixes
-            result = subprocess.run(
+            result = await async_execute(
                 ["ruff", "check", str(path), "--output-format=json", "--show-fixes"],
-                capture_output=True,
-                text=True,
                 timeout=10,
             )
 
@@ -910,10 +890,8 @@ async def lsp_code_action_resolve(file_path: str, action_code: str, line: int = 
 
     if lang == "python":
         try:
-            result = subprocess.run(
+            result = await async_execute(
                 ["ruff", "check", str(path), "--fix", "--select", action_code],
-                capture_output=True,
-                text=True,
                 timeout=15,
             )
 
@@ -927,7 +905,7 @@ async def lsp_code_action_resolve(file_path: str, action_code: str, line: int = 
 
         except FileNotFoundError:
             return "Install ruff: pip install ruff"
-        except subprocess.TimeoutExpired:
+        except asyncio.TimeoutError:
             return "Timeout applying fix"
         except Exception as e:
             return f"Error: {str(e)}"
@@ -1025,7 +1003,7 @@ async def lsp_servers() -> str:
         # Check if installed
         try:
             cmd = server.split()[0]  # simple check for command
-            subprocess.run([cmd, "--version"], capture_output=True, timeout=2)
+            await async_execute([cmd, "--version"], timeout=2)
             status = "✅ Installed"
         except FileNotFoundError:
             status = "❌ Not installed"

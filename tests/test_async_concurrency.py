@@ -18,7 +18,11 @@ async def test_concurrent_search_tools():
             return ProcessResult(stdout="glob result", stderr="", returncode=0)
         return ProcessResult(stdout="", stderr="", returncode=0)
 
-    with patch("mcp_bridge.tools.code_search.async_execute", side_effect=delayed_execute) as mock_exec:
+    # Mock native search to return None so fallback to async_execute is used
+    with patch("mcp_bridge.tools.code_search.native_grep_search", AsyncMock(return_value=None)), \
+         patch("mcp_bridge.tools.code_search.native_glob_files", AsyncMock(return_value=None)), \
+         patch("mcp_bridge.tools.code_search.async_execute", side_effect=delayed_execute) as mock_exec:
+        
         # Run both concurrently
         start_time = asyncio.get_running_loop().time()
         

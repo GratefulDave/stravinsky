@@ -104,7 +104,7 @@ def goodbye():
     )
 
     # Chunk the file
-    chunks = vector_store._chunk_file(test_file)
+    chunks = await vector_store._chunk_file(test_file)
 
     # Should create chunks for functions
     assert len(chunks) > 0
@@ -139,7 +139,7 @@ async def test_chunk_python_with_classes(vector_store, temp_project_dir):
 """
     )
 
-    chunks = vector_store._chunk_file(test_file)
+    chunks = await vector_store._chunk_file(test_file)
 
     # Should have class chunk + method chunks
     assert len(chunks) >= 3  # Class + 2 methods minimum
@@ -159,7 +159,7 @@ async def test_chunk_small_file_skipped(vector_store, temp_project_dir):
     test_file = temp_project_dir / "tiny.py"
     test_file.write_text("x = 1")  # Too small
 
-    chunks = vector_store._chunk_file(test_file)
+    chunks = await vector_store._chunk_file(test_file)
     assert len(chunks) == 0
 
 
@@ -176,7 +176,7 @@ def another():
 """
     )
 
-    chunks = vector_store._chunk_file(test_file)
+    chunks = await vector_store._chunk_file(test_file)
 
     # Should fall back to line-based chunking
     assert len(chunks) > 0
@@ -200,7 +200,7 @@ async def test_detect_new_chunks(vector_store, temp_project_dir):
     return z
 """)
 
-    chunks1 = vector_store._chunk_file(file1)
+    chunks1 = await vector_store._chunk_file(file1)
     existing_ids = {c["id"] for c in chunks1}
 
     # Simulate code change - add new file
@@ -212,7 +212,7 @@ async def test_detect_new_chunks(vector_store, temp_project_dir):
     return z
 """)
 
-    chunks2 = vector_store._chunk_file(file2)
+    chunks2 = await vector_store._chunk_file(file2)
     new_ids = {c["id"] for c in chunks2}
 
     # Should be completely different IDs
@@ -231,7 +231,7 @@ async def test_detect_modified_chunks(vector_store, temp_project_dir):
     z = 3
     return x + y + z
 """)
-    chunks_v1 = vector_store._chunk_file(test_file)
+    chunks_v1 = await vector_store._chunk_file(test_file)
     ids_v1 = {c["id"] for c in chunks_v1}
 
     # Modified content (same length, different logic)
@@ -241,7 +241,7 @@ async def test_detect_modified_chunks(vector_store, temp_project_dir):
     c = 30
     return a * b * c
 """)
-    chunks_v2 = vector_store._chunk_file(test_file)
+    chunks_v2 = await vector_store._chunk_file(test_file)
     ids_v2 = {c["id"] for c in chunks_v2}
 
     # IDs should be different (content hash changed)
@@ -255,12 +255,12 @@ async def test_content_hash_stability(vector_store, temp_project_dir):
     content = "def func(): pass\n"
 
     test_file.write_text(content)
-    chunks1 = vector_store._chunk_file(test_file)
+    chunks1 = await vector_store._chunk_file(test_file)
     ids1 = {c["id"] for c in chunks1}
 
     # Write same content again
     test_file.write_text(content)
-    chunks2 = vector_store._chunk_file(test_file)
+    chunks2 = await vector_store._chunk_file(test_file)
     ids2 = {c["id"] for c in chunks2}
 
     # Hashes should be identical

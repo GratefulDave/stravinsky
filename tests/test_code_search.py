@@ -15,8 +15,11 @@ from mcp_bridge.utils.process import ProcessResult
 @pytest.fixture(autouse=True)
 def mock_native_search():
     """Disable native search for these tests to ensure CLI fallback is tested."""
-    with patch("mcp_bridge.tools.code_search.native_grep_search", return_value=None), \
-         patch("mcp_bridge.tools.code_search.native_glob_files", return_value=None):
+    # We must mock these as AsyncMock because the code now awaits them
+    with patch("mcp_bridge.tools.code_search.native_grep_search", new_callable=AsyncMock) as mock_grep, \
+         patch("mcp_bridge.tools.code_search.native_glob_files", new_callable=AsyncMock) as mock_glob:
+        mock_grep.return_value = None
+        mock_glob.return_value = None
         yield
 
 

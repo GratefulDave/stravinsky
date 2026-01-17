@@ -870,17 +870,14 @@ async def invoke_gemini(
             if agent_type in ("dewey", "explore", "document_writer", "multimodal"):
                 logger.warning(f"[{agent_type}] Gemini failed, falling back to Claude sonnet-4.5")
                 try:
-                    import subprocess
+                    from mcp_bridge.utils.process import async_execute
 
-                    fallback_result = subprocess.run(
+                    result_obj = await async_execute(
                         ["claude", "-p", prompt, "--model", "sonnet", "--output-format", "text"],
-                        capture_output=True,
-                        text=True,
                         timeout=120,
-                        cwd=os.getcwd(),
                     )
-                    if fallback_result.returncode == 0 and fallback_result.stdout.strip():
-                        result = fallback_result.stdout.strip()
+                    if result_obj.returncode == 0 and result_obj.stdout.strip():
+                        result = result_obj.stdout.strip()
                         # Prepend auth header for visibility
                         auth_header = f"[Auth: Claude fallback | Model: sonnet-4.5]\n\n"
                         return auth_header + result
@@ -1031,15 +1028,14 @@ AGENT_TOOLS = [
 ]
 
 
-def _execute_tool(name: str, args: dict) -> str:
+async def _execute_tool(name: str, args: dict) -> str:
     """Execute a tool and return the result."""
-    import subprocess
     from pathlib import Path
+    from mcp_bridge.utils.process import async_execute
 
     try:
         if name == "semantic_search":
             # Import semantic_search function from tools
-            import asyncio
             from .semantic_search import semantic_search
 
             # Extract args with defaults
@@ -1050,20 +1046,15 @@ def _execute_tool(name: str, args: dict) -> str:
             project_path = args.get("project_path", ".")
             n_results = args.get("n_results", 10)
 
-            # Run async function in sync context
-            loop = asyncio.get_event_loop()
-            result = loop.run_until_complete(
-                semantic_search(
-                    query=query,
-                    project_path=project_path,
-                    n_results=n_results,
-                )
+            result = await semantic_search(
+                query=query,
+                project_path=project_path,
+                n_results=n_results,
             )
             return result
 
         elif name == "hybrid_search":
             # Import hybrid_search function from tools
-            import asyncio
             from .semantic_search import hybrid_search
 
             # Extract args with defaults
@@ -1075,55 +1066,45 @@ def _execute_tool(name: str, args: dict) -> str:
             project_path = args.get("project_path", ".")
             n_results = args.get("n_results", 10)
 
-            # Run async function in sync context
-            loop = asyncio.get_event_loop()
-            result = loop.run_until_complete(
-                hybrid_search(
-                    query=query,
-                    pattern=pattern,
-                    project_path=project_path,
-                    n_results=n_results,
-                )
+            result = await hybrid_search(
+                query=query,
+                pattern=pattern,
+                project_path=project_path,
+                n_results=n_results,
             )
             return result
 
         elif name == "read_file":
-            path = Path(args["path"])
-            if not path.exists():
-                return f"Error: File not found: {path}"
-            return path.read_text()
+            from .read_file import read_file
+            path = args["path"]
+            return await read_file(path)
 
         elif name == "list_directory":
-            path = Path(args["path"])
-            if not path.exists():
-                return f"Error: Directory not found: {path}"
-            entries = []
-            for entry in path.iterdir():
-                entry_type = "DIR" if entry.is_dir() else "FILE"
-                entries.append(f"[{entry_type}] {entry.name}")
-            return "\n".join(entries) if entries else "(empty directory)"
+            from .list_directory import list_directory
+            path = args["path"]
+            return await list_directory(path)
 
         elif name == "grep_search":
             pattern = args["pattern"]
             search_path = args["path"]
-            result = subprocess.run(
+            
+            result_obj = await async_execute(
                 ["rg", "--json", "-m", "50", pattern, search_path],
-                capture_output=True,
-                text=True,
-                timeout=30,
+                timeout=30
             )
-            if result.returncode == 0:
-                return result.stdout[:10000]  # Limit output size
-            elif result.returncode == 1:
+            
+            if result_obj.returncode == 0:
+                return result_obj.stdout[:10000]  # Limit output size
+            elif result_obj.returncode == 1:
                 return "No matches found"
             else:
-                return f"Search error: {result.stderr}"
+                return f"Search error: {result_obj.stderr}"
 
         elif name == "write_file":
-            path = Path(args["path"])
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(args["content"])
-            return f"Successfully wrote {len(args['content'])} bytes to {path}"
+            from .write_file import write_file
+            path = args["path"]
+            content = args["content"]
+            return await write_file(path, content)
 
         else:
             return f"Unknown tool: {name}"
@@ -1251,7 +1232,7 @@ async def _invoke_gemini_agentic_with_api_key(
                 func_args = dict(func_call.args) if func_call.args else {}
 
                 logger.info(f"[AgenticGemini] Turn {turn + 1}: Executing {func_name}")
-                result = _execute_tool(func_name, func_args)
+                result = await _execute_tool(func_name, func_args)
 
                 function_responses.append(
                     types.Part(
@@ -1524,7 +1505,7 @@ async def invoke_gemini_agentic(
             func_args = function_call.get("args", {})
 
             logger.info(f"[AgenticGemini] Turn {turn + 1}: Executing {func_name}")
-            result = _execute_tool(func_name, func_args)
+            result = await _execute_tool(func_name, func_args)
 
             # Add model's response and function result to conversation
             contents.append({"role": "model", "parts": [{"functionCall": function_call}]})

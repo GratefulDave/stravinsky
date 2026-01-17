@@ -1,4 +1,5 @@
 import asyncio
+import os
 from dataclasses import dataclass
 from typing import Optional, List, Union
 
@@ -9,7 +10,7 @@ class ProcessResult:
     stderr: str
 
 async def async_execute(
-    cmd: List[str], 
+    cmd: Union[str, List[str]], 
     cwd: Optional[str] = None, 
     timeout: Optional[float] = None
 ) -> ProcessResult:
@@ -17,7 +18,7 @@ async def async_execute(
     Execute a subprocess asynchronously.
     
     Args:
-        cmd: List of command arguments.
+        cmd: Command string or list of arguments.
         cwd: Working directory.
         timeout: Maximum execution time in seconds.
         
@@ -27,12 +28,22 @@ async def async_execute(
     Raises:
         asyncio.TimeoutError: If the process exceeds the timeout.
     """
-    process = await asyncio.create_subprocess_exec(
-        *cmd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-        cwd=cwd
-    )
+    if isinstance(cmd, str):
+        # Use shell wrapper for string commands
+        process = await asyncio.create_subprocess_exec(
+            "bash", "-c", cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            cwd=cwd
+        )
+    else:
+        # Use direct execution for list of arguments
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            cwd=cwd
+        )
     
     try:
         if timeout:
@@ -42,7 +53,11 @@ async def async_execute(
             
     except asyncio.TimeoutError:
         try:
-            process.kill()
+            # Kill process group if started with bash
+            if isinstance(cmd, str):
+                process.kill()
+            else:
+                process.kill()
         except ProcessLookupError:
             pass # Already gone
         # Wait for it to actually die to avoid zombies
@@ -50,7 +65,7 @@ async def async_execute(
         raise
         
     return ProcessResult(
-        returncode=process.returncode or 0,
+        returncode=process.returncode if process.returncode is not None else 0,
         stdout=stdout_bytes.decode('utf-8', errors='replace'),
         stderr=stderr_bytes.decode('utf-8', errors='replace')
     )

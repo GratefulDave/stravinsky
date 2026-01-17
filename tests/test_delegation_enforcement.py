@@ -40,7 +40,7 @@ async def test_missing_delegation_reason_fails():
     """Test agent_spawn fails when delegation_reason is missing."""
     from mcp_bridge.tools.agent_manager import agent_spawn
 
-    with pytest.raises(ValueError, match="must provide.*delegation_reason"):
+    with pytest.raises(ValueError, match="Orchestrators must provide delegation metadata"):
         await agent_spawn(
             agent_type="explore",
             prompt="Find auth logic",
@@ -55,7 +55,7 @@ async def test_missing_expected_outcome_fails():
     """Test agent_spawn fails when expected_outcome is missing."""
     from mcp_bridge.tools.agent_manager import agent_spawn
 
-    with pytest.raises(ValueError, match="must provide.*expected_outcome"):
+    with pytest.raises(ValueError, match="Orchestrators must provide delegation metadata"):
         await agent_spawn(
             agent_type="explore",
             prompt="Find auth logic",
@@ -86,7 +86,7 @@ async def test_empty_delegation_reason_fails():
     """Test agent_spawn fails when delegation_reason is empty string."""
     from mcp_bridge.tools.agent_manager import agent_spawn
 
-    with pytest.raises(ValueError, match="must provide.*delegation_reason"):
+    with pytest.raises(ValueError, match="Orchestrators must provide delegation metadata"):
         await agent_spawn(
             agent_type="explore",
             prompt="Find auth logic",
@@ -101,7 +101,7 @@ async def test_empty_expected_outcome_fails():
     """Test agent_spawn fails when expected_outcome is empty string."""
     from mcp_bridge.tools.agent_manager import agent_spawn
 
-    with pytest.raises(ValueError, match="must provide.*expected_outcome"):
+    with pytest.raises(ValueError, match="Orchestrators must provide delegation metadata"):
         await agent_spawn(
             agent_type="explore",
             prompt="Find auth logic",

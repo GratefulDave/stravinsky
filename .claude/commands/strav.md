@@ -2,6 +2,10 @@
 name: strav
 description: |
   (⚠️ DEPRECATED) Stravinsky orchestrator. Use Native Subagent Pattern instead.
+arguments:
+  - name: prompt
+    description: The task or prompt for the orchestrator.
+    required: false
 ---
 
 # /strav (⚠️ DEPRECATED)

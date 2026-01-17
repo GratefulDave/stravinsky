@@ -567,7 +567,7 @@ class AgentManager:
 
     def cancel(self, task_id: str) -> bool:
         task = self.get_task(task_id)
-        if not task or task["status"] != "running":
+        if not task or task["status"] not in ["pending", "running"]:
             return False
 
         process = self._processes.get(task_id)
@@ -588,9 +588,10 @@ class AgentManager:
         tasks = self._load_tasks()
         stopped_count = 0
         for task_id, task in list(tasks.items()):
-            if task.get("status") == "running":
-                self.cancel(task_id)
-                stopped_count += 1
+            status = task.get("status")
+            if status in ["pending", "running"]:
+                if self.cancel(task_id):
+                    stopped_count += 1
         
         self._stop_monitors.set()
         
@@ -640,7 +641,7 @@ class AgentManager:
         if removed_ids: self._save_tasks(tasks)
         return {"removed": len(removed_ids), "task_ids": removed_ids, "summary": f"Removed {len(removed_ids)} agents"}
 
-    def get_output(self, task_id: str, block: bool = False, timeout: float = 30.0, auto_cleanup: bool = False) -> str:
+    async def get_output(self, task_id: str, block: bool = False, timeout: float = 30.0, auto_cleanup: bool = False) -> str:
         task = self.get_task(task_id)
         if not task: return f"Task {task_id} not found."
 
@@ -649,7 +650,7 @@ class AgentManager:
             while (time.time() - start) < timeout:
                 task = self.get_task(task_id)
                 if not task or task["status"] not in ["pending", "running"]: break
-                time.sleep(0.5)
+                await asyncio.sleep(0.5)
 
         task = self.get_task(task_id)
         status = task["status"]
@@ -725,14 +726,14 @@ async def agent_spawn(
         monitor_task = asyncio.create_task(manager._monitor_progress_async(task_id))
         manager._progress_monitors[task_id] = monitor_task
     if blocking:
-        return manager.get_output(task_id, block=True, timeout=timeout)
+        return await manager.get_output(task_id, block=True, timeout=timeout)
     display_model = AGENT_DISPLAY_MODELS.get(agent_type, AGENT_DISPLAY_MODELS["_default"])
     return format_spawn_output(agent_type, display_model, task_id)
 
 
 async def agent_output(task_id: str, block: bool = False, auto_cleanup: bool = False) -> str:
     manager = get_manager()
-    return manager.get_output(task_id, block=block, auto_cleanup=auto_cleanup)
+    return await manager.get_output(task_id, block=block, auto_cleanup=auto_cleanup)
 
 async def agent_retry(task_id: str, new_prompt: str = None, new_timeout: int = None) -> str:
     manager = get_manager()
@@ -742,6 +743,7 @@ async def agent_retry(task_id: str, new_prompt: str = None, new_timeout: int = N
 
 async def agent_cancel(task_id: str) -> str:
     manager = get_manager()
+    if not manager.get_task(task_id): return f"❌ Task {task_id} not found."
     if manager.cancel(task_id): return f"✅ Cancelled {task_id}."
     return f"❌ Could not cancel {task_id}."
 

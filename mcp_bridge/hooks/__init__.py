@@ -130,6 +130,6 @@ def initialize_hooks():
     manager.register_policy(ParallelEnforcementPolicy())
 
 
-__version__ = "0.4.59"
+__version__ = "0.4.60"
 __author__ = "David Andrews"
 __description__ = "Claude Code hooks for Stravinsky MCP parallel execution"

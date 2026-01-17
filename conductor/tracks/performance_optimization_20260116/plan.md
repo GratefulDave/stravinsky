@@ -9,9 +9,9 @@
     - [x] Update `read_file` to detect log files and default to `tail` mode.
     - [x] Write tests verifying `.log` files are read from the end.
     - [x] Implement `read_file` truncation using the core utility.
-- [ ] Task: Apply Universal Output Cap.
-    - [ ] Integrate `truncate_output` into the central tool execution dispatcher (likely `_execute_tool`).
-    - [ ] Verify `grep` and `ls` outputs are correctly capped.
+- [x] Task: Apply Universal Output Cap. [656716e]
+    - [x] Integrate `truncate_output` into the central tool execution dispatcher (via `TruncationPolicy`).
+    - [x] Verify `grep` and `ls` outputs are correctly capped.
 - [ ] Task: Conductor - User Manual Verification 'Smart Truncation' (Protocol in workflow.md)
 
 ## Phase 2: Smart I/O Caching Layer

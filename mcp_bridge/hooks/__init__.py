@@ -115,9 +115,19 @@ __all__ = [
 
 def initialize_hooks():
     """Initialize and register all hooks with the HookManager."""
-    # Currently hooks are primarily external scripts or lazy-loaded.
-    # This entry point allows for future internal hook registration.
-    pass
+    from .delegation_policy import DelegationReminderPolicy
+    from .edit_recovery_policy import EditRecoveryPolicy
+    from .manager import get_hook_manager
+    from .parallel_enforcement_policy import ParallelEnforcementPolicy
+    from .truncation_policy import TruncationPolicy
+
+    manager = get_hook_manager()
+
+    # Register unified policies
+    manager.register_policy(TruncationPolicy())
+    manager.register_policy(DelegationReminderPolicy())
+    manager.register_policy(EditRecoveryPolicy())
+    manager.register_policy(ParallelEnforcementPolicy())
 
 
 __version__ = "0.2.63"

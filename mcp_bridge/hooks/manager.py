@@ -5,7 +5,7 @@ Provides interception points for tool calls and model invocations.
 
 import logging
 from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import Any, Optional
 
 try:
     from mcp_bridge.config.hook_config import is_hook_enabled
@@ -85,6 +85,18 @@ class HookManager:
     ):
         """Run before context compaction. Can preserve critical context."""
         self.pre_compact_hooks.append(hook)
+
+    def register_policy(self, policy: Any):
+        """
+        Registers a unified HookPolicy.
+        Uses duck-typing to avoid circular imports.
+        """
+        from .events import EventType
+
+        if policy.event_type == EventType.PRE_TOOL_CALL:
+            self.register_pre_tool_call(policy.as_mcp_pre_hook())
+        elif policy.event_type == EventType.POST_TOOL_CALL:
+            self.register_post_tool_call(policy.as_mcp_post_hook())
 
     async def execute_pre_tool_call(
         self, tool_name: str, arguments: dict[str, Any]

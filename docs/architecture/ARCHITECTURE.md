@@ -178,98 +178,38 @@ From Delphi (GPT-5.2 strategic analysis):
 
 **Keep the Hybrid Architecture** with these enhancements:
 
-#### Phase 1: Unified Interface Layer
+### The Unified Hook Interface (NEW in v0.4.58)
 
-Create a canonical event model that both hook types can use:
+To reduce duplication and enable shared logic, Stravinsky now uses a **Unified Hook Interface** via `mcp_bridge/hooks/events.py`.
 
-```python
-# mcp_bridge/hooks/events.py
+#### Canonical Event Model:
+- `ToolCallEvent`: A unified data structure for all hook types (Native and MCP).
+- `HookPolicy`: An abstract base class for implementing cross-environment policies.
+- Adapters: Built-in support for running policies as standalone native scripts (`run_as_native`) or internal MCP callables.
 
-from dataclasses import dataclass
-from typing import Any, Optional
+#### Benefits:
+- **Shared Logic**: Policies like Truncation and Edit Recovery run the same code in both environments.
+- **Improved Testing**: Policies can be unit-tested in isolation without mocking the entire Claude Code lifecycle.
 
-@dataclass
-class ToolCallEvent:
-    """Canonical event for tool invocation"""
-    tool_name: str
-    args: dict[str, Any]
-    result: Optional[Any] = None
-    timestamp: float
-    session_id: str
+---
 
-    @classmethod
-    def from_native_hook(cls, stdin_json: dict):
-        """Adapter for native hook JSON"""
-        return cls(
-            tool_name=stdin_json["tool"],
-            args=stdin_json["args"],
-            result=stdin_json.get("result"),
-            timestamp=time.time(),
-            session_id=stdin_json.get("session_id", "unknown")
-        )
+### Model Proxy Architecture (NEW in v0.4.58)
 
-    @classmethod
-    def from_mcp_hook(cls, name: str, args: dict, result: Any):
-        """Adapter for MCP hook calls"""
-        return cls(
-            tool_name=name,
-            args=args,
-            result=result,
-            timestamp=time.time(),
-            session_id=get_current_session_id()
-        )
+To solve the "Head-of-Line Blocking" problem in MCP stdio, Stravinsky implements a local **Model Proxy**.
 
-@dataclass
-class HookPolicy:
-    """Shared policy that both hook types can enforce"""
-    name: str
-    should_block: Callable[[ToolCallEvent], bool]
-    transform_result: Callable[[Any], Any]
-    priority: int
+#### Data Flow (NEW):
+```
+Claude Code
+└── Native Subagent
+    └── Calls invoke_gemini (MCP)
+        └── Stravinsky Bridge
+            └── Proxy Client (httpx)
+                └── Model Proxy (FastAPI @ localhost:8765)
+                    └── External API (Gemini/GPT)
 ```
 
-**Benefits**:
-- Shared policy definitions (DRY principle)
-- Easier testing (policies are pure functions)
-- Clear separation: native hooks enforce hard boundaries, MCP hooks orchestrate behavior
-
-#### Phase 2: Model Proxy (Critical Optimization)
-
-Current architecture has **head-of-line blocking**:
-
-```
-Native Subagent → agent_spawn → Claude CLI spawn → invoke_gemini
-                                                   ↓
-                                    MCP stdio transport (BLOCKS)
-                                                   ↓
-                        Stravinsky MCP Server → Gemini API
-```
-
-**Problem**: When agent uses invoke_gemini, the ENTIRE MCP stdio transport blocks until Gemini responds (2-30 seconds). This prevents other agents from using ANY MCP tool.
-
-**Solution**: Local model proxy
-
-```python
-# mcp_bridge/proxy/model_server.py
-
-import asyncio
-from fastapi import FastAPI
-
-app = FastAPI()
-
-@app.post("/v1/gemini/generate")
-async def gemini_proxy(request: dict):
-    """Proxy Gemini calls locally - no MCP blocking"""
-    token = await get_gemini_token()
-    # Direct API call, no MCP protocol overhead
-    response = await gemini_client.generate(...)
-    return response
-```
-
-**Benefits**:
-- Eliminates head-of-line blocking
-- Enables true parallelism (20+ concurrent model calls)
-- Adds observability (trace IDs, circuit breakers, rate limiting)
+#### Why This Matters:
+MCP stdio transport is inherently single-threaded and blocking. By offloading model generation to a separate FastAPI process, the bridge can handle other tool calls (like search or read) immediately, even while multiple models are generating responses in parallel.
 
 ---
 
@@ -575,71 +515,10 @@ Stravinsky's architecture **matches and exceeds** oh-my-opencode's design patter
 
 ---
 
-### Phase 1: Native Subagent Prototype (1 week)
-
-**Tasks**:
-1. Create `.claude/agents/stravinsky.md` with full orchestrator prompt
-2. Test auto-delegation with complex tasks
-3. Verify agent_spawn MCP tool calls work from native subagent
-4. Measure: delegation accuracy, context size, execution time
-
-**Success Criteria**:
-- [ ] Stravinsky auto-delegates for 90%+ of complex tasks
-- [ ] agent_spawn works from native subagent context
-- [ ] No increase in token usage vs slash command
-
-### Phase 2: Specialist Agent Migration (1 week)
-
-**Tasks**:
-1. Create `.claude/agents/code-reviewer.md`
-2. Create `.claude/agents/debugger.md`
-3. Update Stravinsky orchestrator to delegate to new agents
-4. Test: code review workflow, debugging workflow
-
-**Success Criteria**:
-- [ ] Code reviews auto-delegated without manual `/review`
-- [ ] Debugger auto-delegated for error analysis
-- [ ] Context isolation verified
-
-### Phase 3: Hook Unification Layer (2 weeks)
-
-**Tasks**:
-1. Implement `mcp_bridge/hooks/events.py` with canonical event model
-2. Create adapters for native and MCP hooks
-3. Migrate 3 policies to unified interface
-4. Add policy testing framework
-
-**Success Criteria**:
-- [ ] 3+ policies using unified HookPolicy class
-- [ ] Native and MCP hooks share policy definitions
-- [ ] Test coverage >80% for policies
-
-### Phase 4: Model Proxy (2 weeks)
-
-**Tasks**:
-1. Implement `mcp_bridge/proxy/model_server.py` with FastAPI
-2. Add Gemini and OpenAI proxy endpoints
-3. Migrate invoke_gemini to use proxy (optional fallback to MCP)
-4. Add observability: trace IDs, circuit breaker, rate limiting
-
-**Success Criteria**:
-- [ ] 20+ concurrent model calls without blocking
-- [ ] <100ms overhead vs direct API calls
-- [ ] Circuit breaker triggers on API failures
-- [ ] Trace IDs in all logs
-
-### Phase 5: Documentation & Cleanup (1 week)
-
-**Tasks**:
-1. Update CLAUDE.md with native subagent architecture
-2. Remove "DO NOT USE" warning from templates.py
-3. Update README.md with new orchestration pattern
-4. Create migration guide for existing users
-
-**Success Criteria**:
-- [ ] All docs reference native subagent pattern
-- [ ] Migration guide tested with 3+ users
-- [ ] Slash commands marked as deprecated
+### Phase 1: Native Subagent Prototype (COMPLETED)
+### Phase 2: Specialist Agent Migration (COMPLETED)
+### Phase 3: Hook Unification Layer (COMPLETED)
+### Phase 4: Model Proxy (COMPLETED)
 
 ---
 

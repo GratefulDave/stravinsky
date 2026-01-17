@@ -1,4 +1,10 @@
-# Review - Code Review Recent Changes
+---
+description: (⚠️ DEPRECATED) Fast security and quality code review. Use code-reviewer native subagent instead.
+---
+# /review (⚠️ DEPRECATED)
+
+**Status**: Deprecated. Use the **Native Subagent** (`.claude/agents/code-reviewer.md`) instead.
+
 
 Perform a thorough code review on recent changes before committing.
 

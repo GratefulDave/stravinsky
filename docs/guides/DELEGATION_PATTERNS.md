@@ -20,16 +20,15 @@ Task(subagent_type="code-reviewer", prompt="Review...", description="Review")
 # Task tool returns results directly - synthesize and proceed
 ```
 
-### Context 2: MCP Skill (LEGACY)
+### Context 2: MCP Skill (DEPRECATED)
 
 **When**: Explicitly invoked via `/strav` slash command
-**Tool**: Use `agent_spawn()` for delegation
+**Tool**: Use `agent_spawn()` for delegation (⚠️ Legacy - use Native Subagent Pattern if possible)
 
 ```python
-# ✅ CORRECT: All agent_spawn calls in same response
+# ⚠️ LEGACY PATTERN: agent_spawn
+# Still supported for /strav context, but Task tool is recommended for all new work.
 agent_spawn(agent_type="explore", prompt="Find auth...", description="Find auth")
-agent_spawn(agent_type="dewey", prompt="Research JWT...", description="Research JWT")
-agent_spawn(agent_type="frontend", prompt="Build UI...", description="Build UI")
 # Collect results later with agent_output()
 ```
 
@@ -441,6 +440,6 @@ After delegation completes:
 
 **The Golden Rule**: After TodoWrite (or identifying exploratory work), spawn ALL independent Task() calls in the SAME response. NEVER end your response without delegation when parallel work is possible.
 
-**Context Awareness**: Use `Task()` in native subagent context (recommended), `agent_spawn()` in /strav MCP context (legacy).
+**Context Awareness**: Use `Task()` in native subagent context (PRIMARY). The `agent_spawn()` tool is considered legacy and should only be used in the deprecated `/strav` MCP context.
 
 **Verify Everything**: Agents can fail. Always check results, run diagnostics, validate output before marking complete.

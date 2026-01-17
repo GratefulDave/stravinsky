@@ -44,18 +44,16 @@ A thin wrapper agent uses a cheap model (Haiku) to:
 
 | Agent | Wrapper Model | Actual Work Model | Cost Tier |
 |-------|---------------|-------------------|-----------|
-| `explore` | Haiku | gemini-3-flash | Cheap |
+| `explore` | Haiku | gemini-3-flash | Free |
 | `dewey` | Haiku | gemini-3-flash | Cheap |
 | `document_writer` | Haiku | gemini-3-flash | Cheap |
 | `multimodal` | Haiku | gemini-3-flash | Cheap |
 | `research-lead` | Haiku | gemini-3-flash | Cheap |
-| `momus` | Haiku | gemini-3-flash | Cheap |
-| `comment_checker` | Haiku | gemini-3-flash | Cheap |
-| `code-reviewer` | Haiku | gemini-3-flash | Cheap |
+| `code-reviewer` | Sonnet | Claude native | Cheap |
+| `debugger` | Sonnet | Claude native | Medium |
+| `stravinsky` | Sonnet 4.5 | Claude native | Moderate |
 | `frontend` | Haiku | gemini-3-pro-high | Medium |
 | `implementation-lead` | Sonnet | Claude native | Medium |
-| `debugger` | Sonnet | Claude native | Medium |
-| `stravinsky` | Sonnet | Claude native | Medium |
 | `delphi` | Sonnet | gpt-5.2 | Expensive |
 | `planner` | Opus | Claude native | Expensive |
 
@@ -106,11 +104,10 @@ Some agents run natively on Claude without delegation:
 - Ensuring task completion
 
 **Example:**
-```
-agent_spawn(
-  "Implement user authentication with JWT, including login, logout, and token refresh",
-  "stravinsky",
-  "Auth implementation"
+```python
+Task(
+  subagent_type="stravinsky",
+  prompt="Implement user authentication with JWT, including login, logout, and token refresh"
 )
 ```
 
@@ -127,11 +124,10 @@ agent_spawn(
 - Creating agent delegation roadmaps
 
 **Example:**
-```
-agent_spawn(
-  "Create a detailed implementation plan for adding OAuth2 authentication with Google and GitHub providers",
-  "planner",
-  "Plan OAuth implementation"
+```python
+Task(
+  subagent_type="planner",
+  prompt="Create a detailed implementation plan for adding OAuth2 authentication with Google and GitHub providers"
 )
 ```
 
@@ -150,11 +146,10 @@ agent_spawn(
 - Strategic planning
 
 **Example:**
-```
-agent_spawn(
-  "Review the authentication architecture and suggest improvements for scalability",
-  "delphi",
-  "Auth review"
+```python
+Task(
+  subagent_type="delphi",
+  prompt="Review the authentication architecture and suggest improvements for scalability"
 )
 ```
 
@@ -173,11 +168,10 @@ agent_spawn(
 - Cross-repo analysis
 
 **Example:**
-```
-agent_spawn(
-  "Find examples of React Query usage with infinite scroll pagination",
-  "dewey",
-  "React Query research"
+```python
+Task(
+  subagent_type="dewey",
+  prompt="Find examples of React Query usage with infinite scroll pagination"
 )
 ```
 
@@ -196,11 +190,10 @@ agent_spawn(
 - Dependency analysis
 
 **Example:**
-```
-agent_spawn(
-  "Find all places where the User model is modified",
-  "explore",
-  "User model usage"
+```python
+Task(
+  subagent_type="explore",
+  prompt="Find all places where the User model is modified"
 )
 ```
 
@@ -219,11 +212,10 @@ agent_spawn(
 - Accessibility improvements
 
 **Example:**
-```
-agent_spawn(
-  "Design a responsive dashboard layout with sidebar navigation",
-  "frontend",
-  "Dashboard design"
+```python
+Task(
+  subagent_type="frontend",
+  prompt="Design a responsive dashboard layout with sidebar navigation"
 )
 ```
 
@@ -240,11 +232,10 @@ agent_spawn(
 - User guides
 
 **Example:**
-```
-agent_spawn(
-  "Write API documentation for the authentication endpoints",
-  "document_writer",
-  "API docs"
+```python
+Task(
+  subagent_type="document_writer",
+  prompt="Write API documentation for the authentication endpoints"
 )
 ```
 
@@ -259,11 +250,10 @@ agent_spawn(
 - Visual debugging
 
 **Example:**
-```
-agent_spawn(
-  "Analyze this screenshot and identify accessibility issues",
-  "multimodal",
-  "A11y analysis"
+```python
+Task(
+  subagent_type="multimodal",
+  prompt="Analyze this screenshot and identify accessibility issues"
 )
 ```
 
@@ -280,11 +270,10 @@ agent_spawn(
 - Pattern/anti-pattern detection
 
 **Example:**
-```
-agent_spawn(
-  "Validate the quality of the recent auth implementation changes",
-  "momus",
-  "Quality check"
+```python
+Task(
+  subagent_type="momus",
+  prompt="Validate the quality of the recent auth implementation changes"
 )
 ```
 
@@ -302,11 +291,10 @@ agent_spawn(
 - Synthesizing findings from multiple agents into a coherent brief
 
 **Example:**
-```
-agent_spawn(
-  "Research how to implement OAuth2 with PKCE in FastAPI",
-  "research-lead",
-  "OAuth research"
+```python
+Task(
+  subagent_type="research-lead",
+  prompt="Research how to implement OAuth2 with PKCE in FastAPI"
 )
 ```
 
@@ -324,11 +312,10 @@ agent_spawn(
 - Verifying implementation with diagnostics
 
 **Example:**
-```
-agent_spawn(
-  "Implement the OAuth2 flow based on the research brief",
-  "implementation-lead",
-  "OAuth implementation"
+```python
+Task(
+  subagent_type="implementation-lead",
+  prompt="Implement the OAuth2 flow based on the research brief"
 )
 ```
 
@@ -383,22 +370,22 @@ Need a plan before implementing?
 ### Parallel Agent Strategies
 
 **Exploration Phase (Cheap):**
-```
-agent_spawn("Find models", "explore", "Models")
-agent_spawn("Find controllers", "explore", "Controllers")
-agent_spawn("Find tests", "explore", "Tests")
+```python
+Task(subagent_type="explore", prompt="Find models")
+Task(subagent_type="explore", prompt="Find controllers")
+Task(subagent_type="explore", prompt="Find tests")
 ```
 
 **Research Phase (Cheap + Expensive):**
-```
-agent_spawn("Research best practices", "dewey", "Research")      # Cheap
-agent_spawn("Review current architecture", "delphi", "Review")   # Expensive
+```python
+Task(subagent_type="dewey", prompt="Research best practices")      # Cheap
+Task(subagent_type="delphi", prompt="Review current architecture")   # Expensive
 ```
 
 **Implementation Phase (Medium):**
-```
-agent_spawn("Implement backend", "stravinsky", "Backend")
-agent_spawn("Implement frontend", "frontend", "Frontend")
+```python
+Task(subagent_type="stravinsky", prompt="Implement backend")
+Task(subagent_type="frontend", prompt="Implement frontend")
 ```
 
 ---
@@ -423,22 +410,22 @@ See `.claude/agents/HOOKS.md` in the project root for comprehensive hook archite
 
 ### Example: Full Workflow
 
-```
+```python
 # Phase 1: Parallel exploration (all cheap Haiku->Gemini)
-explore_models = agent_spawn("Find all database models", "explore", "Models")
-explore_api = agent_spawn("Find all API endpoints", "explore", "API")
-research = agent_spawn("Research REST best practices", "dewey", "Research")
+# Fire all simultaneously in ONE response:
+Task(subagent_type="explore", prompt="Find all database models")
+Task(subagent_type="explore", prompt="Find all API endpoints")
+Task(subagent_type="dewey", prompt="Research REST best practices")
 
-# Phase 2: Wait and collect
-models = agent_output(explore_models)
-api = agent_output(explore_api)
-practices = agent_output(research)
+# Phase 2: Wait and collect (Task tool returns results directly)
+# models = ... (from Task 1)
+# api = ... (from Task 2)
+# practices = ... (from Task 3)
 
 # Phase 3: Strategic review (expensive GPT-5.2)
-review = agent_spawn(
-  f"Review this architecture:\nModels: {models}\nAPI: {api}\nBest practices: {practices}",
-  "delphi",
-  "Architecture review"
+Task(
+  subagent_type="delphi",
+  prompt=f"Review this architecture:\nModels: {models}\nAPI: {api}\nBest practices: {practices}"
 )
 ```
 

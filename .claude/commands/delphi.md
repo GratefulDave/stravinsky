@@ -1,5 +1,9 @@
 ---
-description: Consult the Delphi Strategic Advisor for architecture and hard debugging.
+name: delphi
+description: |
+  (⚠️ DEPRECATED) Strategic advisor. Use Delphi native subagent instead.
 ---
 
-Use the `delphi` prompt to analyze the current problem. This triggers a GPT-based consulting phase focused on strategic reasoning, architectural trade-offs, and root-cause analysis for difficult bugs.
+# /delphi (⚠️ DEPRECATED)
+
+**Status**: Deprecated. The Delphi agent is now available as a **Native Subagent** (`.claude/agents/delphi.md`).

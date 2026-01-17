@@ -162,43 +162,45 @@ Slash commands are discovered from:
 
 Commands can be organized in subdirectories (e.g., `.claude/commands/strav/stravinsky.md`).
 
-## Native Subagent Architecture
+## Native Subagent Architecture (PRIMARY)
 
-Stravinsky uses **native Claude Code subagents** (.claude/agents/) with automatic delegation:
+Stravinsky is architected around the **Native Subagent Pattern**. This design delegates specialized tasks to standalone Claude Code agents, enabling massive parallelism and reducing orchestrator cognitive load.
 
-### How It Works
-
-1. **Auto-Delegation**: Claude Code automatically delegates complex tasks to the Stravinsky orchestrator
-2. **Hook-Based Control**: PreToolUse hooks intercept direct tool calls and enforce delegation patterns
-3. **Parallel Execution**: Task tool enables true parallel execution of specialist agents
-4. **Multi-Model Routing**: Specialists use invoke_gemini/openai MCP tools for multi-model access
-
-### Agent Types
-
-| Agent | Model | Cost | Use For |
-|-------|-------|------|---------|
-| **stravinsky** | Claude Sonnet 4.5 (32k thinking) | Moderate | Auto-delegating orchestrator (primary) |
-| **explore** | Gemini 3 Flash (via MCP) | Free | Code search, always async |
-| **dewey** | Gemini 3 Flash + WebSearch | Cheap | Documentation research, always async |
-| **code-reviewer** | Claude Sonnet (native) | Cheap | Quality analysis, always async |
-| **debugger** | Claude Sonnet (native) | Medium | Root cause (after 2+ failures) |
-| **frontend** | Gemini 3 Pro High (via MCP) | Medium | ALL visual changes (blocking) |
-| **delphi** | GPT-5.2 Medium (via MCP) | Expensive | Architecture (after 3+ failures) |
-
-### Delegation Rules (oh-my-opencode Pattern)
-
-- **Always Async**: explore, dewey, code-reviewer (free/cheap)
-- **Blocking**: debugger (2+ failures), frontend (ALL visual), delphi (3+ failures or architecture)
-- **Never Work Alone**: Orchestrator blocks Read/Grep/Bash via PreToolUse hooks
-
-### ULTRATHINK / ULTRAWORK
-
-- **ULTRATHINK**: Engage exhaustive deep reasoning with extended thinking budget (32k tokens)
-- **ULTRAWORK**: Maximum parallel execution - spawn all async agents immediately
+### Why Native Subagents?
+- **True Parallelism**: Spawn multiple agents (Explore, Dewey, Reviewer) simultaneously using the `Task` tool.
+- **Zero Bridge Latency**: Agents interact directly with the project codebase using native tools.
+- **Specialized Context**: Each agent type has a bespoke system prompt and focused toolset.
 
 ---
 
-## Tools (47)
+## Model Proxy (NEW in v0.4.58)
+
+To solve the "Head-of-Line Blocking" problem in MCP stdio, Stravinsky now includes a dedicated **Model Proxy**.
+
+### The Problem:
+When Claude calls `invoke_gemini` directly through MCP, the entire stdio communication channel is blocked until the model finishes generating. This prevents parallel execution and makes the UI feel sluggish.
+
+### The Solution:
+The **Stravinsky Model Proxy** runs as a separate FastAPI process. Model requests are offloaded to this process, allowing the MCP bridge to handle other tool calls immediately.
+
+### Performance Benefits:
+- **Async Concurrency**: Handle 20+ simultaneous model calls with <10ms overhead.
+- **Zero CLI Blocking**: Keep the main Claude CLI responsive during long generations.
+- **Observability**: Real-time request tracking, Process-Time headers, and trace IDs.
+
+### Usage:
+1. **Start the Proxy** in a separate terminal:
+   ```bash
+   stravinsky-proxy
+   ```
+2. **Enable in Claude**: Set the environment variable:
+   ```bash
+   export STRAVINSKY_USE_PROXY=true
+   ```
+
+---
+
+## Features
 
 | Category         | Tools                                                                              |
 | ---------------- | ---------------------------------------------------------------------------------- |

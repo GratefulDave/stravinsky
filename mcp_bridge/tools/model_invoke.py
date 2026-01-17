@@ -560,30 +560,19 @@ async def invoke_gemini(
 ) -> str:
     """
     Invoke a Gemini model with the given prompt.
-
-    Supports two authentication methods (OAuth-first with API fallback):
-    1. OAuth (PRIMARY): Use Google OAuth via Antigravity (requires stravinsky-auth login gemini)
-    2. API Key (FALLBACK): Set GEMINI_API_KEY or GOOGLE_API_KEY in environment
-       - Used automatically on OAuth 429 rate limit (5-minute cooldown, then retries OAuth)
-
-    Supports vision API for image/PDF analysis when image_path is provided.
-
-    Args:
-        token_store: Token store for OAuth credentials
-        prompt: The prompt to send to Gemini
-        model: Gemini model to use
-        temperature: Sampling temperature (0.0-2.0)
-        max_tokens: Maximum tokens in response
-        thinking_budget: Tokens reserved for internal reasoning
-        image_path: Optional path to image/PDF for vision analysis (token optimization)
-
-    Returns:
-        The model's response text.
-
-    Raises:
-        ValueError: If not authenticated with Gemini
-        httpx.HTTPStatusError: If API request fails
     """
+    from mcp_bridge.proxy.client import is_proxy_enabled, proxy_invoke_gemini
+
+    if is_proxy_enabled():
+        return await proxy_invoke_gemini(
+            prompt=prompt,
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            thinking_budget=thinking_budget,
+            image_path=image_path,
+        )
+
     logger.info(f"[DEBUG] invoke_gemini called, uuid module check: {uuid}")
     # Execute pre-model invoke hooks
     params = {
@@ -1300,28 +1289,22 @@ async def invoke_gemini_agentic(
 ) -> str:
     """
     Invoke Gemini with function calling for agentic tasks.
-
-    This function implements a multi-turn agentic loop:
-    1. Send prompt with tool definitions
-    2. If model returns FunctionCall, execute the tool
-    3. Send FunctionResponse back to model
-    4. Repeat until model returns text or max_turns reached
-
-    Supports two authentication methods (OAuth-first with API fallback):
-    1. OAuth (PRIMARY): Use Google OAuth via Antigravity (requires stravinsky-auth login gemini)
-    2. API Key (FALLBACK): Set GEMINI_API_KEY or GOOGLE_API_KEY in environment
-       - Used automatically on OAuth 429 rate limit (5-minute cooldown, then retries OAuth)
-
-    Args:
-        token_store: Token store for OAuth credentials
-        prompt: The task prompt
-        model: Gemini model to use
-        max_turns: Maximum number of tool-use turns
-        timeout: Request timeout in seconds
-
-    Returns:
-        Final text response from the model
     """
+    from mcp_bridge.proxy.client import is_proxy_enabled, PROXY_URL
+
+    if is_proxy_enabled():
+        import httpx
+        async with httpx.AsyncClient(timeout=float(timeout) + 10) as client:
+            payload = {
+                "prompt": prompt,
+                "model": model,
+                "max_turns": max_turns,
+                "timeout": timeout
+            }
+            response = await client.post(f"{PROXY_URL}/v1/gemini/agentic", json=payload)
+            response.raise_for_status()
+            return response.json()["response"]
+
     import sys
 
     # Get API key from environment (loaded from ~/.stravinsky/.env)
@@ -1582,23 +1565,19 @@ async def invoke_openai(
 ) -> str:
     """
     Invoke an OpenAI model with the given prompt.
-
-    Args:
-        token_store: Token store for API key
-        prompt: The prompt to send to OpenAI
-        model: OpenAI model to use
-        temperature: Sampling temperature (0.0-2.0)
-        max_tokens: Maximum tokens in response
-        thinking_budget: Legacy parameter for high reasoning
-        reasoning_effort: Effort level for reasoning models (low, medium, high)
-
-    Returns:
-        The model's response text.
-
-    Raises:
-        ValueError: If not authenticated with OpenAI
-        httpx.HTTPStatusError: If API request fails
     """
+    from mcp_bridge.proxy.client import is_proxy_enabled, proxy_invoke_openai
+
+    if is_proxy_enabled():
+        return await proxy_invoke_openai(
+            prompt=prompt,
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            thinking_budget=thinking_budget,
+            reasoning_effort=reasoning_effort,
+        )
+
     # Execute pre-model invoke hooks
     params = {
         "prompt": prompt,

@@ -26,5 +26,8 @@ The goal is to transform Stravinsky from a model-invocation bridge into a compre
 *   **Unified Settings:** Move towards a standardized configuration structure (e.g., `settings.json` and agent manifests) that aligns with modern Claude Code orchestration conventions.
 *   **OAuth Backbone:** Maintain and further stabilize Stravinsky's secure OAuth flow and token management as the underlying infrastructure for all external model interactions.
 
+### 5. Native Performance Layer
+*   **Rust Migration:** Migrate latency-sensitive operations (Search, AST parsing, File Watching) to a native Rust module to ensure sub-microsecond overhead and robust concurrency.
+
 ## Target User
 Senior software engineers and AI enthusiasts using Claude Code who require a powerful, extensible, and multi-model orchestration environment that rivals the depth of specialized open-source tools.

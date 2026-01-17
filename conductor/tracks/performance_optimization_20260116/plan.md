@@ -22,10 +22,10 @@
 - [x] Task: Integrate Caching into Read Tools. [7c05558]
     - [x] Wrap `read_file` and `list_directory` with caching logic.
     - [x] Write tests verifying that subsequent reads hit the cache.
-- [ ] Task: Implement Write-Through Invalidation.
-    - [ ] Add `cache.invalidate()` calls to `write_file` and `replace`.
-    - [ ] Add invalidation to `run_shell_command` (broad invalidation if command looks like a write).
-    - [ ] Verify cache consistency after a file write.
+- [x] Task: Implement Write-Through Invalidation. [96f70fc]
+    - [x] Add `cache.invalidate()` calls to `write_file` and `replace`.
+    - [x] Add invalidation to `run_shell_command` (broad invalidation if command looks like a write).
+    - [x] Verify cache consistency after a file write.
 - [ ] Task: Conductor - User Manual Verification 'Smart I/O Caching' (Protocol in workflow.md)
 
 ## Phase 3: Verification & Benchmarking

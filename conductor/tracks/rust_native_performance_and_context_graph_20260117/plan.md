@@ -19,4 +19,4 @@
 - [x] Task: Update `mcp_bridge/tools/search_enhancements.py` to respect the config toggle and use `get_hybrid_context`.
 - [x] Task: Update `find_code.py` to expose the new logic safely.
 - [x] Task: Write comprehensive tests covering the config toggle (enabled/disabled) and the scoring logic (mocking git/files).
-- [ ] Task: Conductor - User Manual Verification 'Phase 3: Integration & Safety' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Phase 3: Integration & Safety' (Protocol in workflow.md)

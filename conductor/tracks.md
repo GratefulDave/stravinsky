@@ -10,8 +10,3 @@ This file tracks all major tracks for the project. Each track has its own detail
 - [x] **Track: Implement Hard Enforcement and Advanced Capabilities**
   *Link: [./conductor/tracks/advanced_capabilities_20260116/](./conductor/tracks/advanced_capabilities_20260116/)*
 
----
-
-- [x] **Track: Parallel & Non-Blocking Execution**
-  *Link: [./conductor/tracks/parallel_execution_20260116/](./conductor/tracks/parallel_execution_20260116/)*
-

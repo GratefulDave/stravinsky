@@ -29,11 +29,11 @@
 - [x] Task: Conductor - User Manual Verification 'AST Chunking Migration' (Protocol in workflow.md) [checkpoint: 27914f3]
 
 ## Phase 4: Native File Watcher
-- [~] Task: Implement File Watcher in Rust.
-    - [ ] Use `notify` crate to watch project root.
-    - [ ] Implement debouncing logic.
-    - [ ] Define IPC mechanism (likely stdout/stdin or shared file update) to signal Python.
-- [ ] Task: Integrate Watcher with Stravinsky.
-    - [ ] Create `start_watcher` hook in `mcp_bridge`.
-    - [ ] Ensure clean shutdown of Rust watcher process.
-- [ ] Task: Conductor - User Manual Verification 'Native File Watcher' (Protocol in workflow.md)
+- [x] Task: Implement File Watcher in Rust. [360db85]
+    - [x] Use `notify` crate to watch project root.
+    - [x] Implement debouncing logic.
+    - [x] Define IPC mechanism (likely stdout/stdin or shared file update) to signal Python.
+- [x] Task: Integrate Watcher with Stravinsky. [360db85]
+    - [x] Create `start_watcher` hook in `mcp_bridge`.
+    - [x] Ensure clean shutdown of Rust watcher process.
+- [~] Task: Conductor - User Manual Verification 'Native File Watcher' (Protocol in workflow.md)

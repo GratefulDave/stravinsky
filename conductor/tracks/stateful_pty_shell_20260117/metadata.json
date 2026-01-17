@@ -1,0 +1,8 @@
+{
+  "track_id": "stateful_pty_shell_20260117",
+  "type": "feature",
+  "status": "new",
+  "created_at": "2026-01-17T18:22:04.815900",
+  "updated_at": "2026-01-17T18:22:04.815902",
+  "description": "Develop a Rust-based PTY manager to support stateful shell sessions (cd, exports) for agents."
+}

@@ -1,0 +1,8 @@
+{
+  "track_id": "agent_parity_and_hardening_20260117",
+  "type": "feature",
+  "status": "new",
+  "created_at": "2026-01-17T18:22:04.834601",
+  "updated_at": "2026-01-17T18:22:04.834604",
+  "description": "Align agent workflows with OMO standards (Momus/Sisyphus) to ensure high-quality, autonomous task execution."
+}

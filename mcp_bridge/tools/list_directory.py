@@ -11,7 +11,7 @@ async def list_directory(path: str) -> str:
     print(f"📂 LIST: {path}", file=sys.stderr)
 
     cache = IOCache.get_instance()
-    cache_key = f"list_dir:{os.path.abspath(path)}"
+    cache_key = f"list_dir:{os.path.realpath(path)}"
     
     cached_result = cache.get(cache_key)
     if cached_result:

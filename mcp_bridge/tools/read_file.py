@@ -19,7 +19,7 @@ async def read_file(
     print(f"📖 READ: {path} (offset={offset}, limit={limit})", file=sys.stderr)
 
     cache = IOCache.get_instance()
-    cache_key = f"read_file:{os.path.abspath(path)}:{offset}:{limit}:{max_chars}"
+    cache_key = f"read_file:{os.path.realpath(path)}:{offset}:{limit}:{max_chars}"
     
     cached_result = cache.get(cache_key)
     if cached_result:

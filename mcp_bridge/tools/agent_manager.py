@@ -19,6 +19,8 @@ from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any, Optional, List, Dict
+import subprocess
+from .mux_client import get_mux, MuxClient
 
 logger = logging.getLogger(__name__)
 
@@ -312,6 +314,29 @@ class AgentManager:
             self._sync_cleanup(max_age_minutes=30)
         except Exception:
             pass
+            
+        self._ensure_sidecar_running()
+
+    def _ensure_sidecar_running(self):
+        """Start the Go sidecar if not running."""
+        # Simple check: is socket present?
+        if os.path.exists("/tmp/stravinsky.sock"):
+            return
+
+        mux_path = Path.cwd() / "dist" / "stravinsky-mux"
+        if mux_path.exists():
+            try:
+                subprocess.Popen(
+                    [str(mux_path)],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    start_new_session=True
+                )
+                logger.info("Started stravinsky-mux sidecar")
+                # Wait briefly for socket
+                time.sleep(0.5)
+            except Exception as e:
+                logger.error(f"Failed to start sidecar: {e}")
 
     def _sync_cleanup(self, max_age_minutes: int = 30):
         tasks = self._load_tasks()
@@ -483,43 +508,71 @@ class AgentManager:
 
             self._processes[task_id] = process
             self._update_task(task_id, pid=process.pid)
-
+            
+            # Streaming read loop for Mux
+            stdout_buffer = []
+            stderr_buffer = []
+            mux = MuxClient(task_id)
+            mux.connect()
+            
+            async def read_stream(stream, buffer, stream_name):
+                while True:
+                    line = await stream.readline()
+                    if not line:
+                        break
+                    decoded = line.decode('utf-8', errors='replace')
+                    buffer.append(decoded)
+                    mux.log(decoded.strip(), stream_name)
+            
             try:
-                stdout_bytes, stderr_bytes = await asyncio.wait_for(process.communicate(), timeout=timeout)
-                stdout = stdout_bytes.decode('utf-8', errors='replace')
-                stderr = stderr_bytes.decode('utf-8', errors='replace')
-                
-                if stderr:
-                    log_file.write_text(stderr)
-
-                if process.returncode == 0:
-                    output_file.write_text(stdout)
-                    self._update_task(
-                        task_id,
-                        status="completed",
-                        result=stdout.strip(),
-                        completed_at=datetime.now().isoformat(),
-                    )
-                else:
-                    error_msg = f"Exit code {process.returncode}\n{stderr}"
-                    output_file.write_text(f"❌ ERROR: {error_msg}")
-                    self._update_task(
-                        task_id,
-                        status="failed",
-                        error=error_msg,
-                        completed_at=datetime.now().isoformat(),
-                    )
-
+                await asyncio.wait_for(
+                    asyncio.gather(
+                        read_stream(process.stdout, stdout_buffer, "stdout"),
+                        read_stream(process.stderr, stderr_buffer, "stderr"),
+                        process.wait()
+                    ),
+                    timeout=timeout
+                )
             except asyncio.TimeoutError:
                 try:
                     os.killpg(os.getpgid(process.pid), signal.SIGKILL)
                 except: pass
+                # Clean up streams
                 await process.wait()
                 error_msg = f"Timed out after {timeout}s"
                 output_file.write_text(f"❌ TIMEOUT: {error_msg}")
                 self._update_task(task_id, status="failed", error=error_msg, completed_at=datetime.now().isoformat())
+                return
+
+            stdout = "".join(stdout_buffer)
+            stderr = "".join(stderr_buffer)
+            
+            if stderr:
+                log_file.write_text(stderr)
+
+            if process.returncode == 0:
+                output_file.write_text(stdout)
+                self._update_task(
+                    task_id,
+                    status="completed",
+                    result=stdout.strip(),
+                    completed_at=datetime.now().isoformat(),
+                )
+            else:
+                error_msg = f"Exit code {process.returncode}\n{stderr}"
+                output_file.write_text(f"❌ ERROR: {error_msg}")
+                self._update_task(
+                    task_id,
+                    status="failed",
+                    error=error_msg,
+                    completed_at=datetime.now().isoformat(),
+                )
 
         except asyncio.CancelledError:
+            
+            
+
+            
             try:
                 if task_id in self._processes:
                     proc = self._processes[task_id]

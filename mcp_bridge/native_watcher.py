@@ -61,13 +61,37 @@ class NativeFileWatcher:
     def stop(self):
         """Stop the native watcher process."""
         self._stop_event.set()
+        
         if self.process:
+            logger.info(f"Stopping native watcher process (PID: {self.process.pid})")
+            # Try to terminate gracefully first
             self.process.terminate()
             try:
-                self.process.wait(timeout=2)
+                self.process.wait(timeout=1.0)
             except subprocess.TimeoutExpired:
+                logger.warning(f"Native watcher (PID: {self.process.pid}) did not terminate, killing...")
                 self.process.kill()
+                try:
+                    self.process.wait(timeout=1.0)
+                except subprocess.TimeoutExpired:
+                    logger.error(f"Failed to kill native watcher (PID: {self.process.pid})")
+            
+            # Close streams
+            if self.process.stdout:
+                self.process.stdout.close()
+            if self.process.stderr:
+                self.process.stderr.close()
+                
             self.process = None
+            
+        # Wait for reader thread to exit
+        if self._thread and self._thread.is_alive():
+            # Don't join with timeout in main thread if it might block,
+            # but since we closed stdout, the reader loop should break.
+            self._thread.join(timeout=1.0)
+            if self._thread.is_alive():
+                logger.warning("Native watcher reader thread did not exit cleanly")
+            self._thread = None
 
     def _read_stdout(self):
         """Read JSON events from the watcher's stdout."""

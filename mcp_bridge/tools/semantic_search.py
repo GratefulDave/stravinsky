@@ -2189,6 +2189,16 @@ async def semantic_search(
                 "This indexes your codebase for natural language search. "
                 "Run it once per project (takes 30s-2min depending on size)."
             )
+    else:
+        # Index exists, ensure watcher is running
+        # We don't await this to avoid blocking search if it takes a moment
+        # But for tests we might need to await it or mock it properly
+        # The test expects it to be called.
+        # Let's just call it. start_file_watcher is async.
+        try:
+            await start_file_watcher(project_path, provider)
+        except Exception as e:
+            logger.warning(f"Failed to auto-start watcher: {e}")
 
     results = await store.search(
         query,

@@ -26,7 +26,7 @@ from pathlib import Path
 STRAVINSKY_MODE_FILE = Path.home() / ".stravinsky_mode"
 
 # ULTRAWORK mode pattern for aggressive parallel execution
-ULTRAWORK_PATTERN = r"\bultrawork\b"
+ULTRAWORK_PATTERN = r"\b(ultrawork|ulw|uw)\b"
 
 
 # Use CLAUDE_CWD for reliable project directory resolution
@@ -46,12 +46,14 @@ def detect_ultrawork_mode(prompt):
 
 
 def detect_stravinsky_invocation(prompt):
-    """Detect if /stravinsky skill is being invoked."""
+    """Detect if /strav or /stravinsky skill is being invoked."""
     patterns = [
         r"/stravinsky",
+        r"/strav\b",
         r"<command-name>/stravinsky</command-name>",
+        r"<command-name>/strav</command-name>",
         r"stravinsky orchestrator",
-        r"\bultrawork\b",
+        r"\b(ultrawork|ulw|uw)\b",
     ]
     prompt_lower = prompt.lower()
     return any(re.search(p, prompt_lower) for p in patterns)

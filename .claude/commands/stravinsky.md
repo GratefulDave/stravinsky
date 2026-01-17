@@ -1,5 +1,5 @@
 ---
-name: strav
+name: stravinsky
 description: |
   Stravinsky task orchestrator and parallel execution specialist.
 ---

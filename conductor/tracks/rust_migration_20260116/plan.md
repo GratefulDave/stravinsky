@@ -8,15 +8,15 @@
 - [x] Task: Conductor - User Manual Verification 'Environment & Scaffolding' (Protocol in workflow.md) [checkpoint: 5949e1f]
 
 ## Phase 2: Search Tools Migration
-- [ ] Task: Implement `grep_search` and `glob_files` in Rust.
-    - [ ] Integrate `ignore` and `globset` crates.
-    - [ ] Expose functions via PyO3.
-    - [ ] Write Rust unit tests for search logic.
-- [ ] Task: Wire Rust Search into `mcp_bridge`.
-    - [ ] Create `mcp_bridge/native_search.py` wrapper.
-    - [ ] Update `mcp_bridge/tools/code_search.py` to optionally use native implementation.
-    - [ ] Verify `test_code_search.py` passes.
-- [ ] Task: Conductor - User Manual Verification 'Search Tools Migration' (Protocol in workflow.md)
+- [x] Task: Implement `grep_search` and `glob_files` in Rust. [5cf709e]
+    - [x] Integrate `ignore` and `globset` crates.
+    - [x] Expose functions via PyO3.
+    - [x] Write Rust unit tests for search logic.
+- [x] Task: Wire Rust Search into `mcp_bridge`. [5b21b9c]
+    - [x] Create `mcp_bridge/native_search.py` wrapper.
+    - [x] Update `mcp_bridge/tools/code_search.py` to optionally use native implementation.
+    - [x] Verify `test_code_search.py` passes.
+- [x] Task: Conductor - User Manual Verification 'Search Tools Migration' (Protocol in workflow.md) [checkpoint: 5b21b9c]
 
 ## Phase 3: AST Chunking Migration
 - [ ] Task: Implement `tree-sitter` chunking in Rust.

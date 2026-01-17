@@ -1,7 +1,7 @@
 [project]
 name = "stravinsky"
-version = "0.4.60"
-description = "MCP Bridge for Claude Code with Multi-Model Support. Install globally: claude mcp add --scope user stravinsky -- uvx stravinsky. Add to CLAUDE.md: See https://pypi.org/project/stravinsky/"
+version = "0.4.61"
+description = "A sophisticated MCP bridge for Claude Code orchestration"
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
 license = {text = "MIT"}

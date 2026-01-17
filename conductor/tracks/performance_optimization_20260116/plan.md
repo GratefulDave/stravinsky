@@ -14,7 +14,7 @@
     - [x] Verify `grep` and `ls` outputs are correctly capped.
 - [x] Task: Conductor - User Manual Verification 'Smart Truncation' (Protocol in workflow.md)
 
-## Phase 2: Smart I/O Caching Layer
+## Phase 2: Smart I/O Caching Layer [checkpoint: 76b0ea6]
 - [x] Task: Implement `IOCache` utility. [fc38c93]
     - [x] Create `mcp_bridge/utils/cache.py` with TTL-based storage.
     - [x] Implement `get`, `set`, and `invalidate(path)` methods.
@@ -26,7 +26,7 @@
     - [x] Add `cache.invalidate()` calls to `write_file` and `replace`.
     - [x] Add invalidation to `run_shell_command` (broad invalidation if command looks like a write).
     - [x] Verify cache consistency after a file write.
-- [ ] Task: Conductor - User Manual Verification 'Smart I/O Caching' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Smart I/O Caching' (Protocol in workflow.md)
 
 ## Phase 3: Verification & Benchmarking
 - [ ] Task: Performance Benchmarking.

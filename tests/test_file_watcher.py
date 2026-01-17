@@ -10,25 +10,29 @@ Tests cover:
 """
 
 import asyncio
-import sys
-import tempfile
 import time
+import tempfile
 from pathlib import Path
-
+from unittest.mock import MagicMock, patch
 import pytest
 
 from mcp_bridge.tools.semantic_search import (
     CodebaseFileWatcher,
     CodebaseVectorStore,
-    get_file_watcher,
-    list_file_watchers,
     start_file_watcher,
     stop_file_watcher,
+    get_file_watcher,
+    list_file_watchers,
 )
 
+# Force CodebaseFileWatcher to use watchdog by mocking NativeFileWatcher failure
+@pytest.fixture(autouse=True)
+def disable_native_watcher():
+    with patch("mcp_bridge.tools.semantic_search.NativeFileWatcher", side_effect=ImportError("Disabled for tests")):
+        yield
 
 @pytest.fixture
-def temp_project():
+def temp_project(tmp_path):
     """Create a temporary project directory with Python files."""
     with tempfile.TemporaryDirectory() as tmpdir:
         project_path = Path(tmpdir)

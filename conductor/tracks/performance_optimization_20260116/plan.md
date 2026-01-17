@@ -15,10 +15,10 @@
 - [x] Task: Conductor - User Manual Verification 'Smart Truncation' (Protocol in workflow.md)
 
 ## Phase 2: Smart I/O Caching Layer
-- [ ] Task: Implement `IOCache` utility.
-    - [ ] Create `mcp_bridge/utils/cache.py` with TTL-based storage.
-    - [ ] Implement `get`, `set`, and `invalidate(path)` methods.
-    - [ ] Write unit tests for TTL expiration and manual invalidation.
+- [x] Task: Implement `IOCache` utility. [fc38c93]
+    - [x] Create `mcp_bridge/utils/cache.py` with TTL-based storage.
+    - [x] Implement `get`, `set`, and `invalidate(path)` methods.
+    - [x] Write unit tests for TTL expiration and manual invalidation.
 - [ ] Task: Integrate Caching into Read Tools.
     - [ ] Wrap `read_file` and `list_directory` with caching logic.
     - [ ] Write tests verifying that subsequent reads hit the cache.

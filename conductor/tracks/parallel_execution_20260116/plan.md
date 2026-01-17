@@ -1,15 +1,15 @@
 # Implementation Plan - Track: parallel_execution_20260116
 
-## Phase 1: Async Subprocess Infrastructure
-- [ ] Task: Create Async Process Wrapper.
-    - [ ] Create `mcp_bridge/utils/process.py`.
-    - [ ] Implement `async_execute(cmd, timeout)` using `asyncio.create_subprocess_exec`.
-    - [ ] Write unit tests for successful execution, timeout handling, and error capture.
-- [ ] Task: Refactor Search Tools.
-    - [ ] Update `mcp_bridge/tools/code_search.py` to use `async_execute`.
-    - [ ] Update `mcp_bridge/tools/find_code.py` for full async compatibility.
-    - [ ] Verify non-blocking behavior by running a long `grep` and a fast `glob` simultaneously.
-- [ ] Task: Conductor - User Manual Verification 'Async Subprocess Migration' (Protocol in workflow.md)
+## Phase 1: Async Subprocess Infrastructure [checkpoint: 9f66f25]
+- [x] Task: Create Async Process Wrapper. [e3a912b]
+    - [x] Create `mcp_bridge/utils/process.py`.
+    - [x] Implement `async_execute(cmd, timeout)` using `asyncio.create_subprocess_exec`.
+    - [x] Write unit tests for successful execution, timeout handling, and error capture.
+- [x] Task: Refactor Search Tools. [9f66f25]
+    - [x] Update `mcp_bridge/tools/code_search.py` to use `async_execute`.
+    - [x] Update `mcp_bridge/tools/find_code.py` for full async compatibility.
+    - [x] Verify non-blocking behavior by running a long `grep` and a fast `glob` simultaneously.
+- [x] Task: Conductor - User Manual Verification 'Async Subprocess Migration' (Protocol in workflow.md)
 
 ## Phase 2: Native Threading & FFI Offloading
 - [ ] Task: Implement Threaded FFI Layer.

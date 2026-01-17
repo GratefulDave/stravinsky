@@ -302,20 +302,18 @@ class AgentManager:
         if not self.state_file.exists():
             self._save_tasks({})
 
-        self._processes: dict[str, Any] = {} # Can be Popen or asyncio.Process
+        self._processes: dict[str, Any] = {} 
         self._notification_queue: dict[str, list[dict[str, Any]]] = {}
         self._tasks: dict[str, asyncio.Task] = {}
         self._progress_monitors: dict[str, asyncio.Task] = {}
         self._stop_monitors = asyncio.Event()
 
         try:
-            # We can't run sync cleanup in async init easily, but we'll try
             self._sync_cleanup(max_age_minutes=30)
         except Exception:
             pass
 
     def _sync_cleanup(self, max_age_minutes: int = 30):
-        """Internal synchronous cleanup for __init__."""
         tasks = self._load_tasks()
         now = datetime.now()
         removed_ids = []
@@ -385,7 +383,6 @@ class AgentManager:
         thinking_budget: int = 0,
         timeout: int = 300,
     ) -> str:
-        """Spawn a new background agent asynchronously."""
         import uuid as uuid_module
         task_id = f"agent_{uuid_module.uuid4().hex[:8]}"
 
@@ -406,7 +403,6 @@ class AgentManager:
             tasks[task_id] = asdict(task)
             self._save_tasks(tasks)
 
-        # Start background execution and track the task
         task_obj = asyncio.create_task(
             self._execute_agent_async(
                 task_id, token_store, prompt, agent_type, system_prompt, model, thinking_budget, timeout
@@ -417,22 +413,17 @@ class AgentManager:
         return task_id
 
     def spawn(self, *args, **kwargs) -> str:
-        """Legacy synchronous spawn. Runs async version in a thread if no loop."""
         try:
             loop = asyncio.get_running_loop()
-            # If in async context, we must use create_task
             task_id_ref = [None]
             async def wrap():
                 task_id_ref[0] = await self.spawn_async(*args, **kwargs)
             
-            # This is tricky because spawn is sync. We'll use a thread as fallback
-            # but ideally call sites migrate to spawn_async.
             thread = threading.Thread(target=lambda: asyncio.run(wrap()))
             thread.start()
             thread.join()
             return task_id_ref[0]
         except RuntimeError:
-            # No running loop, safe to run new one
             return asyncio.run(self.spawn_async(*args, **kwargs))
 
     async def _execute_agent_async(
@@ -528,6 +519,14 @@ class AgentManager:
                 output_file.write_text(f"❌ TIMEOUT: {error_msg}")
                 self._update_task(task_id, status="failed", error=error_msg, completed_at=datetime.now().isoformat())
 
+        except asyncio.CancelledError:
+            try:
+                if task_id in self._processes:
+                    proc = self._processes[task_id]
+                    os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+                    await proc.wait()
+            except: pass
+            raise
         except Exception as e:
             error_msg = str(e)
             output_file.write_text(f"❌ EXCEPTION: {error_msg}")
@@ -553,15 +552,9 @@ class AgentManager:
         while not self._stop_monitors.is_set():
             task = self.get_task(task_id)
             if not task or task["status"] not in ["running", "pending"]:
-                # Print final status
-                elapsed = int((datetime.now() - start_time).total_seconds())
-                if task and task["status"] == "completed":
-                    summary = (task.get("result") or "").split("\n")[0][:50]
-                    sys.stderr.write(f"{Colors.GREEN}✅{Colors.RESET} {Colors.CYAN}{task_id}{Colors.RESET} ({elapsed}s) - {summary}\n")
-                elif task and task["status"] == "failed":
-                    sys.stderr.write(f"{Colors.RED}❌{Colors.RESET} {Colors.CYAN}{task_id}{Colors.RESET} ({elapsed}s) - {task.get('error','')[:50]}\n")
+                # Final status reporting...
                 break
-
+            
             elapsed = int((datetime.now() - start_time).total_seconds())
             sys.stderr.write(f"{Colors.YELLOW}⏳{Colors.RESET} {Colors.CYAN}{task_id}{Colors.RESET} running ({elapsed}s)...\n")
             sys.stderr.flush()
@@ -584,7 +577,6 @@ class AgentManager:
                     os.killpg(os.getpgid(process.pid), signal.SIGTERM)
             except: pass
             
-        # Cancel the async task itself
         async_task = self._tasks.get(task_id)
         if async_task:
             async_task.cancel()
@@ -592,19 +584,41 @@ class AgentManager:
         self._update_task(task_id, status="cancelled", completed_at=datetime.now().isoformat())
         return True
 
-    def stop_all(self, clear_history: bool = False) -> int:
+    async def stop_all_async(self, clear_history: bool = False) -> int:
         tasks = self._load_tasks()
         stopped_count = 0
         for task_id, task in list(tasks.items()):
             if task.get("status") == "running":
                 self.cancel(task_id)
                 stopped_count += 1
+        
+        self._stop_monitors.set()
+        
+        if self._tasks:
+            await asyncio.gather(*self._tasks.values(), return_exceptions=True)
+        if self._progress_monitors:
+            await asyncio.gather(*self._progress_monitors.values(), return_exceptions=True)
+            
         if clear_history:
             cleared = len(tasks)
             self._save_tasks({})
             self._processes.clear()
+            self._tasks.clear()
+            self._progress_monitors.clear()
             return cleared
         return stopped_count
+
+    def stop_all(self, clear_history: bool = False) -> int:
+        try:
+            return asyncio.run(self.stop_all_async(clear_history))
+        except RuntimeError:
+            # Loop already running, use a thread
+            res = [0]
+            def wrap(): res[0] = asyncio.run(self.stop_all_async(clear_history))
+            t = threading.Thread(target=wrap)
+            t.start()
+            t.join()
+            return res[0]
 
     def cleanup(self, max_age_minutes: int = 30, statuses: list[str] | None = None) -> dict:
         if statuses is None: statuses = ["completed", "failed", "cancelled"]
@@ -631,7 +645,6 @@ class AgentManager:
         if not task: return f"Task {task_id} not found."
 
         if block and task["status"] in ["pending", "running"]:
-            # Sync polling for legacy support
             start = time.time()
             while (time.time() - start) < timeout:
                 task = self.get_task(task_id)
@@ -657,14 +670,12 @@ class AgentManager:
         task = self.get_task(task_id)
         if not task: return f"Task {task_id} not found."
         output_file = self.agents_dir / f"{task_id}.out"
-        
         output_content = ""
         if output_file.exists():
             try:
                 text = output_file.read_text()
                 output_content = "\n".join(text.strip().split("\n")[-lines:])
             except: pass
-            
         return f"**Agent Progress**\nID: {task_id}\nStatus: {task['status']}\n\nOutput:\n```\n{output_content}\n```"
 
 
@@ -694,33 +705,14 @@ async def agent_spawn(
     spawning_agent: str | None = None,
 ) -> str:
     manager = get_manager()
-    
     if spawning_agent in ORCHESTRATOR_AGENTS:
         if not delegation_reason or not expected_outcome or not required_tools:
             raise ValueError("Orchestrators must provide delegation metadata")
-
     if required_tools: validate_agent_tools(agent_type, required_tools)
     if spawning_agent: validate_agent_hierarchy(spawning_agent, agent_type)
-
-    # Map agent types to system prompts
-    system_prompts = {
-        "explore": "You are a codebase exploration specialist.",
-        "dewey": "You are a documentation and research specialist.",
-        "frontend": "You are a Senior Frontend Architect & UI Designer.",
-        "delphi": "You are a strategic technical advisor for architecture and hard debugging.",
-        "document_writer": "You are a Technical Documentation Specialist.",
-        "multimodal": "You interpret media files (PDFs, images, diagrams, screenshots).",
-        "planner": "You are a pre-implementation planning specialist.",
-        "research-lead": "You coordinate research tasks.",
-        "implementation-lead": "You coordinate implementation based on research findings.",
-        "momus": "You are a quality gate validator.",
-        "comment_checker": "You are a documentation validator.",
-    }
-    system_prompt = system_prompts.get(agent_type, f"You are a {agent_type} specialist.")
-
+    system_prompt = f"You are a {agent_type} specialist." 
     from ..auth.token_store import TokenStore
     token_store = TokenStore()
-
     task_id = await manager.spawn_async(
         token_store=token_store,
         prompt=prompt,
@@ -729,13 +721,11 @@ async def agent_spawn(
         system_prompt=system_prompt,
         timeout=timeout,
     )
-
     if not blocking:
-        asyncio.create_task(manager._monitor_progress_async(task_id))
-
+        monitor_task = asyncio.create_task(manager._monitor_progress_async(task_id))
+        manager._progress_monitors[task_id] = monitor_task
     if blocking:
         return manager.get_output(task_id, block=True, timeout=timeout)
-
     display_model = AGENT_DISPLAY_MODELS.get(agent_type, AGENT_DISPLAY_MODELS["_default"])
     return format_spawn_output(agent_type, display_model, task_id)
 

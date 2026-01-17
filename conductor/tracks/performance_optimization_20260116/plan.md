@@ -32,6 +32,6 @@
 - [x] Task: Performance Benchmarking. [6c8f711]
     - [x] Measure latency reduction for repeated `list_directory` calls.
     - [x] Measure token savings for large file reads.
-- [ ] Task: Integration Testing.
-    - [ ] Run end-to-end agentic tasks to ensure agents correctly "understand" truncation messages.
+- [x] Task: Integration Testing. [b44510f]
+    - [x] Run end-to-end agentic tasks to ensure agents correctly "understand" truncation messages.
 - [ ] Task: Conductor - User Manual Verification 'Verification & Benchmarking' (Protocol in workflow.md)

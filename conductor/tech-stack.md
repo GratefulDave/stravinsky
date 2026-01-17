@@ -11,6 +11,7 @@
 - **Model Context Protocol (MCP) SDK**: The foundation for building the bridge, facilitating communication between LLMs and local tools.
 - **FastAPI / Uvicorn**: Used to build and serve the high-performance asynchronous API for the MCP bridge.
 - **Pydantic**: Provides data validation and settings management using Python type annotations.
+- **Asyncio**: Core concurrency model for non-blocking I/O and subprocess management.
 
 ## Native Integration
 - **PyO3 / Maturin**: Facilitates seamless Python-Rust bindings, allowing high-performance native code to be called directly from Python.

@@ -32,6 +32,7 @@ The goal is to transform Stravinsky from a model-invocation bridge into a compre
 
 ### 6. Native Performance Layer
 *   **Rust Migration:** Migrate latency-sensitive operations (Search, AST parsing, File Watching) to a native Rust module to ensure sub-microsecond overhead and robust concurrency.
+*   **Async Core:** Fully asynchronous bridge architecture with non-blocking subprocess management and thread-pooled native FFI, enabling lag-free parallel agent orchestration.
 
 ## Target User
 Senior software engineers and AI enthusiasts using Claude Code who require a powerful, extensible, and multi-model orchestration environment that rivals the depth of specialized open-source tools.

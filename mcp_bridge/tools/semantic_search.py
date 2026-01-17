@@ -37,6 +37,7 @@ from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_ex
 
 from mcp_bridge.auth.token_store import TokenStore
 from mcp_bridge.tools.query_classifier import QueryCategory, classify_query
+from mcp_bridge.native_search import native_chunk_code
 
 logger = logging.getLogger(__name__)
 
@@ -1179,7 +1180,42 @@ class CodebaseVectorStore:
         rel_path = str(file_path.resolve().relative_to(self.project_path.resolve()))
         language = file_path.suffix.lstrip(".")
 
-        # Use AST-aware chunking for Python files
+        # Try native AST-aware chunking first
+        native_results = native_chunk_code(content, language)
+        if native_results:
+            chunks = []
+            for nc in native_results:
+                start_line = nc["start_line"]
+                end_line = nc["end_line"]
+                chunk_text = nc["content"]
+                content_hash = hashlib.md5(chunk_text.encode("utf-8")).hexdigest()[:12]
+                
+                node_type = nc.get("node_type", "unknown")
+                name = nc.get("name")
+                
+                if name:
+                    header = f"File: {rel_path}\n{node_type.capitalize()}: {name}\nLines: {start_line}-{end_line}"
+                else:
+                    header = f"File: {rel_path}\nLines: {start_line}-{end_line}"
+                
+                document = f"{header}\n\n{chunk_text}"
+                
+                chunks.append({
+                    "id": f"{rel_path}:{start_line}-{end_line}:{content_hash}",
+                    "document": document,
+                    "metadata": {
+                        "file_path": rel_path,
+                        "start_line": start_line,
+                        "end_line": end_line,
+                        "language": language,
+                        "node_type": node_type,
+                        "name": name or "",
+                    }
+                })
+            if chunks:
+                return chunks
+
+        # Use AST-aware chunking for Python files (fallback)
         if language == "py":
             chunks = self._chunk_python_ast(content, rel_path, language)
             if chunks:  # If AST parsing succeeded

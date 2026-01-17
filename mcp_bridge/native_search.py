@@ -44,3 +44,16 @@ def native_grep_search(pattern: str, directory: str = ".", case_sensitive: bool 
     except Exception as e:
         logger.error(f"Native grep_search failed: {e}")
         return None
+
+def native_chunk_code(content: str, language: str) -> Optional[List[Dict[str, Any]]]:
+    """
+    AST-aware code chunking using Rust/tree-sitter.
+    """
+    if not HAS_NATIVE:
+        return None
+    
+    try:
+        return stravinsky_native.chunk_code(content, language)
+    except Exception as e:
+        logger.error(f"Native chunk_code failed: {e}")
+        return None

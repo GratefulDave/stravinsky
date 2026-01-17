@@ -20,11 +20,11 @@
     - [x] Audit `mcp_bridge/tools/` for any direct `native_*` calls and ensure they are `await`ed.
 - [x] Task: Conductor - User Manual Verification 'Native Threading Layer' (Protocol in workflow.md)
 
-## Phase 3: Parallel Agent Orchestration
-- [ ] Task: Refactor Agent Spawning.
-    - [ ] Update `AgentManager._execute_agent` to be fully non-blocking.
-    - [ ] Ensure that the `threading.Thread` currently used in `AgentManager` is correctly integrated with the `asyncio` loop status.
-    - [ ] Test spawning 3 agents simultaneously in a single turn.
-- [ ] Task: Performance Audit.
-    - [ ] Use `asyncio` debug mode or custom timers to ensure the event loop is never blocked by tool calls.
-- [ ] Task: Conductor - User Manual Verification 'Parallel Orchestration' (Protocol in workflow.md)
+## Phase 3: Parallel Agent Orchestration [checkpoint: f342b83]
+- [x] Task: Refactor Agent Spawning. [f342b83]
+    - [x] Update `AgentManager._execute_agent` to be fully non-blocking.
+    - [x] Ensure that the `threading.Thread` currently used in `AgentManager` is correctly integrated with the `asyncio` loop status.
+    - [x] Test spawning 3 agents simultaneously in a single turn.
+- [x] Task: Performance Audit. [f342b83]
+    - [x] Use `asyncio` debug mode or custom timers to ensure the event loop is never blocked by tool calls.
+- [x] Task: Conductor - User Manual Verification 'Parallel Orchestration' (Protocol in workflow.md)

@@ -11,14 +11,14 @@
     - [x] Verify non-blocking behavior by running a long `grep` and a fast `glob` simultaneously.
 - [x] Task: Conductor - User Manual Verification 'Async Subprocess Migration' (Protocol in workflow.md)
 
-## Phase 2: Native Threading & FFI Offloading
-- [ ] Task: Implement Threaded FFI Layer.
-    - [ ] Update `mcp_bridge/native_search.py` to wrap all module calls in `run_in_executor`.
-    - [ ] Implement a singleton `get_executor()` for shared thread pool management.
-    - [ ] Write tests verifying that Rust calls now return `awaitable` objects.
-- [ ] Task: Update Call Sites.
-    - [ ] Audit `mcp_bridge/tools/` for any direct `native_*` calls and ensure they are `await`ed.
-- [ ] Task: Conductor - User Manual Verification 'Native Threading Layer' (Protocol in workflow.md)
+## Phase 2: Native Threading & FFI Offloading [checkpoint: 739c4e9]
+- [x] Task: Implement Threaded FFI Layer. [739c4e9]
+    - [x] Update `mcp_bridge/native_search.py` to wrap all module calls in `run_in_executor`.
+    - [x] Implement a singleton `get_executor()` for shared thread pool management.
+    - [x] Write tests verifying that Rust calls now return `awaitable` objects.
+- [x] Task: Update Call Sites. [739c4e9]
+    - [x] Audit `mcp_bridge/tools/` for any direct `native_*` calls and ensure they are `await`ed.
+- [x] Task: Conductor - User Manual Verification 'Native Threading Layer' (Protocol in workflow.md)
 
 ## Phase 3: Parallel Agent Orchestration
 - [ ] Task: Refactor Agent Spawning.

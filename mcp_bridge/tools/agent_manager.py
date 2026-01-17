@@ -406,12 +406,13 @@ class AgentManager:
             tasks[task_id] = asdict(task)
             self._save_tasks(tasks)
 
-        # Start background execution without waiting for it to finish
-        asyncio.create_task(
+        # Start background execution and track the task
+        task_obj = asyncio.create_task(
             self._execute_agent_async(
                 task_id, token_store, prompt, agent_type, system_prompt, model, thinking_budget, timeout
             )
         )
+        self._tasks[task_id] = task_obj
 
         return task_id
 
@@ -533,6 +534,7 @@ class AgentManager:
             self._update_task(task_id, status="failed", error=error_msg, completed_at=datetime.now().isoformat())
         finally:
             self._processes.pop(task_id, None)
+            self._tasks.pop(task_id, None)
             self._notify_completion(task_id)
 
     def _notify_completion(self, task_id: str):
@@ -581,6 +583,12 @@ class AgentManager:
                 if hasattr(process, 'pid'):
                     os.killpg(os.getpgid(process.pid), signal.SIGTERM)
             except: pass
+            
+        # Cancel the async task itself
+        async_task = self._tasks.get(task_id)
+        if async_task:
+            async_task.cancel()
+            
         self._update_task(task_id, status="cancelled", completed_at=datetime.now().isoformat())
         return True
 

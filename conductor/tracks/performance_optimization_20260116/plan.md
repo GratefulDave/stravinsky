@@ -19,9 +19,9 @@
     - [x] Create `mcp_bridge/utils/cache.py` with TTL-based storage.
     - [x] Implement `get`, `set`, and `invalidate(path)` methods.
     - [x] Write unit tests for TTL expiration and manual invalidation.
-- [ ] Task: Integrate Caching into Read Tools.
-    - [ ] Wrap `read_file` and `list_directory` with caching logic.
-    - [ ] Write tests verifying that subsequent reads hit the cache.
+- [x] Task: Integrate Caching into Read Tools. [7c05558]
+    - [x] Wrap `read_file` and `list_directory` with caching logic.
+    - [x] Write tests verifying that subsequent reads hit the cache.
 - [ ] Task: Implement Write-Through Invalidation.
     - [ ] Add `cache.invalidate()` calls to `write_file` and `replace`.
     - [ ] Add invalidation to `run_shell_command` (broad invalidation if command looks like a write).

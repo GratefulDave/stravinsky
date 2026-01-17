@@ -1,8 +1,9 @@
 from .events import EventType, HookPolicy, PolicyResult, ToolCallEvent
+from ..utils.truncation import truncate_output, TruncationStrategy
 
 
 class TruncationPolicy(HookPolicy):
-    def __init__(self, max_chars: int = 30000):
+    def __init__(self, max_chars: int = 20000):
         self.max_chars = max_chars
 
     @property
@@ -13,11 +14,17 @@ class TruncationPolicy(HookPolicy):
         if not event.output or len(event.output) <= self.max_chars:
             return PolicyResult(modified_data=event.output)
 
-        header = f"[TRUNCATED - {len(event.output)} chars reduced to {self.max_chars}]\n"
-        footer = "\n...[TRUNCATED]"
-        truncated = event.output[:self.max_chars]
+        # Skip truncation for read_file since it handles its own truncation with log-awareness
+        if event.tool_name == "read_file":
+            return PolicyResult(modified_data=event.output)
 
-        modified = header + truncated + footer
+        # Use middle truncation for general tool outputs
+        modified = truncate_output(
+            event.output, 
+            limit=self.max_chars, 
+            strategy=TruncationStrategy.MIDDLE
+        )
+        
         return PolicyResult(
             modified_data=modified,
             message=modified,  # Message is what gets printed in run_as_native

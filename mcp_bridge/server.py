@@ -225,6 +225,15 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 directory=arguments.get("directory", "."),
             )
 
+        elif name == "read_file":
+            from .tools.read_file import read_file
+
+            result_content = await read_file(
+                path=arguments["path"],
+                offset=arguments.get("offset", 0),
+                limit=arguments.get("limit"),
+            )
+
         elif name == "tool_search":
             from .tools.tool_search import search_tools
             from .server_tools import get_tool_definitions

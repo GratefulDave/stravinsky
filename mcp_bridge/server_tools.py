@@ -46,6 +46,30 @@ def get_tool_definitions() -> list[Tool]:
             },
         ),
         Tool(
+            name="read_file",
+            description=(
+                "Read the contents of a file. Supports smart truncation and log-awareness. "
+                "For log files (.log, .out, .err), defaults to reading the last 100 lines."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Absolute or relative path to the file"},
+                    "offset": {
+                        "type": "integer", 
+                        "description": "Line number to start reading from (0-indexed)",
+                        "default": 0
+                    },
+                    "limit": {
+                        "type": "integer", 
+                        "description": "Maximum number of lines to read",
+                    },
+                },
+                "required": ["path"],
+            },
+            meta={"defer_loading": True},
+        ),
+        Tool(
             name="invoke_gemini",
             description=(
                 "Invoke a Gemini model with the given prompt. "

@@ -592,8 +592,10 @@ class AgentManager:
                 self.cancel(task_id)
                 stopped_count += 1
         if clear_history:
+            cleared = len(tasks)
             self._save_tasks({})
             self._processes.clear()
+            return cleared
         return stopped_count
 
     def cleanup(self, max_age_minutes: int = 30, statuses: list[str] | None = None) -> dict:

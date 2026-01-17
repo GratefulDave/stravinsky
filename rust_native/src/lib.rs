@@ -90,31 +90,50 @@ fn walk_and_chunk<'py>(
     content: &str,
     language: &str,
     chunks: &mut Vec<Bound<'py, PyDict>>,
+    parent_class: Option<String>,
 ) -> PyResult<()> {
     let kind = node.kind();
     let mut is_chunk = false;
     let mut node_type = "";
+    let mut current_class = parent_class.clone();
 
     match language {
         "python" | "py" => {
             if kind == "function_definition" {
                 is_chunk = true;
-                node_type = "func";
+                if parent_class.is_some() {
+                    node_type = "method";
+                } else {
+                    node_type = "func";
+                }
             } else if kind == "class_definition" {
                 is_chunk = true;
                 node_type = "class";
             }
         }
         "typescript" | "ts" | "tsx" => {
-            if kind == "function_declaration" || kind == "method_definition" {
+            if kind == "function_declaration" {
                 is_chunk = true;
                 node_type = "func";
+            } else if kind == "method_definition" {
+                is_chunk = true;
+                node_type = "method";
             } else if kind == "class_declaration" {
                 is_chunk = true;
                 node_type = "class";
             }
         }
         _ => {}
+    }
+
+    // Extract name if this is a chunkable node
+    let mut extracted_name = None;
+    if is_chunk {
+        if let Some(name_node) = node.child_by_field_name("name") {
+            extracted_name = Some(&content[name_node.start_byte()..name_node.end_byte()]);
+        } else if let Some(name_node) = node.child_by_field_name("key") {
+            extracted_name = Some(&content[name_node.start_byte()..name_node.end_byte()]);
+        }
     }
 
     if is_chunk {
@@ -128,11 +147,7 @@ fn walk_and_chunk<'py>(
             dict.set_item("content", &content[node.start_byte()..node.end_byte()])?;
             dict.set_item("node_type", node_type)?;
 
-            if let Some(name_node) = node.child_by_field_name("name") {
-                let name = &content[name_node.start_byte()..name_node.end_byte()];
-                dict.set_item("name", name)?;
-            } else if let Some(name_node) = node.child_by_field_name("key") {
-                let name = &content[name_node.start_byte()..name_node.end_byte()];
+            if let Some(name) = extracted_name {
                 dict.set_item("name", name)?;
             }
             
@@ -140,10 +155,17 @@ fn walk_and_chunk<'py>(
         }
     }
 
+    // Update parent_class context if we entered a class
+    if node_type == "class" {
+        if let Some(name) = extracted_name {
+            current_class = Some(name.to_string());
+        }
+    }
+
     // Recurse into children
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
-        walk_and_chunk(py, child, content, language, chunks)?;
+        walk_and_chunk(py, child, content, language, chunks, current_class.clone())?;
     }
 
     Ok(())
@@ -165,7 +187,7 @@ fn chunk_code(py: Python<'_>, content: String, language: String) -> PyResult<Vec
     let root_node = tree.root_node();
 
     let mut chunks = Vec::new();
-    walk_and_chunk(py, root_node, &content, &language, &mut chunks)?;
+    walk_and_chunk(py, root_node, &content, &language, &mut chunks, None)?;
 
     Ok(chunks)
 }

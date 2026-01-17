@@ -1163,7 +1163,7 @@ class CodebaseVectorStore:
         sorted_results = sorted(results, key=lambda x: x[0])
         return [emb for _, emb in sorted_results]
 
-    def _chunk_file(self, file_path: Path) -> list[dict]:
+    async def _chunk_file(self, file_path: Path) -> list[dict]:
         """Split a file into chunks with metadata.
 
         Uses AST-aware chunking for Python files to respect function/class
@@ -1182,7 +1182,7 @@ class CodebaseVectorStore:
         language = file_path.suffix.lstrip(".")
 
         # Try native AST-aware chunking first
-        native_results = native_chunk_code(content, language)
+        native_results = await native_chunk_code(content, language)
         if native_results:
             chunks = []
             for nc in native_results:
@@ -1709,7 +1709,7 @@ class CodebaseVectorStore:
                         continue
 
                 # If we get here: file changed, new, or chunks missing from DB
-                chunks = self._chunk_file(file_path)
+                chunks = await self._chunk_file(file_path)
                 all_chunks.extend(chunks)
 
                 new_chunk_ids = []

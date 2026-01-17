@@ -210,7 +210,7 @@ async def grep_search(pattern: str, directory: str = ".", file_pattern: str = ""
     # Try native implementation first (currently doesn't support file_pattern filter in the same way)
     # If file_pattern is provided, we still use rg for now as it's more flexible with globs
     if not file_pattern:
-        native_results = native_grep_search(pattern, directory)
+        native_results = await native_grep_search(pattern, directory)
         if native_results is not None:
             if not native_results:
                 return "No matches found"
@@ -267,7 +267,7 @@ async def glob_files(pattern: str, directory: str = ".") -> str:
     print(f"📁 GLOB: pattern='{pattern}' dir={directory}", file=sys.stderr)
 
     # Try native implementation first
-    native_results = native_glob_files(pattern, directory)
+    native_results = await native_glob_files(pattern, directory)
     if native_results is not None:
         if not native_results:
             return "No files found"

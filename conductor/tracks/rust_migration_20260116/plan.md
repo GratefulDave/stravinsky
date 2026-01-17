@@ -36,4 +36,4 @@
 - [x] Task: Integrate Watcher with Stravinsky. [360db85]
     - [x] Create `start_watcher` hook in `mcp_bridge`.
     - [x] Ensure clean shutdown of Rust watcher process.
-- [~] Task: Conductor - User Manual Verification 'Native File Watcher' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Native File Watcher' (Protocol in workflow.md) [checkpoint: 360db85]

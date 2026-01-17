@@ -29,9 +29,9 @@
 - [x] Task: Conductor - User Manual Verification 'Smart I/O Caching' (Protocol in workflow.md)
 
 ## Phase 3: Verification & Benchmarking
-- [ ] Task: Performance Benchmarking.
-    - [ ] Measure latency reduction for repeated `list_directory` calls.
-    - [ ] Measure token savings for large file reads.
+- [x] Task: Performance Benchmarking. [6c8f711]
+    - [x] Measure latency reduction for repeated `list_directory` calls.
+    - [x] Measure token savings for large file reads.
 - [ ] Task: Integration Testing.
     - [ ] Run end-to-end agentic tasks to ensure agents correctly "understand" truncation messages.
 - [ ] Task: Conductor - User Manual Verification 'Verification & Benchmarking' (Protocol in workflow.md)

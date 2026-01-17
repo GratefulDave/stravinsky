@@ -1,4 +1,4 @@
-# Stravinsky Usage Guide
+øø# Stravinsky Usage Guide
 
 Complete reference for all Stravinsky MCP tools and features.
 

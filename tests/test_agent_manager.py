@@ -57,8 +57,8 @@ def agent_manager(temp_dir):
     """Create an AgentManager with a temporary directory."""
     manager = AgentManager(base_dir=temp_dir)
     yield manager
-    # Cleanup: wait for all threads before temp dir cleanup
-    manager.stop_all(clear_history=True, wait_for_threads=True)
+    # Cleanup
+    manager.stop_all(clear_history=True)
 
 
 @pytest.fixture

@@ -779,15 +779,11 @@ class TestErrorHandling:
         mock_process.stderr.readline = AsyncMock(side_effect=[b"Error occurred\n", b""])
         mock_process.stdout.readline = AsyncMock(return_value=b"")
 
-                result = await agent_spawn(
-
-                    prompt="Failing task",
-
-                    agent_type="explore",
-
-                    timeout=10,
-
-                )
+        result = await agent_spawn(
+            prompt="Failing task",
+            agent_type="explore",
+            timeout=10,
+        )
 
         
 

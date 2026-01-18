@@ -9,6 +9,7 @@ use tree_sitter::{Parser, Node};
 mod git_analysis;
 mod import_analysis;
 mod hybrid_graph;
+mod truncator;
 
 #[pyfunction]
 fn sum_as_string(a: usize, b: usize) -> PyResult<String> {
@@ -205,6 +206,12 @@ fn stravinsky_native(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(git_analysis::get_related_files, m)?)?;
     m.add_function(wrap_pyfunction!(import_analysis::get_imports, m)?)?;
     m.add_function(wrap_pyfunction!(hybrid_graph::get_hybrid_context, m)?)?;
+    
+    // Create submodule for truncator
+    let truncator_module = PyModule::new_bound(_py, "truncator")?;
+    truncator::register(_py, &truncator_module)?;
+    m.add_submodule(&truncator_module)?;
+    
     Ok(())
 }
 

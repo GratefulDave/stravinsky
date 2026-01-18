@@ -83,6 +83,16 @@ def mock_subprocess():
         mock_mux.log = MagicMock()
         mock_mux_cls.return_value = mock_mux
 
+        # Mock asyncio.sleep to yield control but not wait
+        async def mock_sleep_func(delay, result=None):
+            # If delay is small (polling), yield. If large (timeout), just return.
+            if delay < 1:
+                import asyncio as real_asyncio
+                await real_asyncio.sleep(0) 
+            return result
+            
+        mock_sleep.side_effect = mock_sleep_func
+
         mock_process = MagicMock()
         mock_process.pid = 12345
         mock_process.returncode = 0

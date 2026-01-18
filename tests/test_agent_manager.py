@@ -286,9 +286,12 @@ class TestAgentManager:
             timeout=10,
         )
 
-        # Wait for task to complete
-        await asyncio.sleep(0.5)
-
+        # Wait for task to complete (loop with sleeps)
+        for _ in range(10):
+            await asyncio.sleep(0.1)
+            if agent_manager.get_task(task_id)["status"] == "completed":
+                break
+        
         output = await agent_manager.get_output(task_id, block=False)
         assert "Completed" in output or "success" in output.lower()
 

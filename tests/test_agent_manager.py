@@ -73,10 +73,29 @@ def mock_token_store():
 @pytest.fixture
 def mock_subprocess():
     """Mock asyncio.create_subprocess_exec for Claude CLI execution."""
-    with patch("mcp_bridge.tools.agent_manager.asyncio.create_subprocess_exec") as mock_exec:
+    with patch("mcp_bridge.tools.agent_manager.asyncio.create_subprocess_exec") as mock_exec, \
+         patch("mcp_bridge.tools.agent_manager.MuxClient") as mock_mux_cls:
+        
+        # Mock MuxClient
+        mock_mux = MagicMock()
+        mock_mux.connect = MagicMock()
+        mock_mux.log = MagicMock()
+        mock_mux_cls.return_value = mock_mux
+
         mock_process = MagicMock()
         mock_process.pid = 12345
         mock_process.returncode = 0
+        
+        # Mock streams for readline
+        mock_stdout = AsyncMock()
+        mock_stdout.readline = AsyncMock(side_effect=[b"Agent output\n", b""])
+        
+        mock_stderr = AsyncMock()
+        mock_stderr.readline = AsyncMock(side_effect=[b""])
+
+        mock_process.stdout = mock_stdout
+        mock_process.stderr = mock_stderr
+        
         # Mock async methods
         mock_process.communicate = AsyncMock(return_value=(b"Agent output", b""))
         mock_process.wait = AsyncMock(return_value=0)
@@ -194,15 +213,9 @@ class TestAgentManager:
         assert updated["result"] == "Success!"
 
     @pytest.mark.asyncio
-    @patch("mcp_bridge.tools.agent_manager.asyncio.create_subprocess_exec")
-    async def test_spawn_creates_task(self, mock_popen, agent_manager, mock_token_store):
+    async def test_spawn_creates_task(self, mock_subprocess, agent_manager, mock_token_store):
         """Test that spawn creates a task and starts execution."""
-        # Mock the subprocess
-        mock_process = MagicMock()
-        mock_process.pid = 12345
-        mock_process.communicate = AsyncMock(return_value=(b"Output", b""))
-        mock_process.returncode = 0
-        mock_popen.return_value = mock_process
+        _, mock_process = mock_subprocess  # Unpack fixture
 
         task_id = await agent_manager.spawn_async(
             token_store=mock_token_store,
@@ -219,17 +232,14 @@ class TestAgentManager:
         task = agent_manager.get_task(task_id)
         assert task is not None
         assert task["prompt"] == "Find authentication code"
+        if task["status"] == "failed":
+            print(f"Task Failed Error: {task.get('error')}")
         assert task["status"] in ["pending", "running", "completed"]
 
     @pytest.mark.asyncio
-    @patch("mcp_bridge.tools.agent_manager.asyncio.create_subprocess_exec")
-    async def test_spawn_with_different_agent_types(self, mock_popen, agent_manager, mock_token_store):
+    async def test_spawn_with_different_agent_types(self, mock_subprocess, agent_manager, mock_token_store):
         """Test spawning different agent types."""
-        mock_process = MagicMock()
-        mock_process.pid = 12345
-        mock_process.communicate = AsyncMock(return_value=(b"Output", b""))
-        mock_process.returncode = 0
-        mock_popen.return_value = mock_process
+        _, mock_process = mock_subprocess
 
         agent_types = ["explore", "dewey", "frontend", "delphi", "document_writer", "multimodal"]
 
@@ -250,15 +260,12 @@ class TestAgentManager:
         await agent_manager.stop_all_async()
 
     @pytest.mark.asyncio
-    @patch("mcp_bridge.tools.agent_manager.asyncio.create_subprocess_exec")
-    async def test_get_output_completed_task(self, mock_popen, agent_manager, mock_token_store):
+    async def test_get_output_completed_task(self, mock_subprocess, agent_manager, mock_token_store):
         """Test getting output from a completed task."""
-        # Mock successful process
-        mock_process = MagicMock()
-        mock_process.pid = 12345
-        mock_process.communicate = AsyncMock(return_value=(b"Task completed successfully", b""))
-        mock_process.returncode = 0
-        mock_popen.return_value = mock_process
+        _, mock_process = mock_subprocess
+        
+        # Setup streams for success
+        mock_process.stdout.readline = AsyncMock(side_effect=[b"Task completed successfully\n", b""])
 
         task_id = await agent_manager.spawn_async(
             token_store=mock_token_store,
@@ -274,25 +281,22 @@ class TestAgentManager:
         assert "Completed" in output or "success" in output.lower()
 
     @pytest.mark.asyncio
-    @patch("mcp_bridge.tools.agent_manager.asyncio.create_subprocess_exec")
     async def test_get_output_running_task_non_blocking(
         self,
-        mock_popen,
+        mock_subprocess,
         agent_manager,
         mock_token_store,
     ):
         """Test getting output from a running task without blocking."""
+        _, mock_process = mock_subprocess
 
-        # Mock long-running process
-        async def communicate_slow(timeout=None):
-            await asyncio.sleep(10)  # Longer than test timeout
-            return (b"Output", b"")
-
-        mock_process = MagicMock()
-        mock_process.pid = 12345
-        mock_process.poll = MagicMock(return_value=None)
-        mock_process.communicate = communicate_slow
-        mock_popen.return_value = mock_process
+        # Mock long-running process by delaying the stream
+        async def slow_readline():
+            await asyncio.sleep(10)
+            return b""
+            
+        mock_process.stdout.readline = AsyncMock(side_effect=slow_readline)
+        mock_process.wait = AsyncMock(side_effect=lambda: asyncio.sleep(10))
 
         task_id = await agent_manager.spawn_async(
             token_store=mock_token_store,
@@ -308,15 +312,11 @@ class TestAgentManager:
         assert "Running" in output or "pending" in output.lower()
 
     @pytest.mark.asyncio
-    @patch("mcp_bridge.tools.agent_manager.asyncio.create_subprocess_exec")
-    async def test_get_output_running_task_blocking(self, mock_popen, agent_manager, mock_token_store):
+    async def test_get_output_running_task_blocking(self, mock_subprocess, agent_manager, mock_token_store):
         """Test getting output from a running task with blocking."""
-        # Mock process that completes quickly
-        mock_process = MagicMock()
-        mock_process.pid = 12345
-        mock_process.communicate = AsyncMock(return_value=(b"Completed", b""))
-        mock_process.returncode = 0
-        mock_popen.return_value = mock_process
+        _, mock_process = mock_subprocess
+        
+        mock_process.stdout.readline = AsyncMock(side_effect=[b"Completed\n", b""])
 
         task_id = await agent_manager.spawn_async(
             token_store=mock_token_store,
@@ -336,21 +336,17 @@ class TestAgentManager:
         assert "not found" in output.lower()
 
     @pytest.mark.asyncio
-    @patch("mcp_bridge.tools.agent_manager.asyncio.create_subprocess_exec")
-    async def test_cancel_running_task(self, mock_popen, agent_manager, mock_token_store):
+    async def test_cancel_running_task(self, mock_subprocess, agent_manager, mock_token_store):
         """Test cancelling a running task."""
+        _, mock_process = mock_subprocess
 
         # Mock long-running process
-        async def communicate_slow(timeout=None):
+        async def slow_readline():
             await asyncio.sleep(30)
-            return (b"Output", b"")
-
-        mock_process = MagicMock()
-        mock_process.pid = 12345
-        mock_process.poll = MagicMock(return_value=None)
-        mock_process.communicate = communicate_slow
-        mock_process.wait = AsyncMock()
-        mock_popen.return_value = mock_process
+            return b""
+            
+        mock_process.stdout.readline = AsyncMock(side_effect=slow_readline)
+        mock_process.wait = AsyncMock(side_effect=lambda: asyncio.sleep(30))
 
         task_id = await agent_manager.spawn_async(
             token_store=mock_token_store,
@@ -389,15 +385,13 @@ class TestAgentManager:
         assert success is False
 
     @pytest.mark.asyncio
-    @patch("mcp_bridge.tools.agent_manager.asyncio.create_subprocess_exec")
-    async def test_get_progress(self, mock_popen, agent_manager, mock_token_store):
+    async def test_get_progress(self, mock_subprocess, agent_manager, mock_token_store):
         """Test getting progress from a running task."""
-        mock_process = MagicMock()
-        mock_process.pid = 12345
-        mock_process.poll = MagicMock(return_value=None)
-        mock_process.communicate = AsyncMock(return_value=(b"Progress output", b""))
-        mock_process.returncode = 0
-        mock_popen.return_value = mock_process
+        _, mock_process = mock_subprocess
+        
+        # Mock long process
+        mock_process.stdout.readline = AsyncMock(return_value=b"")
+        mock_process.wait = AsyncMock(side_effect=lambda: asyncio.sleep(30))
 
         task_id = await agent_manager.spawn_async(
             token_store=mock_token_store,
@@ -419,21 +413,18 @@ class TestAgentManager:
         assert "not found" in progress.lower()
 
     @pytest.mark.asyncio
-    @patch("mcp_bridge.tools.agent_manager.asyncio.create_subprocess_exec")
-    async def test_stop_all_running_tasks(self, mock_popen, agent_manager, mock_token_store):
+    async def test_stop_all_running_tasks(self, mock_subprocess, agent_manager, mock_token_store):
         """Test stopping all running tasks."""
-        mock_process = MagicMock()
-        mock_process.pid = 12345
-        mock_process.poll = MagicMock(return_value=None)
+        _, mock_process = mock_subprocess
         
-        # Mock communicate to hang so tasks stay "running"
-        async def slow_communicate():
+        # Mock long process
+        async def hang(*args, **kwargs):
             await asyncio.sleep(10)
-            return b"Done", b""
-        
-        mock_process.communicate = slow_communicate
-        mock_process.wait = AsyncMock()
-        mock_popen.return_value = mock_process
+            return b""
+            
+        mock_process.stdout.readline = AsyncMock(side_effect=hang)
+        mock_process.stderr.readline = AsyncMock(side_effect=hang)
+        mock_process.wait = AsyncMock(side_effect=lambda: asyncio.sleep(10))
 
         # Spawn multiple tasks
         for i in range(3):
@@ -471,17 +462,11 @@ class TestAgentSpawn:
     """Test agent_spawn function."""
 
     @pytest.mark.asyncio
-    @patch("mcp_bridge.tools.agent_manager.asyncio.create_subprocess_exec")
     @patch("mcp_bridge.auth.token_store.TokenStore")
-    async def test_agent_spawn_explore(self, mock_token_store_class, mock_popen, agent_manager):
+    async def test_agent_spawn_explore(self, mock_token_store_class, mock_subprocess, agent_manager):
         """Test spawning an explore agent."""
         mock_token_store_class.return_value = MagicMock()
-
-        mock_process = MagicMock()
-        mock_process.pid = 12345
-        mock_process.communicate = AsyncMock(return_value=(b"Output", b""))
-        mock_process.returncode = 0
-        mock_popen.return_value = mock_process
+        _, mock_process = mock_subprocess
 
         result = await agent_spawn(
             prompt="Find authentication code",
@@ -493,17 +478,11 @@ class TestAgentSpawn:
         assert "agent_" in result
 
     @pytest.mark.asyncio
-    @patch("mcp_bridge.tools.agent_manager.asyncio.create_subprocess_exec")
     @patch("mcp_bridge.auth.token_store.TokenStore")
-    async def test_agent_spawn_dewey(self, mock_token_store_class, mock_popen, agent_manager):
+    async def test_agent_spawn_dewey(self, mock_token_store_class, mock_subprocess, agent_manager):
         """Test spawning a dewey agent."""
         mock_token_store_class.return_value = MagicMock()
-
-        mock_process = MagicMock()
-        mock_process.pid = 12345
-        mock_process.communicate = AsyncMock(return_value=(b"Output", b""))
-        mock_process.returncode = 0
-        mock_popen.return_value = mock_process
+        _, mock_process = mock_subprocess
 
         result = await agent_spawn(
             prompt="Research JWT best practices",
@@ -515,17 +494,11 @@ class TestAgentSpawn:
         assert "agent_" in result
 
     @pytest.mark.asyncio
-    @patch("mcp_bridge.tools.agent_manager.asyncio.create_subprocess_exec")
     @patch("mcp_bridge.auth.token_store.TokenStore")
-    async def test_agent_spawn_frontend(self, mock_token_store_class, mock_popen, agent_manager):
+    async def test_agent_spawn_frontend(self, mock_token_store_class, mock_subprocess, agent_manager):
         """Test spawning a frontend agent."""
         mock_token_store_class.return_value = MagicMock()
-
-        mock_process = MagicMock()
-        mock_process.pid = 12345
-        mock_process.communicate = AsyncMock(return_value=(b"Output", b""))
-        mock_process.returncode = 0
-        mock_popen.return_value = mock_process
+        _, mock_process = mock_subprocess
 
         result = await agent_spawn(
             prompt="Create a login form",
@@ -537,17 +510,11 @@ class TestAgentSpawn:
         assert "agent_" in result
 
     @pytest.mark.asyncio
-    @patch("mcp_bridge.tools.agent_manager.asyncio.create_subprocess_exec")
     @patch("mcp_bridge.auth.token_store.TokenStore")
-    async def test_agent_spawn_delphi(self, mock_token_store_class, mock_popen, agent_manager):
+    async def test_agent_spawn_delphi(self, mock_token_store_class, mock_subprocess, agent_manager):
         """Test spawning a delphi agent."""
         mock_token_store_class.return_value = MagicMock()
-
-        mock_process = MagicMock()
-        mock_process.pid = 12345
-        mock_process.communicate = AsyncMock(return_value=(b"Output", b""))
-        mock_process.returncode = 0
-        mock_popen.return_value = mock_process
+        _, mock_process = mock_subprocess
 
         result = await agent_spawn(
             prompt="Review architecture for scalability",
@@ -559,17 +526,13 @@ class TestAgentSpawn:
         assert "agent_" in result
 
     @pytest.mark.asyncio
-    @patch("mcp_bridge.tools.agent_manager.asyncio.create_subprocess_exec")
     @patch("mcp_bridge.auth.token_store.TokenStore")
-    async def test_agent_spawn_blocking_mode(self, mock_token_store_class, mock_popen, agent_manager):
+    async def test_agent_spawn_blocking_mode(self, mock_token_store_class, mock_subprocess, agent_manager):
         """Test spawning an agent in blocking mode."""
         mock_token_store_class.return_value = MagicMock()
-
-        mock_process = MagicMock()
-        mock_process.pid = 12345
-        mock_process.communicate = AsyncMock(return_value=(b"Completed", b""))
-        mock_process.returncode = 0
-        mock_popen.return_value = mock_process
+        _, mock_process = mock_subprocess
+        
+        mock_process.stdout.readline = AsyncMock(side_effect=[b"Completed\n", b""])
 
         result = await agent_spawn(
             prompt="Quick analysis",
@@ -582,15 +545,11 @@ class TestAgentSpawn:
         assert "Completed" in result
 
     @pytest.mark.asyncio
-    @patch("mcp_bridge.tools.agent_manager.asyncio.create_subprocess_exec")
     @patch("mcp_bridge.auth.token_store.TokenStore")
-    async def test_agent_spawn_custom_timeout(self, mock_token_store_class, mock_popen, agent_manager):
+    async def test_agent_spawn_custom_timeout(self, mock_token_store_class, mock_subprocess, agent_manager):
         """Test spawning an agent with custom timeout."""
         mock_token_store_class.return_value = MagicMock()
-
-        mock_process = MagicMock()
-        mock_process.pid = 12345
-        mock_popen.return_value = mock_process
+        _, mock_process = mock_subprocess
 
         result = await agent_spawn(
             prompt="Long running task",
@@ -605,17 +564,13 @@ class TestAgentOutput:
     """Test agent_output function."""
 
     @pytest.mark.asyncio
-    @patch("mcp_bridge.tools.agent_manager.asyncio.create_subprocess_exec")
     @patch("mcp_bridge.auth.token_store.TokenStore")
-    async def test_agent_output_non_blocking(self, mock_token_store_class, mock_popen, agent_manager):
+    async def test_agent_output_non_blocking(self, mock_token_store_class, mock_subprocess, agent_manager):
         """Test getting output without blocking."""
         mock_token_store_class.return_value = MagicMock()
-
-        mock_process = MagicMock()
-        mock_process.pid = 12345
-        mock_process.communicate = AsyncMock(return_value=(b"Output", b""))
-        mock_process.returncode = 0
-        mock_popen.return_value = mock_process
+        _, mock_process = mock_subprocess
+        
+        mock_process.stdout.readline = AsyncMock(side_effect=[b"Output\n", b""])
 
         task_id = await agent_spawn(
             prompt="Test task",
@@ -651,15 +606,11 @@ class TestAgentRetry:
     """Test agent_retry function."""
 
     @pytest.mark.asyncio
-    @patch("mcp_bridge.tools.agent_manager.asyncio.create_subprocess_exec")
     @patch("mcp_bridge.auth.token_store.TokenStore")
-    async def test_agent_retry_failed_task(self, mock_token_store_class, mock_popen, agent_manager):
+    async def test_agent_retry_failed_task(self, mock_token_store_class, mock_subprocess, agent_manager):
         """Test retrying a failed task."""
         mock_token_store_class.return_value = MagicMock()
-
-        mock_process = MagicMock()
-        mock_process.pid = 12345
-        mock_popen.return_value = mock_process
+        _, mock_process = mock_subprocess
 
         # Create a failed task
         task_data = {
@@ -739,12 +690,12 @@ class TestErrorHandling:
     """Test error handling scenarios."""
 
     @pytest.mark.asyncio
-    @patch("mcp_bridge.tools.agent_manager.asyncio.create_subprocess_exec")
     @patch("mcp_bridge.auth.token_store.TokenStore")
-    async def test_spawn_with_claude_not_found(self, mock_token_store_class, mock_popen, agent_manager):
+    async def test_spawn_with_claude_not_found(self, mock_token_store_class, mock_subprocess, agent_manager):
         """Test spawning when Claude CLI is not found."""
         mock_token_store_class.return_value = MagicMock()
-        mock_popen.side_effect = FileNotFoundError("claude not found")
+        mock_exec, _ = mock_subprocess
+        mock_exec.side_effect = FileNotFoundError("claude not found")
 
         task_id = await agent_spawn(
             prompt="Test task",
@@ -764,29 +715,29 @@ class TestErrorHandling:
             assert task["status"] == "failed"
             assert "not found" in task.get("error", "").lower()
 
-    @pytest.mark.asyncio
-    @patch("mcp_bridge.tools.agent_manager.asyncio.create_subprocess_exec")
-    @patch("mcp_bridge.auth.token_store.TokenStore")
-    async def test_spawn_with_timeout(self, mock_token_store_class, mock_popen, agent_manager):
-        """Test spawning a task that times out."""
-        mock_token_store_class.return_value = MagicMock()
-
-        mock_process = MagicMock()
-        mock_process.pid = 12345
-        mock_process.communicate = AsyncMock(side_effect=asyncio.TimeoutError())
-        mock_process.wait = AsyncMock()
-        mock_process.kill = MagicMock()
-        mock_popen.return_value = mock_process
-
-        with patch("mcp_bridge.tools.agent_manager.os.killpg"), \
-             patch("mcp_bridge.tools.agent_manager.os.getpgid"):
-            task_id = await agent_spawn(
-                prompt="Timeout task",
-                agent_type="explore",
-                timeout=1,
-            )
-
-            await asyncio.sleep(1.5)
+        @pytest.mark.asyncio
+        @patch("mcp_bridge.auth.token_store.TokenStore")
+        async def test_spawn_with_timeout(self, mock_token_store_class, mock_subprocess, agent_manager):
+            """Test spawning a task that times out."""
+            mock_token_store_class.return_value = MagicMock()
+            _, mock_process = mock_subprocess
+            
+            # Make it hang
+            async def hang(*args, **kwargs):
+                await asyncio.sleep(10)
+                return b""
+                
+            mock_process.wait = AsyncMock(side_effect=hang)
+            mock_process.stdout.readline = AsyncMock(side_effect=hang)
+        
+            with patch("mcp_bridge.tools.agent_manager.os.killpg"), \
+                 patch("mcp_bridge.tools.agent_manager.os.getpgid"):
+                task_id = await agent_spawn(
+                    prompt="Timeout task",
+                    agent_type="explore",
+                    timeout=0.1,  # Fast timeout
+                )
+                await asyncio.sleep(1.5)
 
             # Extract ID
             actual_id = task_id.split("agent_")[-1][:8]
@@ -798,17 +749,16 @@ class TestErrorHandling:
                 assert "timed out" in task.get("error", "").lower()
 
     @pytest.mark.asyncio
-    @patch("mcp_bridge.tools.agent_manager.asyncio.create_subprocess_exec")
     @patch("mcp_bridge.auth.token_store.TokenStore")
-    async def test_spawn_with_process_failure(self, mock_token_store_class, mock_popen, agent_manager):
+    async def test_spawn_with_process_failure(self, mock_token_store_class, mock_subprocess, agent_manager):
         """Test spawning a task where the process fails."""
         mock_token_store_class.return_value = MagicMock()
-
-        mock_process = MagicMock()
-        mock_process.pid = 12345
-        mock_process.communicate = AsyncMock(return_value=(b"", b"Error occurred"))
+        _, mock_process = mock_subprocess
+        
+        # Simulate failure
         mock_process.returncode = 1
-        mock_popen.return_value = mock_process
+        mock_process.stderr.readline = AsyncMock(side_effect=[b"Error occurred\n", b""])
+        mock_process.stdout.readline = AsyncMock(return_value=b"")
 
         task_id = await agent_spawn(
             prompt="Failing task",

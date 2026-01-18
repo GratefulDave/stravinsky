@@ -17,7 +17,7 @@ This file tracks all major tracks for the project. Each track has its own detail
 - [ ] **Track: Observability Multiplexer**
   *Link: [./conductor/tracks/observability_multiplexer_20260117/](./conductor/tracks/observability_multiplexer_20260117/)*
 
-- [ ] **Track: Stateful PTY Shell**
+- [ ] ~~**Track: Stateful PTY Shell**~~ [CANCELLED: Bloat/Low ROI]
   *Link: [./conductor/tracks/stateful_pty_shell_20260117/](./conductor/tracks/stateful_pty_shell_20260117/)*
 
 - [ ] **Track: Agent Parity and Hardening**

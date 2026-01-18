@@ -786,17 +786,12 @@ class TestErrorHandling:
 
         
 
-                for _ in range(10):
+        for _ in range(10):
+            await asyncio.sleep(0.1)
+            if agent_manager.get_task(task_id)["status"] in ["completed", "failed"]:
+                break
 
-                    await asyncio.sleep(0.1)
-
-                    if agent_manager.get_task(task_id)["status"] in ["completed", "failed"]:
-
-                        break
-
-        
-
-                # Extract ID
+        # Extract ID
 
                 actual_id = task_id.split("agent_")[-1][:8]
 

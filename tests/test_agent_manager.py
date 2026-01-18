@@ -232,6 +232,8 @@ class TestAgentManager:
         task = agent_manager.get_task(task_id)
         assert task is not None
         assert task["prompt"] == "Find authentication code"
+        if task["status"] == "failed":
+            print(f"Task Failed Error: {task.get('error')}")
         assert task["status"] in ["pending", "running", "completed"]
 
     @pytest.mark.asyncio

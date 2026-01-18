@@ -74,7 +74,8 @@ def mock_token_store():
 def mock_subprocess():
     """Mock asyncio.create_subprocess_exec for Claude CLI execution."""
     with patch("mcp_bridge.tools.agent_manager.asyncio.create_subprocess_exec") as mock_exec, \
-         patch("mcp_bridge.tools.agent_manager.MuxClient") as mock_mux_cls:
+         patch("mcp_bridge.tools.agent_manager.MuxClient") as mock_mux_cls, \
+         patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
         
         # Mock MuxClient
         mock_mux = MagicMock()

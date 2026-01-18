@@ -787,21 +787,14 @@ class TestErrorHandling:
 
         
 
-                # Extract ID
+        # Extract ID
+        actual_id = result.split("agent_")[-1][:8]
+        actual_id = f"agent_{actual_id}"
 
-                actual_id = result.split("agent_")[-1][:8]
-
-                actual_id = f"agent_{actual_id}"
-
-        
-
-                for _ in range(10):
-
-                    await asyncio.sleep(0.1)
-
-                    if agent_manager.get_task(actual_id)["status"] in ["completed", "failed"]:
-
-                        break
+        for _ in range(10):
+            await asyncio.sleep(0.1)
+            if agent_manager.get_task(actual_id)["status"] in ["completed", "failed"]:
+                break
 
         
 

@@ -225,6 +225,36 @@ class TestAgentManager:
         assert updated["result"] == "Success!"
 
     @pytest.mark.asyncio
+    async def test_spawn_with_semantic_first(self, mock_subprocess, agent_manager, mock_token_store):
+        """Test spawning a task with semantic_first enabled."""
+        mock_exec, mock_process = mock_subprocess
+        
+        # Setup process mock behavior
+        mock_process.stdout.readline = AsyncMock(return_value=b"")
+        mock_process.stderr.readline = AsyncMock(return_value=b"")
+        mock_exec.return_value = mock_process
+
+        # Mock semantic_search
+        with patch("mcp_bridge.tools.agent_manager.semantic_search") as mock_search:
+            mock_search.search.return_value = "Found context"
+            
+            task_id = await agent_manager.spawn_async(
+                token_store=mock_token_store,
+                prompt="Test task",
+                agent_type="explore",
+                timeout=10,
+                semantic_first=True
+            )
+
+            assert task_id.startswith("agent_")
+            # Verify search was called
+            mock_search.search.assert_called_once()
+            
+            # Verify prompt was modified in the command call
+            # The command is built inside _execute_agent_async, which runs in a task.
+            # We can't easily verify the exact args passed to subprocess here without more mocking,
+            # but verifying search was called is a good signal.
+
     async def test_spawn_creates_task(self, mock_subprocess, agent_manager, mock_token_store):
         """Test that spawn creates a task and starts execution."""
         _, mock_process = mock_subprocess  # Unpack fixture

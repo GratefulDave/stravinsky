@@ -1,0 +1,8 @@
+{
+  "track_id": "semantic_first_context_injection_20260117_20260117",
+  "type": "feature",
+  "status": "new",
+  "created_at": "2026-01-17T20:51:18.321815",
+  "updated_at": "2026-01-17T20:51:18.321818",
+  "description": "Implement semantic search context injection for agents"
+}

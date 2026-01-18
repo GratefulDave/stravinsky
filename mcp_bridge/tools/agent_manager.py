@@ -21,6 +21,11 @@ from pathlib import Path
 from typing import Any, Optional, List, Dict
 import subprocess
 from .mux_client import get_mux, MuxClient
+try:
+    from . import semantic_search
+except ImportError:
+    # Fallback or lazy import
+    semantic_search = None
 
 logger = logging.getLogger(__name__)
 
@@ -407,7 +412,30 @@ class AgentManager:
         model: str = "gemini-3-flash",
         thinking_budget: int = 0,
         timeout: int = 300,
+        semantic_first: bool = False,
     ) -> str:
+        # Semantic First Context Injection
+        if semantic_first and semantic_search:
+            try:
+                # Run search in thread to avoid blocking loop
+                results = await asyncio.to_thread(
+                    semantic_search.search, 
+                    query=prompt, 
+                    n_results=5, 
+                    project_path=str(self.base_dir.parent)
+                )
+                if results and "No results" not in results and "Error" not in results:
+                    prompt = (
+                        f"## 🧠 SEMANTIC CONTEXT (AUTO-INJECTED)\n"
+                        f"The following code snippets were found in the vector index based on your task:\n\n"
+                        f"{results}\n\n"
+                        f"---\n\n"
+                        f"## 📋 YOUR TASK\n"
+                        f"{prompt}"
+                    )
+            except Exception as e:
+                logger.error(f"Semantic context injection failed: {e}")
+
         import uuid as uuid_module
         task_id = f"agent_{uuid_module.uuid4().hex[:8]}"
 
@@ -757,6 +785,7 @@ async def agent_spawn(
     timeout: int = 300,
     blocking: bool = False,
     spawning_agent: str | None = None,
+    semantic_first: bool = False,
 ) -> str:
     manager = get_manager()
     if spawning_agent in ORCHESTRATOR_AGENTS:
@@ -774,6 +803,7 @@ async def agent_spawn(
         description=description,
         system_prompt=system_prompt,
         timeout=timeout,
+        semantic_first=semantic_first,
     )
     if not blocking:
         monitor_task = asyncio.create_task(manager._monitor_progress_async(task_id))

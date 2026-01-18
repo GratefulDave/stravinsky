@@ -22,3 +22,6 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 - [ ] **Track: Agent Parity and Hardening**
   *Link: [./conductor/tracks/agent_parity_and_hardening_20260117/](./conductor/tracks/agent_parity_and_hardening_20260117/)*
+
+- [ ] **Track: semantic_first_context_injection_20260117**
+  *Link: [./conductor/tracks/semantic_first_context_injection_20260117_20260117/](./conductor/tracks/semantic_first_context_injection_20260117_20260117/)*

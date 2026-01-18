@@ -719,7 +719,10 @@ class TestErrorHandling:
         )
 
         # Task should be created but will fail
-        await asyncio.sleep(0.5)
+        for _ in range(10):
+            await asyncio.sleep(0.1)
+            if agent_manager.get_task(task_id)["status"] in ["completed", "failed"]:
+                break
 
         # Extract ID
         actual_id = task_id.split("agent_")[-1][:8]
@@ -775,18 +778,40 @@ class TestErrorHandling:
         mock_process.stderr.readline = AsyncMock(side_effect=[b"Error occurred\n", b""])
         mock_process.stdout.readline = AsyncMock(return_value=b"")
 
-        task_id = await agent_spawn(
-            prompt="Failing task",
-            agent_type="explore",
-            timeout=10,
-        )
+                task_id = await agent_spawn(
 
-        await asyncio.sleep(0.5)
+                    prompt="Failing task",
 
-        # Extract ID
-        actual_id = task_id.split("agent_")[-1][:8]
-        actual_id = f"agent_{actual_id}"
-        task = agent_manager.get_task(actual_id)
+                    agent_type="explore",
 
-        if task:
-            assert task["status"] == "failed"
+                    timeout=10,
+
+                )
+
+        
+
+                for _ in range(10):
+
+                    await asyncio.sleep(0.1)
+
+                    if agent_manager.get_task(task_id)["status"] in ["completed", "failed"]:
+
+                        break
+
+        
+
+                # Extract ID
+
+                actual_id = task_id.split("agent_")[-1][:8]
+
+                actual_id = f"agent_{actual_id}"
+
+                task = agent_manager.get_task(actual_id)
+
+        
+
+                if task:
+
+                    assert task["status"] == "failed"
+
+        

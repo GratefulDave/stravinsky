@@ -73,6 +73,8 @@ def mock_token_store():
 @pytest.fixture
 def mock_subprocess():
     """Mock asyncio.create_subprocess_exec for Claude CLI execution."""
+    original_sleep = asyncio.sleep
+    
     with patch("mcp_bridge.tools.agent_manager.asyncio.create_subprocess_exec") as mock_exec, \
          patch("mcp_bridge.tools.agent_manager.MuxClient") as mock_mux_cls, \
          patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
@@ -87,8 +89,7 @@ def mock_subprocess():
         async def mock_sleep_func(delay, result=None):
             # If delay is small (polling), yield. If large (timeout), just return.
             if delay < 1:
-                import asyncio as real_asyncio
-                await real_asyncio.sleep(0) 
+                await original_sleep(0) 
             return result
             
         mock_sleep.side_effect = mock_sleep_func

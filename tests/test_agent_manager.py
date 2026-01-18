@@ -712,21 +712,22 @@ class TestErrorHandling:
         mock_exec, _ = mock_subprocess
         mock_exec.side_effect = FileNotFoundError("claude not found")
 
-        task_id = await agent_spawn(
+        result = await agent_spawn(
             prompt="Test task",
             agent_type="explore",
             timeout=10,
         )
 
+        # Extract ID
+        actual_id = result.split("agent_")[-1][:8]
+        actual_id = f"agent_{actual_id}"
+
         # Task should be created but will fail
         for _ in range(10):
             await asyncio.sleep(0.1)
-            if agent_manager.get_task(task_id)["status"] in ["completed", "failed"]:
+            if agent_manager.get_task(actual_id)["status"] in ["completed", "failed"]:
                 break
 
-        # Extract ID
-        actual_id = task_id.split("agent_")[-1][:8]
-        actual_id = f"agent_{actual_id}"
         task = agent_manager.get_task(actual_id)
 
         if task:
@@ -778,24 +779,35 @@ class TestErrorHandling:
         mock_process.stderr.readline = AsyncMock(side_effect=[b"Error occurred\n", b""])
         mock_process.stdout.readline = AsyncMock(return_value=b"")
 
-        task_id = await agent_spawn(
-            prompt="Failing task",
-            agent_type="explore",
-            timeout=10,
-        )
+                result = await agent_spawn(
+
+                    prompt="Failing task",
+
+                    agent_type="explore",
+
+                    timeout=10,
+
+                )
 
         
 
-        for _ in range(10):
-            await asyncio.sleep(0.1)
-            if agent_manager.get_task(task_id)["status"] in ["completed", "failed"]:
-                break
+                # Extract ID
 
-        # Extract ID
-
-                actual_id = task_id.split("agent_")[-1][:8]
+                actual_id = result.split("agent_")[-1][:8]
 
                 actual_id = f"agent_{actual_id}"
+
+        
+
+                for _ in range(10):
+
+                    await asyncio.sleep(0.1)
+
+                    if agent_manager.get_task(actual_id)["status"] in ["completed", "failed"]:
+
+                        break
+
+        
 
                 task = agent_manager.get_task(actual_id)
 
@@ -804,5 +816,7 @@ class TestErrorHandling:
                 if task:
 
                     assert task["status"] == "failed"
+
+        
 
         

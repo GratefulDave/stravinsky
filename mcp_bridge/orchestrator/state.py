@@ -1,15 +1,23 @@
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Callable
 from .enums import OrchestrationPhase
 
 class OrchestratorState:
-    def __init__(self):
+    def __init__(self, enable_phase_gates: bool = False, approver: Optional[Callable[[], bool]] = None):
         self.current_phase = OrchestrationPhase.CLASSIFY
         self.history: List[OrchestrationPhase] = []
         self.artifacts: Dict[str, str] = {}
+        self.enable_phase_gates = enable_phase_gates
+        self.approver = approver
         
     def transition_to(self, next_phase: OrchestrationPhase):
         """Transitions to the next phase if requirements are met."""
         self._validate_transition(next_phase)
+        
+        # Phase Gates
+        if self.enable_phase_gates and self.approver:
+            if not self.approver():
+                raise PermissionError(f"Transition to {next_phase} denied by user.")
+        
         self.history.append(self.current_phase)
         self.current_phase = next_phase
         

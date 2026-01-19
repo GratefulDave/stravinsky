@@ -1,72 +1,101 @@
-# Model Routing Architecture
+# Model Routing & Fallback Architecture
 
-## The Problem
+Stravinsky features a sophisticated **Tier-Aware Multi-Provider Routing System** designed for high availability, cost-efficiency, and resilience.
 
-Claude Code's native Task system only supports Claude models. To use Gemini/GPT, agents must call MCP tools (invoke_gemini, invoke_openai).
+## Model Tiers
 
-## Alternatives Considered
+Models are classified into two primary tiers based on capability and cost:
 
-### Option A: Pure Native (Task only)
-- All agents run on Claude Sonnet
-- Agents call invoke_gemini/invoke_openai for specific tasks
-- **Problem**: Double cost - paying for Sonnet + Gemini for every exploration task
-- **Rejected**: Too expensive for high-volume exploration work
+| Tier | Claude (Anthropic) | OpenAI (ChatGPT) | Gemini (Google) |
+|------|--------------------|------------------|-----------------|
+| **PREMIUM** | Claude 4.5 Opus | GPT 5.2 Codex | Gemini 3 Pro |
+| **STANDARD**| Claude 4.5 Sonnet | GPT 5.2 | Gemini 3 Flash Preview |
 
-### Option B: Pure MCP (agent_spawn only)
-- Use Stravinsky MCP's agent_spawn tool for all delegation
-- Agents run as subprocess, call Gemini/GPT directly
-- **Problem**: Subprocess overhead, slower startup, no Task parallelism benefits
-- **Rejected**: Slower and more complex than necessary
+### Claude 4.5 Opus "Thinking" Mode
+The PREMIUM Claude 4.5 Opus model supports an extended "Thinking" mode (enabled via `thinking_budget` > 0), allowing for deep reasoning on complex architectural or logic problems.
 
-### Option C: Thin Wrapper (CHOSEN)
-- Use Task to spawn cheap Claude Haiku agents
-- Haiku agents immediately delegate to invoke_gemini/invoke_openai
-- Haiku does NO actual work - just parses request and delegates
-- **Benefits**:
-  - Fast (in-process Task execution)
-  - Cheap (Haiku is 1/10th Sonnet cost)
-  - Simple (clear single-responsibility pattern)
-  - Compatible (works with Claude Code's existing Task infrastructure)
+---
 
-## Cost Analysis
+## OAuth-First Fallback Architecture
 
-| Approach | Wrapper Cost | Work Cost | Total |
-|----------|--------------|-----------|-------|
-| Pure Native (Sonnet→Gemini) | $3/1M tokens | $0.075/1M | $3.075/1M |
-| Thin Wrapper (Haiku→Gemini) | $0.25/1M tokens | $0.075/1M | $0.325/1M |
-| **Savings** | | | **~10x** |
+Stravinsky prioritizes secure OAuth authentication while maintaining robust fallback mechanisms to ensure task continuity even during rate limits or provider outages.
 
-## Implementation
+### Fallback Priority Matrix
 
-Each thin wrapper agent follows this pattern:
+When a model call fails (e.g., due to a 429 Rate Limit or 5xx error), Stravinsky follows this deterministic fallback chain:
 
-```python
-# 1. Parse the request (minimal work)
-# 2. Call invoke_gemini with full context
-mcp__stravinsky__invoke_gemini(
-    prompt="You are the Explore specialist...\n\nTASK: {request}\n\nAVAILABLE TOOLS: ...",
-    model="gemini-3-flash",
-    agent_context={"agent_type": "explore", "description": "..."}
-)
-# 3. Return Gemini's response directly
+| Priority | Strategy | Description |
+|----------|----------|-------------|
+| **1** | **Cross-Provider OAuth** | Attempts the same tier model from a different provider using OAuth. |
+| **2** | **Lower-Tier OAuth** | Falls back to a STANDARD tier model from any available provider using OAuth. |
+| **3** | **API Key Fallback** | As a last resort, attempts the original model tier using a configured API key. |
+
+**Example Chain (Starting with GPT 5.2 Codex OAuth):**
+1. → Gemini 3 Pro (OAuth)
+2. → Claude 4.5 Opus (OAuth)
+3. → GPT 5.2 (OAuth)
+4. → Gemini 3 Flash Preview (OAuth)
+5. → GPT 5.2 Codex (API Key)
+
+---
+
+## Task-Based Routing
+
+You can define specific models for different types of work in your project to balance cost and capability.
+
+### Configuration: `.stravinsky/routing.json`
+
+Project-local routing rules are stored in `.stravinsky/routing.json`. This configuration allows you to override default models for specific tasks.
+
+```json
+{
+  "routing": {
+    "task_routing": {
+      "code_generation": {
+        "provider": "openai",
+        "model": "gpt-5.2-codex",
+        "description": "Complex code generation tasks"
+      },
+      "debugging": {
+        "provider": "openai",
+        "model": "gpt-5.2-codex",
+        "description": "Code analysis and debugging"
+      },
+      "documentation": {
+        "provider": "gemini",
+        "model": "gemini-3-flash-preview",
+        "description": "Documentation writing"
+      },
+      "code_search": {
+        "provider": "gemini",
+        "model": "gemini-3-flash-preview",
+        "description": "Finding code patterns"
+      }
+    },
+    "fallback": {
+      "enabled": true,
+      "chain": ["claude", "openai", "gemini"],
+      "cooldown_seconds": 300
+    }
+  }
+}
 ```
 
-## Agent Routing Summary
+---
 
-| Agent | Pattern | Wrapper | Work Model |
-|-------|---------|---------|------------|
-| explore | Thin Wrapper | haiku | gemini-3-flash |
-| dewey | Thin Wrapper | haiku | gemini-3-flash |
-| frontend | Thin Wrapper | haiku | gemini-3-pro-high |
-| delphi | Thin Wrapper | sonnet | gpt-5.2-medium |
-| code-reviewer | Native | sonnet | Claude native |
-| debugger | Native | sonnet | Claude native |
-| stravinsky | Orchestrator | sonnet | Claude native |
+## Routing CLI Commands
 
-## Conclusion
+Manage provider health and routing configuration via the CLI:
 
-The thin wrapper pattern achieves oh-my-opencode parity:
-- Fast parallel execution via Task
-- Cheap model routing (Haiku + Gemini)
-- Multi-model support (Gemini, GPT, Claude)
-- Compatible with existing Claude Code infrastructure
+- **View Status**: `stravinsky-auth routing status`
+  Displays health, auth readiness, and request statistics for all providers.
+- **Initialize Config**: `stravinsky-auth routing init`
+  Creates a default `.stravinsky/routing.json` in the current directory.
+- **Reset Cooldowns**: `stravinsky-auth routing reset [provider]`
+  Manually clears rate-limit cooldowns for a specific provider (or all providers if omitted).
+
+---
+
+## Thin Wrapper Pattern (Internal)
+
+To maintain low latency and cost, Stravinsky uses "Thin Wrapper" agents (Claude Haiku) that immediately delegate work to the routed external models via MCP tools. This achieves ~10x cost savings compared to running all agents on Claude Sonnet.

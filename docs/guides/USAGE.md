@@ -4,6 +4,44 @@ Complete reference for all Stravinsky MCP tools and features.
 
 ---
 
+### Model Invoke Tools
+
+Stravinsky uses a **Tier-Aware Multi-Provider Routing System**. Default models are selected based on task complexity, with automatic fallback across providers.
+
+#### Tiers
+- **PREMIUM**: Claude 4.5 Opus (Thinking), GPT 5.2 Codex, Gemini 3 Pro
+- **STANDARD**: Claude 4.5 Sonnet, GPT 5.2, Gemini 3 Flash Preview
+
+---
+
+## Routing CLI Commands
+
+Manage the routing system and check provider health from the terminal.
+
+### stravinsky-auth routing status
+View the current health, auth readiness, and request statistics for all AI providers.
+
+```bash
+stravinsky-auth routing status
+```
+
+### stravinsky-auth routing init
+Initialize a project-local routing configuration. This creates `.stravinsky/routing.json` where you can customize task-based model assignments.
+
+```bash
+stravinsky-auth routing init
+```
+
+### stravinsky-auth routing reset
+Reset rate-limit cooldowns for specific providers. Useful if you've recently upgraded your quota or waited out a temporary block.
+
+```bash
+stravinsky-auth routing reset [provider]
+# Example: stravinsky-auth routing reset gemini
+```
+
+---
+
 ## Model Invocation
 
 ### invoke_gemini

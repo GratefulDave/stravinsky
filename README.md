@@ -20,6 +20,8 @@
 - 🔄 **Hook-Based Delegation** - PreToolUse hooks enforce delegation patterns with hard boundaries (exit code 2)
 - 📝 **LSP Integration** - Full Language Server Protocol support with persistent servers (35x speedup), code refactoring, and advanced navigation
 - 🔍 **AST-Aware Search** - Structural code search and refactoring with ast-grep
+- 🧠 **Tier-Aware Routing** - Multi-provider fallback system (Claude 4.5, GPT 5.2, Gemini 3) with OAuth-first priority
+- 🧠 **Tier-Aware Routing** - Multi-provider fallback system (Claude 4.5, GPT 5.2, Gemini 3) with OAuth-first priority
 - 🧠 **Semantic Code Search** - Natural language queries with local embeddings (ChromaDB + Ollama)
 - ⚡ **Cost-Optimized Routing** - Free/cheap agents (explore, dewey) always async, expensive (delphi) only when needed
 

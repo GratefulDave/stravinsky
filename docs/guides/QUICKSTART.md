@@ -20,7 +20,17 @@ stravinsky-auth login gemini
 stravinsky-auth login openai
 ```
 
-## Step 3: Add to Your Project
+## Step 3: Initialize Project Routing
+
+Create a project-local routing configuration to optimize model usage for different tasks:
+
+```bash
+stravinsky-auth routing init
+```
+
+This creates `.stravinsky/routing.json` with default rules for code generation, debugging, and search.
+
+## Step 4: Add to Your Project
 
 Create or update `CLAUDE.md` in your project root:
 

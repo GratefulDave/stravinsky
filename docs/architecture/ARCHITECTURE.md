@@ -46,7 +46,8 @@ Stravinsky is a **Model Context Protocol (MCP) bridge** that enables Claude Code
 |-----------|------|---------|
 | **MCP Server** | `mcp_bridge/server.py` | Protocol entry point (zero-import-weight) |
 | **Agent Manager** | `tools/agent_manager.py` | Background agent orchestration |
-| **Model Routing** | `tools/model_invoke.py` | Multi-model API calls with OAuth fallback |
+| **Model Routing** | `routing/config.py` | Tier-aware multi-provider routing & OAuth fallback |
+| **Model Invoke** | `tools/model_invoke.py` | Multi-model API calls via proxy/direct |
 | **Semantic Search** | `tools/semantic_search.py` | Vector-based code search (ChromaDB) |
 | **OAuth** | `auth/google_auth.py`, `auth/openai_auth.py` | Authentication flows |
 | **Hook Manager** | `hooks/manager.py` | Tool execution middleware |

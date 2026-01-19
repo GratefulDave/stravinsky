@@ -314,6 +314,9 @@ class AgentManager:
         self._tasks: dict[str, asyncio.Task] = {}
         self._progress_monitors: dict[str, asyncio.Task] = {}
         self._stop_monitors = asyncio.Event()
+        
+        # Orchestrator Integration
+        self.orchestrator = None # Type: Optional[OrchestratorState]
 
         try:
             self._sync_cleanup(max_age_minutes=30)
@@ -414,6 +417,17 @@ class AgentManager:
         timeout: int = 300,
         semantic_first: bool = False,
     ) -> str:
+        # Orchestrator Logic
+        if self.orchestrator:
+            logger.info(f"Spawning agent {agent_type} in phase {self.orchestrator.current_phase}")
+            # Example: If in PLAN phase, inject wisdom automatically
+            from ..orchestrator.enums import OrchestrationPhase
+            if self.orchestrator.current_phase == OrchestrationPhase.PLAN:
+                from ..orchestrator.wisdom import WisdomLoader
+                wisdom = WisdomLoader().load_wisdom()
+                if wisdom:
+                    prompt = f"## PROJECT WISDOM\n{wisdom}\n\n---\n\n{prompt}"
+
         # Semantic First Context Injection
         if semantic_first and semantic_search:
             try:

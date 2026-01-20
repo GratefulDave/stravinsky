@@ -25,3 +25,11 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 - [ ] **Track: semantic_first_context_injection_20260117**
   *Link: [./conductor/tracks/semantic_first_context_injection_20260117_20260117/](./conductor/tracks/semantic_first_context_injection_20260117_20260117/)*
+
+- [ ] **Track: ralph_loop_implementation_20260117**
+  *Link: [./conductor/tracks/ralph_loop_implementation_20260117_20260118/](./conductor/tracks/ralph_loop_implementation_20260117_20260118/)*
+
+---
+
+- [~] **Track: Implement 7-Phase Orchestrator with Thinking-Variant Routing and Native Rust Output Hygiene**
+  *Link: [./conductor/tracks/seven_phase_orchestrator_20260118/](./conductor/tracks/seven_phase_orchestrator_20260118/)*

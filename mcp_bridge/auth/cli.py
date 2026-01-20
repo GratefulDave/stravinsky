@@ -14,8 +14,10 @@ Usage:
 """
 
 import argparse
+import json
 import sys
 import time
+from pathlib import Path
 
 from ..tools.init import bootstrap_repo
 from .oauth import perform_oauth_flow as gemini_oauth
@@ -27,6 +29,11 @@ from .openai_oauth import (
     refresh_access_token as openai_refresh,
 )
 from .token_store import TokenStore
+
+try:
+    from ..routing import get_provider_tracker
+except ImportError:
+    get_provider_tracker = None  # type: ignore
 
 
 def cmd_login(provider: str, token_store: TokenStore) -> int:
@@ -126,12 +133,148 @@ def cmd_status(token_store: TokenStore) -> int:
 
 
 def cmd_refresh(provider: str, token_store: TokenStore) -> int:
-    """Refresh access token for a provider."""
-    token = token_store.get_token(provider)
-    if not token or not token.get("refresh_token"):
-        print(f"No refresh token found for {provider}")
-        print(f"Please run: python -m mcp_bridge.auth.cli login {provider}")
+    """Manually refresh an access token."""
+    try:
+        token = token_store.get_token(provider)
+        if not token:
+            print(f"Not logged in to {provider}. Run 'stravinsky-auth login {provider}' first.")
+            return 1
+
+        print(f"Refreshing {provider} access token...")
+
+        if provider == "gemini":
+            result = gemini_refresh(token["refresh_token"])
+        elif provider == "openai":
+            result = openai_refresh(token["refresh_token"])
+        else:
+            print(f"Refresh not supported for {provider}")
+            return 1
+
+        expires_at = int(time.time()) + result.expires_in
+
+        token_store.set_token(
+            provider=provider,
+            access_token=result.access_token,
+            refresh_token=result.refresh_token or token["refresh_token"],
+            expires_at=expires_at,
+        )
+
+        print(f"✓ Token refreshed, expires in {result.expires_in // 60} minutes")
+        return 0
+
+    except Exception as e:
+        print(f"✗ Refresh failed: {e}", file=sys.stderr)
         return 1
+
+
+def cmd_routing_status() -> int:
+    """Show current routing provider states."""
+    if not get_provider_tracker or not callable(get_provider_tracker):
+        print("✗ Routing module not available", file=sys.stderr)
+        return 1
+
+    try:
+        tracker = get_provider_tracker()
+        status = tracker.get_status()
+
+        print("\n📊 Provider Routing Status\n")
+        for provider_name, state in status.items():
+            available = "✓ Available" if state["available"] else "⏳ In Cooldown"
+            print(f"{provider_name.title():10} {available}")
+
+            if state["cooldown_remaining"]:
+                mins = int(state["cooldown_remaining"] / 60)
+                secs = int(state["cooldown_remaining"] % 60)
+                print(f"           Cooldown: {mins}m {secs}s remaining")
+
+            print(f"           Requests: {state['total_requests']}")
+            print(f"           Failures: {state['total_failures']}")
+
+            if state["last_error"]:
+                print(f"           Last error: {state['last_error']}")
+
+            print()
+
+        return 0
+
+    except Exception as e:
+        print(f"✗ Failed to get routing status: {e}", file=sys.stderr)
+        return 1
+
+
+def cmd_routing_reset(provider: str | None = None) -> int:
+    """Reset provider cooldown states."""
+    if not get_provider_tracker or not callable(get_provider_tracker):
+        print("✗ Routing module not available", file=sys.stderr)
+        return 1
+
+    try:
+        tracker = get_provider_tracker()
+
+        if provider:
+            tracker.reset_provider(provider)
+            print(f"✓ Reset cooldown state for {provider}")
+        else:
+            tracker.reset_all()
+            print("✓ Reset all provider cooldown states")
+
+        return 0
+
+    except Exception as e:
+        print(f"✗ Failed to reset routing state: {e}", file=sys.stderr)
+        return 1
+
+
+def cmd_routing_init() -> int:
+    """Create default routing.json configuration."""
+    config_path = Path(".stravinsky/routing.json")
+
+    if config_path.exists():
+        response = input(f"{config_path} already exists. Overwrite? [y/N]: ")
+        if response.lower() != "y":
+            print("Cancelled.")
+            return 0
+
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+
+    default_config = {
+        "routing": {
+            "task_routing": {
+                "code_generation": {
+                    "provider": "openai",
+                    "model": "gpt-5-codex",
+                    "description": "Complex code generation tasks",
+                },
+                "debugging": {
+                    "provider": "openai",
+                    "model": "gpt-5-codex",
+                    "description": "Code analysis and debugging",
+                },
+                "documentation": {
+                    "provider": "gemini",
+                    "model": "gemini-3-flash",
+                    "description": "Documentation writing",
+                },
+                "code_search": {
+                    "provider": "gemini",
+                    "model": "gemini-3-flash",
+                    "description": "Finding code patterns",
+                },
+            },
+            "fallback": {
+                "enabled": True,
+                "chain": ["claude", "openai", "gemini"],
+                "cooldown_seconds": 300,
+            },
+        }
+    }
+
+    with open(config_path, "w") as f:
+        json.dump(default_config, f, indent=2)
+
+    print(f"✓ Created {config_path}")
+    print("\nEdit this file to customize routing behavior for this project.")
+    return 0
 
     try:
         print(f"Refreshing {provider} token...")
@@ -229,6 +372,41 @@ def main():
         description="Creates .stravinsky/ directory structure and copies default configuration files.",
     )
 
+    # routing command
+    routing_parser = subparsers.add_parser(
+        "routing",
+        help="Manage provider routing and fallback",
+        description="View and manage provider routing states, cooldowns, and configuration.",
+    )
+    routing_subparsers = routing_parser.add_subparsers(
+        dest="routing_command", help="Routing subcommands", metavar="SUBCOMMAND"
+    )
+
+    routing_subparsers.add_parser(
+        "status",
+        help="Show current provider routing states",
+        description="Display availability, cooldown timers, and error counts for all providers.",
+    )
+
+    routing_reset_parser = routing_subparsers.add_parser(
+        "reset",
+        help="Reset provider cooldown states",
+        description="Clear cooldown timers for one or all providers.",
+    )
+    routing_reset_parser.add_argument(
+        "provider",
+        nargs="?",
+        choices=["claude", "openai", "gemini"],
+        metavar="PROVIDER",
+        help="Provider to reset (omit to reset all)",
+    )
+
+    routing_subparsers.add_parser(
+        "init",
+        help="Create default routing.json configuration",
+        description="Generate .stravinsky/routing.json with default task-based routing rules.",
+    )
+
     args = parser.parse_args()
 
     if not args.command:
@@ -248,6 +426,16 @@ def main():
     elif args.command == "init":
         print(bootstrap_repo())
         return 0
+    elif args.command == "routing":
+        if not args.routing_command:
+            routing_parser.print_help()
+            return 1
+        if args.routing_command == "status":
+            return cmd_routing_status()
+        elif args.routing_command == "reset":
+            return cmd_routing_reset(args.provider if hasattr(args, "provider") else None)
+        elif args.routing_command == "init":
+            return cmd_routing_init()
 
     return 0
 

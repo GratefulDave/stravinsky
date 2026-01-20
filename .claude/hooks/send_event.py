@@ -76,14 +76,16 @@ def main():
 
     # Stravinsky-specific metrics (optional)
     parser.add_argument("--cost", type=float, help="Cost in USD (Stravinsky metrics)")
-    parser.add_argument("--input-tokens", type=int, help="Input token count (Stravinsky metrics)")
-    parser.add_argument("--output-tokens", type=int, help="Output token count (Stravinsky metrics)")
+    parser.add_argument("--prompt-tokens", type=int, help="Prompt token count (Stravinsky metrics)")
+    parser.add_argument(
+        "--completion-tokens", type=int, help="Completion token count (Stravinsky metrics)"
+    )
     parser.add_argument("--agent-type", type=str, help="Agent type (Stravinsky metrics)")
     parser.add_argument("--task-id", type=str, help="Task tracking ID (Stravinsky metrics)")
+    parser.add_argument("--hierarchy-level", type=int, help="Nesting depth (Stravinsky metrics)")
     parser.add_argument(
         "--parent-session-id", type=str, help="Parent session ID for hierarchy (Stravinsky metrics)"
     )
-    parser.add_argument("--hierarchy-level", type=int, help="Nesting depth (Stravinsky metrics)")
 
     args = parser.parse_args()
 
@@ -106,8 +108,8 @@ def main():
     if any(
         [
             args.cost,
-            args.input_tokens,
-            args.output_tokens,
+            args.prompt_tokens,
+            args.completion_tokens,
             args.agent_type,
             args.task_id,
             args.parent_session_id,
@@ -116,9 +118,9 @@ def main():
     ):
         stravinsky_metrics = {
             "cost_usd": args.cost,
-            "input_tokens": args.input_tokens,
-            "output_tokens": args.output_tokens,
-            "total_tokens": (args.input_tokens or 0) + (args.output_tokens or 0),
+            "prompt_tokens": args.prompt_tokens,
+            "completion_tokens": args.completion_tokens,
+            "total_tokens": (args.prompt_tokens or 0) + (args.completion_tokens or 0),
             "model": model_name,
             "provider": "anthropic",
             "agent_type": args.agent_type,
@@ -141,26 +143,44 @@ def main():
     if stravinsky_metrics:
         event_data["stravinsky"] = stravinsky_metrics
 
-    # Handle --add-chat option
-    if args.add_chat and "transcript_path" in input_data:
-        transcript_path = input_data["transcript_path"]
-        if os.path.exists(transcript_path):
-            # Read .jsonl file and convert to JSON array
-            chat_data = []
-            try:
-                with open(transcript_path, "r") as f:
-                    for line in f:
-                        line = line.strip()
-                        if line:
-                            try:
-                                chat_data.append(json.loads(line))
-                            except json.JSONDecodeError:
-                                pass  # Skip invalid lines
+    # Handle --add-chat option (OR auto-detect from session_id)
+    transcript_path = None
 
-                # Add chat to event data
-                event_data["chat"] = chat_data
-            except Exception as e:
-                print(f"Failed to read transcript: {e}", file=sys.stderr)
+    # First, check if transcript_path is explicitly provided
+    if "transcript_path" in input_data and input_data["transcript_path"]:
+        transcript_path = input_data["transcript_path"]
+    # Otherwise, try to find transcript from session_id
+    elif session_id and session_id != "unknown":
+        # Common transcript locations to try
+        possible_paths = [
+            f"~/.claude/sessions/{session_id}/transcript.jsonl",  # Claude Code default
+            f"~/.stravinsky/sessions/{session_id}/transcript.jsonl",  # Stravinsky fallback
+        ]
+
+        for path_template in possible_paths:
+            expanded_path = os.path.expanduser(path_template)
+            if os.path.exists(expanded_path):
+                transcript_path = expanded_path
+                break
+
+    # If we have a transcript path (explicit or auto-detected), read it
+    if transcript_path and os.path.exists(transcript_path):
+        # Read .jsonl file and convert to JSON array
+        chat_data = []
+        try:
+            with open(transcript_path, "r") as f:
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        try:
+                            chat_data.append(json.loads(line))
+                        except json.JSONDecodeError:
+                            pass  # Skip invalid lines
+
+            # Add chat to event data
+            event_data["chat"] = chat_data
+        except Exception as e:
+            print(f"Failed to read transcript: {e}", file=sys.stderr)
 
     # Generate summary if requested
     if args.summarize:

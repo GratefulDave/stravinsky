@@ -71,7 +71,7 @@ class CostTracker:
         except Exception as e:
             logger.error(f"Failed to write usage record: {e}")
 
-    def get_session_summary(self, session_id: str = None) -> dict:
+    def get_session_summary(self, session_id: str | None = None) -> dict:
         if session_id is None:
             session_id = os.environ.get("CLAUDE_SESSION_ID", "default")
             

@@ -21,15 +21,15 @@
 - [x] Task: Implement Model Routing Logic [8fb362f]
     - [x] Define `ModelVariant` config (Planning vs Execution models)
     - [x] Implement `Router` class to select model based on Phase
-- [ ] Task: Conductor - User Manual Verification 'Orchestrator State Machine' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Orchestrator State Machine' (Protocol in workflow.md) [checkpoint: f70b325]
 
 ## Phase 3: Workflow Enforcement & UX
-- [ ] Task: Implement Phase Gates (Optional)
-    - [ ] Add configuration toggle `enable_phase_gates`
-    - [ ] Implement pause/resume logic in Agent Loop
-- [ ] Task: Connect Orchestrator to Agent Loop
-    - [ ] Modify `agent_manager.py` to consult Orchestrator before actions
-    - [ ] Enforce artifact checks (e.g., `plan.md` must exist before Code phase)
-- [ ] Task: Add Progress Visualization
-    - [ ] Update CLI output to show `[Phase X/7]` status
+- [x] Task: Implement Phase Gates (Optional) [bacfadd]
+    - [x] Add configuration toggle `enable_phase_gates`
+    - [x] Implement pause/resume logic in Agent Loop
+- [x] Task: Connect Orchestrator to Agent Loop [f86e14c]
+    - [x] Modify `agent_manager.py` to consult Orchestrator before actions
+    - [x] Enforce artifact checks (e.g., `plan.md` must exist before Code phase)
+- [x] Task: Add Progress Visualization [9a0d825]
+    - [x] Update CLI output to show `[Phase X/7]` status
 - [ ] Task: Conductor - User Manual Verification 'Workflow Enforcement & UX' (Protocol in workflow.md)

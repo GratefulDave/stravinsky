@@ -1010,6 +1010,31 @@ def main():
         help="Also clear agent history from .stravinsky/agents.json",
     )
 
+    # proxy command (model server proxy)
+    proxy_parser = subparsers.add_parser(
+        "proxy",
+        help="Manage the model proxy server",
+        description="Starts or manages the FastAPI model proxy for async execution.",
+    )
+    proxy_subparsers = proxy_parser.add_subparsers(
+        dest="proxy_command", help="Proxy subcommands", metavar="SUBCOMMAND"
+    )
+    proxy_subparsers.add_parser(
+        "start",
+        help="Start the model proxy server",
+        description="Launches the FastAPI server on port 8765.",
+    )
+    proxy_subparsers.add_parser(
+        "stop",
+        help="Stop the model proxy server",
+        description="Terminates any running model proxy process.",
+    )
+    proxy_subparsers.add_parser(
+        "status",
+        help="Check proxy server status",
+        description="Verifies if the proxy server is reachable.",
+    )
+
     # auth command (authentication)
     auth_parser = subparsers.add_parser(
         "auth",
@@ -1120,6 +1145,51 @@ def main():
         else:
             print(f"Stopped {count} running agent(s).")
         return 0
+
+    elif args.command == "proxy":
+        proxy_cmd = getattr(args, "proxy_command", None)
+        import os
+        import sys
+
+        if proxy_cmd == "start":
+            from .proxy.model_server import main as proxy_main
+
+            proxy_main()
+            return 0
+        elif proxy_cmd == "stop":
+            # Simple kill-by-port for now
+            import os
+            import subprocess
+
+            port = int(os.getenv("STRAVINSKY_PROXY_PORT", 8765))
+            try:
+                if sys.platform == "win32":
+                    subprocess.run(
+                        f"taskkill /F /FI \"PID eq $(netstat -ano | findstr :{port} | awk '{{print $5}}')\"",
+                        shell=True,
+                    )
+                else:
+                    subprocess.run(f"lsof -ti:{port} | xargs kill -9", shell=True)
+                print(f"Stopped proxy on port {port}")
+            except Exception as e:
+                print(f"Failed to stop proxy: {e}")
+            return 0
+        elif proxy_cmd == "status":
+            import socket
+
+            port = int(os.getenv("STRAVINSKY_PROXY_PORT", 8765))
+            host = os.getenv("STRAVINSKY_PROXY_HOST", "127.0.0.1")
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.settimeout(1)
+                try:
+                    s.connect((host, port))
+                    print(f"✅ Proxy is RUNNING on {host}:{port}")
+                except Exception:
+                    print(f"❌ Proxy is NOT RUNNING on {host}:{port}")
+            return 0
+        else:
+            proxy_parser.print_help()
+            return 0
 
     elif args.command == "auth":
         auth_cmd = getattr(args, "auth_command", None)

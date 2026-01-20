@@ -14,6 +14,8 @@ import time
 import uuid
 
 from mcp_bridge.config.rate_limits import get_rate_limiter, get_gemini_time_limiter
+from mcp_bridge.routing.model_tiers import get_oauth_fallback_chain
+from mcp_bridge.routing.provider_state import get_provider_tracker
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +54,13 @@ _CODEX_INSTRUCTIONS_RELEASE_TAG = "rust-v0.77.0"  # Update as needed
 # After 5 minutes, we automatically retry OAuth.
 _GEMINI_OAUTH_429_TIMESTAMP: float | None = None  # Timestamp of last 429
 _OAUTH_COOLDOWN_SECONDS = 300  # 5 minutes
+
+# ==============================================
+# OPENAI AUTH MODE STATE (OAuth-first with 429 fallback)
+# ==============================================
+# When OpenAI OAuth gets a 429 rate limit, we fallback to Gemini for 5 minutes.
+# After 5 minutes, we automatically retry OpenAI OAuth.
+_OPENAI_OAUTH_429_TIMESTAMP: float | None = None  # Timestamp of last OpenAI 429
 
 
 def _get_gemini_api_key() -> str | None:
@@ -109,6 +118,58 @@ def reset_gemini_auth_mode():
     global _GEMINI_OAUTH_429_TIMESTAMP
     _GEMINI_OAUTH_429_TIMESTAMP = None
     logger.info("[Gemini] Reset to OAuth-first mode")
+
+
+def _set_openai_fallback_mode(reason: str = "429 rate limit"):
+    """Switch to Gemini fallback after OpenAI rate limit (5-minute cooldown)."""
+    global _OPENAI_OAUTH_429_TIMESTAMP
+    _OPENAI_OAUTH_429_TIMESTAMP = time.time()
+    logger.warning(f"[OpenAI] Switching to Gemini fallback: {reason}")
+    import sys
+
+    print(
+        f"⚠️ OPENAI: OAuth rate-limited (429). "
+        f"Using Gemini for 5 minutes (will retry OpenAI at {time.strftime('%H:%M:%S', time.localtime(_OPENAI_OAUTH_429_TIMESTAMP + _OAUTH_COOLDOWN_SECONDS))}).",
+        file=sys.stderr,
+    )
+
+
+def _is_openai_fallback_mode() -> bool:
+    """
+    Check if we're in Gemini fallback mode (5-minute cooldown after OpenAI 429).
+
+    Returns True if:
+    - OpenAI 429 occurred AND
+    - Less than 5 minutes have elapsed
+
+    Automatically resets to OpenAI mode after 5 minutes.
+    """
+    global _OPENAI_OAUTH_429_TIMESTAMP
+
+    if _OPENAI_OAUTH_429_TIMESTAMP is None:
+        return False
+
+    elapsed = time.time() - _OPENAI_OAUTH_429_TIMESTAMP
+
+    if elapsed >= _OAUTH_COOLDOWN_SECONDS:
+        # Cooldown expired - reset to OpenAI mode
+        logger.info(
+            f"[OpenAI] 5-minute cooldown expired (elapsed: {elapsed:.0f}s). Retrying OpenAI OAuth."
+        )
+        _OPENAI_OAUTH_429_TIMESTAMP = None
+        return False
+
+    # Still in cooldown
+    remaining = _OAUTH_COOLDOWN_SECONDS - elapsed
+    logger.debug(f"[OpenAI] Gemini fallback mode active ({remaining:.0f}s remaining)")
+    return True
+
+
+def reset_openai_auth_mode():
+    """Reset to OpenAI-first mode. Call this to manually reset cooldown."""
+    global _OPENAI_OAUTH_429_TIMESTAMP
+    _OPENAI_OAUTH_429_TIMESTAMP = None
+    logger.info("[OpenAI] Reset to OAuth-first mode")
 
 
 async def _fetch_codex_instructions(model: str = "gpt-5.2-codex") -> str:
@@ -507,18 +568,19 @@ async def _invoke_gemini_with_api_key(
         # Track usage
         try:
             from mcp_bridge.metrics.cost_tracker import get_cost_tracker
+
             tracker = get_cost_tracker()
             if hasattr(response, "usage_metadata"):
                 usage = response.usage_metadata
                 agent_type = (agent_context or {}).get("agent_type", "unknown")
                 task_id = (agent_context or {}).get("task_id", "")
-                
+
                 tracker.track_usage(
                     model=model,
                     input_tokens=usage.prompt_token_count,
                     output_tokens=usage.candidates_token_count,
                     agent_type=agent_type,
-                    task_id=task_id
+                    task_id=task_id,
                 )
         except Exception:
             pass
@@ -663,6 +725,45 @@ async def invoke_gemini(
             # Prepend auth header for visibility in logs
             auth_header = f"[Auth: API key (5-min cooldown) | Model: {model}]\n\n"
             return auth_header + result
+
+    provider_tracker = get_provider_tracker()
+
+    # If Gemini is in cooldown, follow tier-aware fallback chain.
+    if not provider_tracker.is_available("gemini"):
+        for candidate_provider, candidate_model, use_oauth in get_oauth_fallback_chain("gemini", model):
+            if candidate_provider == "gemini" and use_oauth:
+                continue
+            if use_oauth and not provider_tracker.is_available(candidate_provider):
+                continue
+
+            if candidate_provider == "gemini" and not use_oauth:
+                api_key = _get_gemini_api_key()
+                if not api_key:
+                    continue
+                _set_api_only_mode("Gemini in cooldown; using API key")
+                result = await _invoke_gemini_with_api_key(
+                    api_key=api_key,
+                    prompt=prompt,
+                    model=candidate_model,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    thinking_budget=thinking_budget,
+                    image_path=image_path,
+                    agent_context=agent_context,
+                )
+                auth_header = f"[Auth: API key (cooldown) | Model: {candidate_model}]\n\n"
+                return auth_header + result
+
+            if candidate_provider == "openai" and use_oauth:
+                return await invoke_openai(
+                    token_store=token_store,
+                    prompt=prompt,
+                    model=candidate_model,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    thinking_budget=0,
+                    reasoning_effort="medium",
+                )
 
     # DEFAULT: Try OAuth first (Antigravity)
 
@@ -833,35 +934,60 @@ async def invoke_gemini(
             break
 
         # ==============================================
-        # 429 RATE LIMIT DETECTION: Fallback to API key
+        # 429 RATE LIMIT DETECTION: Tier-aware fallback chain
         # ==============================================
-        # If OAuth got rate-limited (429), switch to API-only mode and retry with API key
         if response is not None and response.status_code == 429:
-            api_key = _get_gemini_api_key()
-            if api_key:
-                _set_api_only_mode("OAuth rate-limited (429)")
-                logger.info("[Gemini] Retrying with API key after OAuth 429")
-                # Retry immediately with API key
-                result = await _invoke_gemini_with_api_key(
-                    api_key=api_key,
-                    prompt=prompt,
-                    model=model,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                    thinking_budget=thinking_budget,
-                    image_path=image_path,
-                    agent_context=agent_context,
-                )
-                # Prepend auth header for visibility
-                auth_header = f"[Auth: API key (OAuth 429 fallback) | Model: {model}]\n\n"
-                return auth_header + result
-            else:
-                # No API key available - raise clear error
-                raise ValueError(
-                    "OAuth rate-limited (429) and no API key available. "
-                    "Add GEMINI_API_KEY to ~/.stravinsky/.env"
-                )
+            provider_tracker = get_provider_tracker()
+            provider_tracker.mark_rate_limited(
+                "gemini",
+                duration=_OAUTH_COOLDOWN_SECONDS,
+                reason="Gemini OAuth rate-limited (429)",
+            )
 
+            for candidate_provider, candidate_model, use_oauth in get_oauth_fallback_chain(
+                "gemini", model
+            ):
+                if candidate_provider == "gemini" and use_oauth:
+                    continue
+                if use_oauth and not provider_tracker.is_available(candidate_provider):
+                    continue
+
+                if candidate_provider == "gemini" and not use_oauth:
+                    api_key = _get_gemini_api_key()
+                    if not api_key:
+                        continue
+                    _set_api_only_mode("OAuth rate-limited (429)")
+                    logger.info("[Gemini] Retrying with API key after OAuth 429")
+                    result = await _invoke_gemini_with_api_key(
+                        api_key=api_key,
+                        prompt=prompt,
+                        model=candidate_model,
+                        temperature=temperature,
+                        max_tokens=max_tokens,
+                        thinking_budget=thinking_budget,
+                        image_path=image_path,
+                        agent_context=agent_context,
+                    )
+                    auth_header = (
+                        f"[Auth: API key (OAuth 429 fallback) | Model: {candidate_model}]\n\n"
+                    )
+                    return auth_header + result
+
+                if candidate_provider == "openai" and use_oauth:
+                    return await invoke_openai(
+                        token_store=token_store,
+                        prompt=prompt,
+                        model=candidate_model,
+                        temperature=temperature,
+                        max_tokens=max_tokens,
+                        thinking_budget=0,
+                        reasoning_effort="medium",
+                    )
+
+            raise ValueError(
+                "OAuth rate-limited (429) and no fallback succeeded. "
+                "Add GEMINI_API_KEY to ~/.stravinsky/.env"
+            )
         if response is None:
             # FALLBACK: Try Claude sonnet-4.5 for agents that support it
             agent_context = params.get("agent_context", {})
@@ -892,17 +1018,18 @@ async def invoke_gemini(
         # Track usage
         try:
             from mcp_bridge.metrics.cost_tracker import get_cost_tracker
+
             tracker = get_cost_tracker()
             usage = data.get("usageMetadata", {})
             input_tokens = usage.get("promptTokenCount", 0)
             output_tokens = usage.get("candidatesTokenCount", 0)
-            
+
             tracker.track_usage(
                 model=model,
                 input_tokens=input_tokens,
                 output_tokens=output_tokens,
                 agent_type=agent_type,
-                task_id=task_id
+                task_id=task_id,
             )
         except Exception as e:
             logger.warning(f"Failed to track cost: {e}")
@@ -1076,23 +1203,24 @@ async def _execute_tool(name: str, args: dict) -> str:
 
         elif name == "read_file":
             from .read_file import read_file
+
             path = args["path"]
             return await read_file(path)
 
         elif name == "list_directory":
             from .list_directory import list_directory
+
             path = args["path"]
             return await list_directory(path)
 
         elif name == "grep_search":
             pattern = args["pattern"]
             search_path = args["path"]
-            
+
             result_obj = await async_execute(
-                ["rg", "--json", "-m", "50", pattern, search_path],
-                timeout=30
+                ["rg", "--json", "-m", "50", pattern, search_path], timeout=30
             )
-            
+
             if result_obj.returncode == 0:
                 return result_obj.stdout[:10000]  # Limit output size
             elif result_obj.returncode == 1:
@@ -1102,6 +1230,7 @@ async def _execute_tool(name: str, args: dict) -> str:
 
         elif name == "write_file":
             from .write_file import write_file
+
             path = args["path"]
             content = args["content"]
             return await write_file(path, content)
@@ -1275,13 +1404,9 @@ async def invoke_gemini_agentic(
 
     if is_proxy_enabled():
         import httpx
+
         async with httpx.AsyncClient(timeout=float(timeout) + 10) as client:
-            payload = {
-                "prompt": prompt,
-                "model": model,
-                "max_turns": max_turns,
-                "timeout": timeout
-            }
+            payload = {"prompt": prompt, "model": model, "max_turns": max_turns, "timeout": timeout}
             response = await client.post(f"{PROXY_URL}/v1/gemini/agentic", json=payload)
             response.raise_for_status()
             return response.json()["response"]
@@ -1596,6 +1721,41 @@ async def invoke_openai(
 
     task_info = f" task={task_id}" if task_id else ""
     desc_info = f" | {description}" if description else ""
+
+    # ==============================================
+    # AUTH PRIORITY: OAuth first, Gemini fallback on 429
+    # ==============================================
+    # 1. If fallback mode (after 429), use Gemini directly
+    # 2. Otherwise, try OpenAI OAuth first
+    # 3. On 429 from OAuth, switch to fallback mode and retry with Gemini
+
+    provider_tracker = get_provider_tracker()
+
+    # If OpenAI is in cooldown, follow tier-aware fallback chain.
+    if not provider_tracker.is_available("openai"):
+        for candidate_provider, candidate_model, use_oauth in get_oauth_fallback_chain("openai", model):
+            if candidate_provider == "openai":
+                continue
+            if use_oauth and not provider_tracker.is_available(candidate_provider):
+                continue
+
+            if candidate_provider == "gemini":
+                if not use_oauth:
+                    # Force Gemini API-key mode for the cooldown window.
+                    if _get_gemini_api_key() is None:
+                        continue
+                    _set_api_only_mode("OpenAI in cooldown; using Gemini API key")
+
+                return await invoke_gemini(
+                    token_store=token_store,
+                    prompt=prompt,
+                    model=candidate_model,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    thinking_budget=0,
+                    image_path=None,
+                )
+    # DEFAULT: Try OpenAI OAuth first
     print(f"🧠 OPENAI: {model} | agent={agent_type}{task_info}{desc_info}", file=sys.stderr)
 
     access_token = await _ensure_valid_token(token_store, "openai")
@@ -1668,6 +1828,42 @@ async def invoke_openai(
             if response.status_code == 401:
                 raise ValueError("OpenAI authentication failed. Run: stravinsky-auth login openai")
 
+            # ==============================================
+            # 429 RATE LIMIT DETECTION: Tier-aware fallback chain
+            # ==============================================
+            if response.status_code == 429:
+                provider_tracker = get_provider_tracker()
+                provider_tracker.mark_rate_limited(
+                    "openai",
+                    duration=_OAUTH_COOLDOWN_SECONDS,
+                    reason="OpenAI OAuth rate-limited (429)",
+                )
+
+                for candidate_provider, candidate_model, use_oauth in get_oauth_fallback_chain(
+                    "openai", model
+                ):
+                    if candidate_provider == "openai":
+                        continue
+                    if use_oauth and not provider_tracker.is_available(candidate_provider):
+                        continue
+
+                    if candidate_provider == "gemini":
+                        if not use_oauth:
+                            if _get_gemini_api_key() is None:
+                                continue
+                            _set_api_only_mode("OpenAI OAuth rate-limited (429)")
+
+                        return await invoke_gemini(
+                            token_store=token_store,
+                            prompt=prompt,
+                            model=candidate_model,
+                            temperature=temperature,
+                            max_tokens=max_tokens,
+                            thinking_budget=0,
+                            image_path=None,
+                        )
+
+                raise ValueError("OpenAI OAuth rate-limited (429) and no fallback succeeded")
             if response.status_code >= 400:
                 error_body = await response.aread()
                 error_text = error_body.decode("utf-8")
@@ -1696,21 +1892,22 @@ async def invoke_openai(
 
         # Return collected text
         result = "".join(text_chunks)
-        
+
         # Track estimated usage
         try:
             from mcp_bridge.metrics.cost_tracker import get_cost_tracker
+
             tracker = get_cost_tracker()
             # Estimate: 4 chars per token
             input_tokens = len(prompt) // 4
             output_tokens = len(result) // 4
-            
+
             tracker.track_usage(
                 model=model,
                 input_tokens=input_tokens,
                 output_tokens=output_tokens,
                 agent_type=agent_type,
-                task_id=task_id
+                task_id=task_id,
             )
         except Exception as e:
             logger.warning(f"Failed to track cost: {e}")

@@ -1,61 +1,31 @@
 {
   "dependencies": {
-    "1": {
+    "tier_def": {
       "deps": [],
       "independent": true,
       "parallel_safe": true
     },
-    "2": {
+    "chain_logic": {
       "deps": [],
       "independent": true,
       "parallel_safe": true
     },
-    "3": {
+    "config_update": {
       "deps": [],
       "independent": true,
       "parallel_safe": true
     },
-    "4": {
+    "router_integration": {
       "deps": [],
       "independent": true,
       "parallel_safe": true
     },
-    "5": {
+    "invoke_update": {
       "deps": [],
       "independent": true,
       "parallel_safe": true
     },
-    "6": {
-      "deps": [],
-      "independent": true,
-      "parallel_safe": true
-    },
-    "7": {
-      "deps": [],
-      "independent": true,
-      "parallel_safe": true
-    },
-    "8": {
-      "deps": [],
-      "independent": true,
-      "parallel_safe": true
-    },
-    "9": {
-      "deps": [],
-      "independent": true,
-      "parallel_safe": true
-    },
-    "10": {
-      "deps": [],
-      "independent": true,
-      "parallel_safe": true
-    },
-    "11": {
-      "deps": [],
-      "independent": true,
-      "parallel_safe": true
-    },
-    "12": {
+    "verify_routing": {
       "deps": [],
       "independent": true,
       "parallel_safe": true

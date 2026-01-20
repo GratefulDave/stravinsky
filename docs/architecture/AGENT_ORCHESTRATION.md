@@ -17,14 +17,14 @@ flowchart TB
         subgraph "Async Agents (Cheap)"
             E1[explore<br/>gemini-3-flash]
             E2[dewey<br/>gemini-3-flash]
-            CR[code-reviewer<br/>gemini-3-flash]
+            CR[code-reviewer<br/>Claude Sonnet]
         end
 
         subgraph "Blocking Agents (When Needed)"
             FE[frontend<br/>gemini-3-pro-high]
             DEB[debugger<br/>Claude Sonnet]
-            DEL[delphi<br/>gpt-5.2]
-        end
+            DEL[delphi<br/>gpt-5.2-medium]
+        end–
     end
 
     STRAV --> TODO
@@ -45,19 +45,19 @@ flowchart TB
 | **stravinsky** | Sonnet 4.5 (32k thinking) | Moderate | Primary | `/strav` command |
 | **explore** | gemini-3-flash | Free | Async | Code search queries |
 | **dewey** | gemini-3-flash | Cheap | Async | Documentation research |
-| **code-reviewer** | gemini-3-flash | Cheap | Async | Quality analysis |
+| **code-reviewer** | Claude Sonnet | Cheap | Async | Quality analysis |
 | **frontend** | gemini-3-pro-high | Medium | Blocking | ALL visual changes |
 | **debugger** | Claude Sonnet | Medium | Blocking | After 2+ failures |
-| **delphi** | gpt-5.2 | Expensive | Blocking | Architecture, 3+ failures |
+| **delphi** | gpt-5.2-medium | Expensive | Blocking | Architecture, 3+ failures |
 
 ### Cost Optimization Strategy
 
 ```mermaid
 pie title Agent Cost Distribution
     "Free (explore)" : 40
-    "Cheap (dewey, code-reviewer, momus)" : 30
-    "Medium (frontend, debugger, impl-lead)" : 20
-    "Expensive (delphi, planner)" : 10
+    "Cheap (dewey, code-reviewer)" : 30
+    "Medium (frontend, debugger)" : 20
+    "Expensive (delphi)" : 10
 ```
 
 **Principle**: Use the cheapest agent that can complete the task.

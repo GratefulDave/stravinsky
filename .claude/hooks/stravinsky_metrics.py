@@ -33,14 +33,14 @@ import subprocess
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, Any
+from mcp_bridge.metrics.cost_tracker import CostTracker
 
 
 def load_usage_data(session_id: str) -> Dict[str, Any]:
     """
-    Load usage data from Stravinsky's metrics storage.
-
-    TODO: Replace this with actual integration using CostTracker.get_session_summary()
-    Currently reads directly from ~/.stravinsky/usage.jsonl as a placeholder.
+    Load usage data from Stravinsky's cost tracker.
+    
+    Uses CostTracker.get_session_summary() to get metrics for a session.
 
     Args:
         session_id: Claude Code session ID
@@ -48,60 +48,19 @@ def load_usage_data(session_id: str) -> Dict[str, Any]:
     Returns:
         Dictionary with metrics data
     """
-    usage_file = Path.home() / ".stravinsky" / "usage.jsonl"
-
-    if not usage_file.exists():
-        return {"total_cost": 0.0, "total_tokens": 0, "by_agent": {}, "by_model": {}}
-
-    total_cost = 0.0
-    total_tokens = 0
-    by_agent = {}
-    by_model = {}
-
-    try:
-        with open(usage_file, "r") as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-
-                try:
-                    record = json.loads(line)
-
-                    if record.get("session_id") != session_id:
-                        continue
-
-                    cost = record.get("cost", 0.0)
-                    tokens = record.get("input_tokens", 0) + record.get("output_tokens", 0)
-                    agent_type = record.get("agent_type", "unknown")
-                    model = record.get("model", "unknown")
-
-                    total_cost += cost
-                    total_tokens += tokens
-
-                    if agent_type not in by_agent:
-                        by_agent[agent_type] = {"cost": 0.0, "tokens": 0}
-                    by_agent[agent_type]["cost"] += cost
-                    by_agent[agent_type]["tokens"] += tokens
-
-                    if model not in by_model:
-                        by_model[model] = {"cost": 0.0, "tokens": 0}
-                    by_model[model]["cost"] += cost
-                    by_model[model]["tokens"] += tokens
-
-                except json.JSONDecodeError:
-                    continue
-
-    except Exception as e:
-        print(f"Error reading usage file: {e}", file=sys.stderr)
-        return None
-
-    return {
-        "total_cost": round(total_cost, 6),
-        "total_tokens": total_tokens,
-        "by_agent": by_agent,
-        "by_model": by_model,
+    summary = CostTracker.get_instance().get_session_summary(session_id)
+    
+    # Transform CostTracker summary to expected format
+    metrics = {
+        "total_cost": summary.get("total_cost", 0),
+        "total_tokens": summary.get("total_tokens", 0),
+        "by_agent": summary.get("by_agent", {}),
+        "by_model": {},  # Extract from summary if available
     }
+    
+    return metrics
+
+
 
 
 def send_metrics_event(session_id: str, metrics: Dict[str, Any]) -> bool:

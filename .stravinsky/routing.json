@@ -1,0 +1,35 @@
+{
+  "routing": {
+    "task_routing": {
+      "code_generation": {
+        "provider": "openai",
+        "model": "gpt-5-codex",
+        "description": "Complex code generation tasks"
+      },
+      "debugging": {
+        "provider": "openai",
+        "model": "gpt-5-codex",
+        "description": "Code analysis and debugging"
+      },
+      "documentation": {
+        "provider": "gemini",
+        "model": "gemini-3-flash",
+        "description": "Documentation writing"
+      },
+      "code_search": {
+        "provider": "gemini",
+        "model": "gemini-3-flash",
+        "description": "Finding code patterns"
+      }
+    },
+    "fallback": {
+      "enabled": true,
+      "chain": [
+        "claude",
+        "openai",
+        "gemini"
+      ],
+      "cooldown_seconds": 300
+    }
+  }
+}

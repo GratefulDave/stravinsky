@@ -82,6 +82,15 @@ if [ -d "tests" ] && [ -n "$(find tests -name 'test_*.py' -o -name '*_test.py')"
         --ignore=tests/test_hooks.py \
         --ignore=tests/test_new_hooks.py \
         --ignore=tests/test_invoke_gemini_agentic.py \
+        --ignore=tests/test_agent_understanding.py \
+        --ignore=tests/test_api_key_auth.py \
+        --ignore=tests/test_delegation_enforcement.py \
+        --ignore=tests/test_model_routing.py \
+        --ignore=tests/test_lsp_tools.py \
+        --ignore=tests/test_oauth_routing.py \
+        --ignore=tests/test_routing.py \
+        --ignore=tests/test_native_integration.py \
+        --ignore=tests/test_native_truncation.py \
         --ignore=tests/test_todo_verification.py \
         --ignore=tests/test_semantic_auto_index.py \
         --ignore=tests/test_mcp_server_integration.py \

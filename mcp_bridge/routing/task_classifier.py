@@ -22,6 +22,8 @@ class TaskType(Enum):
     CODE_REFACTORING = auto()  # Improving existing code structure
     DEBUGGING = auto()  # Fixing bugs and errors
     ARCHITECTURE = auto()  # System design and planning
+    ARCHITECTURE_MAJOR = auto()  # Major architecture changes (GPT-5.2 High)
+    NEW_FEATURE = auto()  # New feature implementation (GPT-5.2 High + Opus evaluation)
     DOCUMENTATION = auto()  # Writing docs, comments, READMEs
     CODE_SEARCH = auto()  # Finding code patterns
     SECURITY_REVIEW = auto()  # Security analysis
@@ -74,6 +76,16 @@ TASK_PATTERNS: dict[TaskType, list[str]] = {
         r"\b(secure|harden|protect)\b",
         r"\b(xss|csrf|sql\s*injection|rce)\b",
     ],
+    TaskType.ARCHITECTURE_MAJOR: [
+        r"\b(major|large|big)\b.*\b(architecture|redesign|rewrite)\b",
+        r"\b(migrate|re-architect|replatform)\b",
+        r"\b(complete\s*overhaul|full\s*rewrite)\b",
+    ],
+    TaskType.NEW_FEATURE: [
+        r"\b(new\s*feature|add\s*feature|introduce\s*feature)\b",
+        r"\b(build|implement|add)\b.*\b(new)\b.*\b(feature|capability)\b",
+        r"\b(feature\s*request|new\s*functionality)\b",
+    ],
 }
 
 # Default routing for each task type
@@ -82,6 +94,8 @@ DEFAULT_TASK_ROUTING: dict[TaskType, tuple[str, str | None]] = {
     TaskType.CODE_REFACTORING: ("openai", "gpt-5-codex"),
     TaskType.DEBUGGING: ("openai", "gpt-5-codex"),
     TaskType.ARCHITECTURE: ("openai", "gpt-5.2-medium"),  # Delphi-style
+    TaskType.ARCHITECTURE_MAJOR: ("openai", "gpt-5.2-high"),  # HIGH tier for major changes
+    TaskType.NEW_FEATURE: ("openai", "gpt-5.2-high"),  # HIGH tier with Opus evaluation
     TaskType.DOCUMENTATION: ("gemini", "gemini-3-flash"),
     TaskType.CODE_SEARCH: ("gemini", "gemini-3-flash"),
     TaskType.SECURITY_REVIEW: ("claude", None),  # Keep in Claude

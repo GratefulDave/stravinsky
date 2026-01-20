@@ -1,6 +1,15 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
+
+# /// script
+# requires-python = ">=3.11"
+# dependencies = []
+# # [tool.uv]
+# # allow-unquoted-path = true
+# ///
+
 """
 Stravinsky Metrics Hook Script
+
 
 Queries Stravinsky's internal metrics and sends them to the observability dashboard.
 This hook is triggered on Stop/SubagentStop events.
@@ -39,7 +48,7 @@ from mcp_bridge.metrics.cost_tracker import CostTracker
 def load_usage_data(session_id: str) -> Dict[str, Any]:
     """
     Load usage data from Stravinsky's cost tracker.
-    
+
     Uses CostTracker.get_session_summary() to get metrics for a session.
 
     Args:
@@ -49,7 +58,7 @@ def load_usage_data(session_id: str) -> Dict[str, Any]:
         Dictionary with metrics data
     """
     summary = CostTracker.get_instance().get_session_summary(session_id)
-    
+
     # Transform CostTracker summary to expected format
     metrics = {
         "total_cost": summary.get("total_cost", 0),
@@ -57,10 +66,8 @@ def load_usage_data(session_id: str) -> Dict[str, Any]:
         "by_agent": summary.get("by_agent", {}),
         "by_model": {},  # Extract from summary if available
     }
-    
+
     return metrics
-
-
 
 
 def send_metrics_event(session_id: str, metrics: Dict[str, Any]) -> bool:

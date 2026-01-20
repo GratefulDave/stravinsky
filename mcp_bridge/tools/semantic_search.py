@@ -1190,29 +1190,31 @@ class CodebaseVectorStore:
                 end_line = nc["end_line"]
                 chunk_text = nc["content"]
                 content_hash = hashlib.md5(chunk_text.encode("utf-8")).hexdigest()[:12]
-                
+
                 node_type = nc.get("node_type", "unknown")
                 name = nc.get("name")
-                
+
                 if name:
                     header = f"File: {rel_path}\n{node_type.capitalize()}: {name}\nLines: {start_line}-{end_line}"
                 else:
                     header = f"File: {rel_path}\nLines: {start_line}-{end_line}"
-                
+
                 document = f"{header}\n\n{chunk_text}"
-                
-                chunks.append({
-                    "id": f"{rel_path}:{start_line}-{end_line}:{content_hash}",
-                    "document": document,
-                    "metadata": {
-                        "file_path": rel_path,
-                        "start_line": start_line,
-                        "end_line": end_line,
-                        "language": language,
-                        "node_type": node_type,
-                        "name": name or "",
+
+                chunks.append(
+                    {
+                        "id": f"{rel_path}:{start_line}-{end_line}:{content_hash}",
+                        "document": document,
+                        "metadata": {
+                            "file_path": rel_path,
+                            "start_line": start_line,
+                            "end_line": end_line,
+                            "language": language,
+                            "node_type": node_type,
+                            "name": name or "",
+                        },
                     }
-                })
+                )
             if chunks:
                 return chunks
 
@@ -2086,13 +2088,15 @@ def _prompt_with_timeout(prompt_text: str, timeout: int = 30) -> str:
         response = input(prompt_text)
         signal.alarm(0)  # Cancel alarm
         # Restore old handler
-        signal.signal(signal.SIGALRM, old_handler)
+        if old_handler:
+            signal.signal(signal.SIGALRM, old_handler)
         return response
     except (TimeoutError, EOFError):
         signal.alarm(0)  # Cancel alarm
         # Restore old handler
         try:
-            signal.signal(signal.SIGALRM, old_handler)
+            if "old_handler" in locals() and old_handler:
+                signal.signal(signal.SIGALRM, old_handler)
         except Exception:
             pass
         print("\n⏱️  Timeout - skipping index creation", file=sys.stderr)
@@ -2168,7 +2172,9 @@ async def semantic_search(
                 # Auto-start file watcher
                 print("🔄 Starting file watcher for auto-updates...", file=sys.stderr)
                 await start_file_watcher(project_path, provider)
-                print("✅ File watcher started - index will auto-update on changes", file=sys.stderr)
+                print(
+                    "✅ File watcher started - index will auto-update on changes", file=sys.stderr
+                )
 
             except Exception as e:
                 logger.error(f"Failed to create index: {e}")
@@ -2567,37 +2573,17 @@ async def start_file_watcher(
     with _watchers_lock:
         if path_key not in _watchers:
             store = get_store(project_path, provider)
-
-            # Check if index exists - create if missing, update if stale
-            try:
-                stats = store.get_stats()
-                chunks_indexed = stats.get("chunks_indexed", 0)
-
-                if chunks_indexed == 0:
-                    # No index exists - create initial index
-                    print("📋 No index found, creating initial index...", file=sys.stderr)
-                    await store.index_codebase(force=False)
-                    print("✅ Initial index created, starting file watcher", file=sys.stderr)
-                else:
-                    # Index exists - catch up on any missed changes since watcher was off
-                    print("📋 Catching up on changes since last index...", file=sys.stderr)
-                    await store.index_codebase(force=False)
-                    print("✅ Index updated, starting file watcher", file=sys.stderr)
-
-            except Exception as e:
-                # Failed to index - log and create watcher anyway (it will index on file changes)
-                logger.warning(f"Failed to index before starting watcher: {e}")
-                print(f"⚠️  Warning: Could not index project: {e}", file=sys.stderr)
-                print(
-                    "🔄 Starting watcher anyway - will index on first file change", file=sys.stderr
-                )
-
             watcher = store.start_watching(debounce_seconds=debounce_seconds)
             _watchers[path_key] = watcher
+
+            # Background the initial reindex to avoid blocking MCP tool call
+            print(f"🔄 Starting background reindex for {project_path}...", file=sys.stderr)
+            watcher._indexing_worker.request_reindex([])
         else:
             watcher = _watchers[path_key]
             if not watcher.is_running():
                 watcher.start()
+                watcher._indexing_worker.request_reindex([])
         return _watchers[path_key]
 
 
@@ -3123,9 +3109,7 @@ class DedicatedIndexingWorker:
             return
 
         self._shutdown.clear()
-        self._thread = threading.Thread(
-            target=self._run_worker, daemon=False, name="IndexingWorker"
-        )
+        self._thread = threading.Thread(target=self._run_worker, daemon=True, name="IndexingWorker")
         self._thread.start()
         logger.info(f"Started indexing worker for {self.store.project_path}")
 
@@ -3269,7 +3253,7 @@ class CodebaseFileWatcher:
         # Observer and handler for watchdog
         self._observer = None
         self._event_handler = None
-        
+
         # Native watcher
         self._native_watcher: NativeFileWatcher | None = None
 
@@ -3304,7 +3288,7 @@ class CodebaseFileWatcher:
                 try:
                     self._native_watcher = NativeFileWatcher(
                         str(self.project_path),
-                        on_change=lambda type, path: self._on_file_changed(Path(path))
+                        on_change=lambda type, path: self._on_file_changed(Path(path)),
                     )
                     self._native_watcher.start()
                     self._running = True

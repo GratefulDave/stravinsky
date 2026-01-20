@@ -4,15 +4,31 @@ Stravinsky features a sophisticated **Tier-Aware Multi-Provider Routing System**
 
 ## Model Tiers
 
-Models are classified into two primary tiers based on capability and cost:
+Models are classified into three tiers based on capability, cost, and use case:
 
-| Tier | Claude (Anthropic) | OpenAI (ChatGPT) | Gemini (Google) |
-|------|--------------------|------------------|-----------------|
-| **PREMIUM** | Claude 4.5 Opus | GPT 5.2 Codex | Gemini 3 Pro |
-| **STANDARD**| Claude 4.5 Sonnet | GPT 5.2 | Gemini 3 Flash Preview |
+| Tier | Claude (Anthropic) | OpenAI (ChatGPT) | Gemini (Google) | Use Case |
+|------|--------------------|------------------|-----------------|----------|
+| **HIGH** | Claude 4.5 Opus (Thinking) | GPT 5.2 | Gemini 3 Pro | Architecture, strategic decisions, complex debugging |
+| **PREMIUM** | Claude 4.5 Opus | GPT 5.2 Codex | Gemini 3 Pro | Code generation, complex implementation |
+| **STANDARD**| Claude 4.5 Sonnet | GPT 5.2 | Gemini 3 Flash Preview | Documentation, code search, simple tasks |
+
+### HIGH Tier: Strategic Reasoning
+
+The **HIGH tier** is reserved for tasks requiring deep strategic thinking:
+- **Architecture review and design decisions**
+- **Complex debugging after 2+ failed attempts**
+- **Security vulnerability analysis**
+- **Performance optimization strategies**
+- **Multi-system tradeoff evaluation**
+
+| Provider | Model | Configuration | Strengths |
+|----------|-------|---------------|-----------|
+| OpenAI | GPT 5.2 | Default | Deep reasoning, strategic analysis |
+| Claude | 4.5 Opus | `thinking_budget > 0` | Extended thinking, architectural decisions |
+| Gemini | 3 Pro | Default | Multi-modal analysis, UI/UX evaluation |
 
 ### Claude 4.5 Opus "Thinking" Mode
-The PREMIUM Claude 4.5 Opus model supports an extended "Thinking" mode (enabled via `thinking_budget` > 0), allowing for deep reasoning on complex architectural or logic problems.
+The HIGH-tier Claude 4.5 Opus model supports an extended "Thinking" mode (enabled via `thinking_budget` > 0), allowing for deep reasoning on complex architectural or logic problems.
 
 ---
 
@@ -51,24 +67,40 @@ Project-local routing rules are stored in `.stravinsky/routing.json`. This confi
 {
   "routing": {
     "task_routing": {
+      "architecture": {
+        "provider": "openai",
+        "model": "gpt-5.2",
+        "tier": "high",
+        "description": "Architecture review, strategic decisions, complex tradeoffs"
+      },
+      "security_review": {
+        "provider": "openai",
+        "model": "gpt-5.2",
+        "tier": "high",
+        "description": "Security vulnerability analysis and threat modeling"
+      },
       "code_generation": {
         "provider": "openai",
         "model": "gpt-5.2-codex",
+        "tier": "premium",
         "description": "Complex code generation tasks"
       },
       "debugging": {
         "provider": "openai",
         "model": "gpt-5.2-codex",
+        "tier": "premium",
         "description": "Code analysis and debugging"
       },
       "documentation": {
         "provider": "gemini",
         "model": "gemini-3-flash-preview",
+        "tier": "standard",
         "description": "Documentation writing"
       },
       "code_search": {
         "provider": "gemini",
         "model": "gemini-3-flash-preview",
+        "tier": "standard",
         "description": "Finding code patterns"
       }
     },

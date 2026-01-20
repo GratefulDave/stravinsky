@@ -1,34 +1,93 @@
 {
   "routing": {
     "task_routing": {
+      "architecture": {
+        "provider": "openai",
+        "model": "gpt-5.2",
+        "tier": "high",
+        "description": "Architecture review, strategic decisions, complex tradeoffs"
+      },
+      "security_review": {
+        "provider": "openai",
+        "model": "gpt-5.2",
+        "tier": "high",
+        "description": "Security vulnerability analysis and threat modeling"
+      },
+      "performance_optimization": {
+        "provider": "openai",
+        "model": "gpt-5.2",
+        "tier": "high",
+        "description": "Performance analysis and optimization strategies"
+      },
       "code_generation": {
         "provider": "openai",
-        "model": "gpt-5-codex",
+        "model": "gpt-5.2-codex",
+        "tier": "premium",
         "description": "Complex code generation tasks"
       },
       "debugging": {
         "provider": "openai",
-        "model": "gpt-5-codex",
+        "model": "gpt-5.2-codex",
+        "tier": "premium",
         "description": "Code analysis and debugging"
+      },
+      "refactoring": {
+        "provider": "openai",
+        "model": "gpt-5.2-codex",
+        "tier": "premium",
+        "description": "Code refactoring and restructuring"
       },
       "documentation": {
         "provider": "gemini",
-        "model": "gemini-3-flash",
+        "model": "gemini-3-flash-preview",
+        "tier": "standard",
         "description": "Documentation writing"
       },
       "code_search": {
         "provider": "gemini",
-        "model": "gemini-3-flash",
+        "model": "gemini-3-flash-preview",
+        "tier": "standard",
         "description": "Finding code patterns"
+      },
+      "exploration": {
+        "provider": "gemini",
+        "model": "gemini-3-flash-preview",
+        "tier": "standard",
+        "description": "Codebase exploration and analysis"
+      }
+    },
+    "tier_defaults": {
+      "high": {
+        "providers": ["openai", "claude", "gemini"],
+        "models": {
+          "openai": "gpt-5.2",
+          "claude": "claude-4.5-opus",
+          "gemini": "gemini-3-pro"
+        },
+        "claude_config": {
+          "thinking_budget": 32000
+        }
+      },
+      "premium": {
+        "providers": ["openai", "claude", "gemini"],
+        "models": {
+          "openai": "gpt-5.2-codex",
+          "claude": "claude-4.5-opus",
+          "gemini": "gemini-3-pro"
+        }
+      },
+      "standard": {
+        "providers": ["gemini", "claude", "openai"],
+        "models": {
+          "gemini": "gemini-3-flash-preview",
+          "claude": "claude-4.5-sonnet",
+          "openai": "gpt-5.2"
+        }
       }
     },
     "fallback": {
       "enabled": true,
-      "chain": [
-        "claude",
-        "openai",
-        "gemini"
-      ],
+      "chain": ["claude", "openai", "gemini"],
       "cooldown_seconds": 300
     }
   }

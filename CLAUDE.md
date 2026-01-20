@@ -96,12 +96,28 @@ Skills are discovered from:
 - Project-local: `.claude/commands/**/*.md` (recursive)
 - User-global: `~/.claude/commands/**/*.md` (recursive)
 
-Common commands:
-- `/strav`: Task Orchestrator & Planner
-- `/delphi`: Architecture & Debug Advisor
-- `/dewey`: Documentation & Research
-- `/get-context`: Refresh Git/Rules/Todo context (renamed from /context to avoid Claude conflict)
-- `/health`: Comprehensive system check
+#### Core Skills (Model Tier)
+
+| Skill | Purpose | Model Tier |
+|-------|---------|------------|
+| `/strav` | Task Orchestrator & Planner | PREMIUM |
+| `/delphi` | Architecture & Debug Advisor | HIGH |
+| `/dewey` | Documentation & Research | STANDARD |
+| `/arch-review` | Architecture review and design analysis | HIGH |
+| `/security-scan` | Security vulnerability scanning | HIGH |
+| `/perf-opt` | Performance optimization analysis | HIGH |
+| `/doc-gen` | Automated documentation generation | STANDARD |
+| `/get-context` | Refresh Git/Rules/Todo context | STANDARD |
+| `/verify` | Post-implementation verification | PREMIUM |
+| `/publish` | PyPI publication workflow | STANDARD |
+
+#### Model Tier Reference
+
+| Tier | Models | Use Case |
+|------|--------|----------|
+| **HIGH** | GPT-5.2, Claude Opus (Thinking) | Architecture, security, performance |
+| **PREMIUM** | GPT-5.2 Codex, Claude Opus | Code generation, debugging |
+| **STANDARD** | Gemini Flash, Claude Sonnet | Docs, search, simple tasks |
 
 ## OAuth Flows
 

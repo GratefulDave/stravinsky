@@ -19,6 +19,7 @@ from typing import Final
 
 
 class ModelTier(str, Enum):
+    HIGH = "high"  # For major architecture & new features (GPT-5.2 High, Opus evaluation)
     PREMIUM = "premium"
     STANDARD = "standard"
 
@@ -39,9 +40,16 @@ PROVIDER_FALLBACK_ORDER: Final[dict[str, list[str]]] = {
 }
 
 # Ordered best -> worst.
-TIER_ORDER: Final[tuple[ModelTier, ...]] = (ModelTier.PREMIUM, ModelTier.STANDARD)
+TIER_ORDER: Final[tuple[ModelTier, ...]] = (ModelTier.HIGH, ModelTier.PREMIUM, ModelTier.STANDARD)
 
 MODEL_TIERS: Final[dict[ModelTier, dict[str, TierModel]]] = {
+    ModelTier.HIGH: {
+        # HIGH tier: For major architecture changes and new feature evaluation
+        # Supports Opus vs GPT-5.2 comparison via role-split pattern
+        "claude": TierModel(model="claude-4.5-opus", thinking=True),
+        "openai": TierModel(model="gpt-5.2-high", thinking=True),
+        "gemini": TierModel(model="gemini-3-pro", thinking=False),
+    },
     ModelTier.PREMIUM: {
         "claude": TierModel(model="claude-4.5-opus", thinking=True),
         "openai": TierModel(model="gpt-5.2-codex", thinking=False),

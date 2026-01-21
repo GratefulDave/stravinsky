@@ -25,27 +25,37 @@ def send_stravinsky_metrics(session_id: str, hooks_dir: Path) -> bool:
 
     try:
         # Determine project root with validation
+        # Goal: Find the directory containing 'mcp_bridge' and use its venv
         candidates = []
         
-        # 1. Environment variable (High confidence)
+        # 1. Stravinsky Dev Directory (Highest Priority for dev user)
+        # This ensures we use Stravinsky's venv/dependencies, not the target project's
+        candidates.append(Path.home() / "PycharmProjects/stravinsky")
+
+        # 2. Relative to hooks dir (Standard local installation)
+        # If hooks are in PROJECT/.claude/hooks, parent.parent is PROJECT
+        candidates.append(hooks_dir.parent.parent)
+
+        # 3. Environment variable (Low priority - usually points to target project)
         if os.environ.get("CLAUDE_PROJECT_DIR"):
             candidates.append(Path(os.environ["CLAUDE_PROJECT_DIR"]))
             
-        # 2. Current working directory (Common for CLI)
+        # 4. Current working directory (Fallback)
         candidates.append(Path.cwd())
         
-        # 3. Relative to hooks dir (For local installation)
-        candidates.append(hooks_dir.parent.parent)
-        
-        project_root = Path.cwd() # Default
+        project_root = None
         for candidate in candidates:
             if (candidate / "mcp_bridge").exists():
                 project_root = candidate
                 break
         
+        if project_root is None:
+             # Fallback to CWD if nothing found, though it will likely fail
+             project_root = Path.cwd()
+
         # Build command
         # We use uv run python to ensure the environment is correctly set up
-        # Use --directory to force uv to use the project's venv
+        # Use --directory to force uv to use the Stravinsky project's venv
         cmd = [
             "uv",
             "run",

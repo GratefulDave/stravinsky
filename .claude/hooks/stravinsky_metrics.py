@@ -42,7 +42,25 @@ import subprocess
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, Any
-from mcp_bridge.metrics.cost_tracker import CostTracker
+
+# Ensure project root is in sys.path for mcp_bridge import
+# Try CLAUDE_PROJECT_DIR first
+project_dir = os.environ.get("CLAUDE_PROJECT_DIR")
+if project_dir:
+    if project_dir not in sys.path:
+        sys.path.insert(0, project_dir)
+else:
+    # Fallback: assume CWD is project root (standard Claude CLI behavior)
+    cwd = os.getcwd()
+    if cwd not in sys.path:
+        sys.path.insert(0, cwd)
+
+try:
+    from mcp_bridge.metrics.cost_tracker import CostTracker
+except ImportError:
+    # Diagnostic info if import still fails
+    print(f"Error: Could not import mcp_bridge. sys.path: {sys.path}", file=sys.stderr)
+    sys.exit(1)
 
 
 def load_usage_data(session_id: str) -> Dict[str, Any]:

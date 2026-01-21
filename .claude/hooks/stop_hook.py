@@ -36,7 +36,8 @@ def send_stravinsky_metrics(session_id: str, hooks_dir: Path) -> bool:
         ]
 
         # Inject project root into PYTHONPATH for mcp_bridge resolution
-        project_root = hooks_dir.parent.parent
+        # Use CLAUDE_PROJECT_DIR if available, otherwise assume we are in .claude/hooks/ inside the project
+        project_root = Path(os.environ.get("CLAUDE_PROJECT_DIR", hooks_dir.parent.parent))
         env = os.environ.copy()
         env["PYTHONPATH"] = str(project_root) + os.pathsep + env.get("PYTHONPATH", "")
 

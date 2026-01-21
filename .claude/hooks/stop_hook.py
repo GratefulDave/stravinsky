@@ -24,19 +24,25 @@ def send_stravinsky_metrics(session_id: str, hooks_dir: Path) -> bool:
         return False
 
     try:
-        # Determine project root
-        project_dir_env = os.environ.get("CLAUDE_PROJECT_DIR")
-        if project_dir_env:
-            project_root = Path(project_dir_env)
-        else:
-            # Fallback: assume we are running from within the project or hooks are in .claude/hooks
-            # hooks_dir is usually PROJECT/.claude/hooks
-            project_root = hooks_dir.parent.parent
-
-        if not project_root.exists():
-             # Last resort
-             project_root = Path.cwd()
-
+        # Determine project root with validation
+        candidates = []
+        
+        # 1. Environment variable (High confidence)
+        if os.environ.get("CLAUDE_PROJECT_DIR"):
+            candidates.append(Path(os.environ["CLAUDE_PROJECT_DIR"]))
+            
+        # 2. Current working directory (Common for CLI)
+        candidates.append(Path.cwd())
+        
+        # 3. Relative to hooks dir (For local installation)
+        candidates.append(hooks_dir.parent.parent)
+        
+        project_root = Path.cwd() # Default
+        for candidate in candidates:
+            if (candidate / "mcp_bridge").exists():
+                project_root = candidate
+                break
+        
         # Build command
         # We use uv run python to ensure the environment is correctly set up
         # Use --directory to force uv to use the project's venv

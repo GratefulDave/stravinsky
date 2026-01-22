@@ -6,7 +6,7 @@ Detailed guide to specialized agent configurations.
 
 ## Overview
 
-Stravinsky provides **13 specialized agent types**, each with a unique delegation prompt optimized for specific tasks. Agents use a cost-optimized routing system where agents delegate work to specialized external models (Gemini, GPT) via MCP tools.
+Stravinsky provides **13 specialized agent types**, with **12 having full delegation prompts** in `AGENT_DELEGATION_PROMPTS`. Agents use a cost-optimized routing system where agents delegate work to specialized external models (Gemini, GPT) via MCP tools.
 
 | Agent | Display Model | Cost Tier | Purpose |
 |-------|---------------|-----------|---------|
@@ -100,35 +100,35 @@ Delegate to [Model] FIRST, then return the response.
 
 Agents that delegate to `gemini-3-flash` - fast, cost-effective for research and search tasks.
 
-| Agent | Delegation Target | Best For |
-|-------|-------------------|----------|
-| `explore` | invoke_gemini_agentic | Codebase search, file discovery |
-| `dewey` | invoke_gemini_agentic | Documentation research, examples |
-| `code-reviewer` | invoke_gemini_agentic | Code quality analysis |
-| `momus` | invoke_gemini_agentic | Quality gate validation |
-| `comment_checker` | invoke_gemini_agentic | Documentation completeness |
-| `document_writer` | invoke_gemini_agentic | Technical documentation |
-| `multimodal` | invoke_gemini | Visual analysis |
-| `research-lead` | invoke_gemini_agentic | Research coordination |
+| Agent | Delegation Target | Full Prompt | Best For |
+|-------|-------------------|-------------|----------|
+| `explore` | invoke_gemini_agentic | Yes | Codebase search, file discovery |
+| `dewey` | invoke_gemini_agentic | Yes | Documentation research, examples |
+| `code-reviewer` | invoke_gemini_agentic | Yes | Code quality analysis |
+| `momus` | invoke_gemini_agentic | Yes | Quality gate validation |
+| `comment_checker` | invoke_gemini_agentic | Yes | Documentation completeness |
+| `document_writer` | invoke_gemini_agentic | Yes | Technical documentation |
+| `multimodal` | invoke_gemini | Yes | Visual analysis |
+| `research-lead` | invoke_gemini_agentic | Yes | Research coordination, parallel agent spawning |
 
 ### MEDIUM Tier (Use When Needed)
 
 Agents for more complex tasks requiring higher capability models.
 
-| Agent | Delegation Target | Best For |
-|-------|-------------------|----------|
-| `frontend` | invoke_gemini_agentic (gemini-3-pro) | UI/UX implementation |
-| `debugger` | Native (LSP tools) | Root cause analysis |
-| `implementation-lead` | Native (Claude Sonnet) | Execution coordination |
+| Agent | Delegation Target | Full Prompt | Best For |
+|-------|-------------------|-------------|----------|
+| `frontend` | invoke_gemini_agentic (gemini-3-pro) | Yes | UI/UX implementation |
+| `debugger` | Native (LSP tools) | Yes | Root cause analysis |
+| `implementation-lead` | invoke_gemini_agentic | Yes | Execution coordination, agent workflow |
 
 ### EXPENSIVE Tier (Use Sparingly)
 
 Agents for strategic and complex reasoning tasks.
 
-| Agent | Delegation Target | Best For |
-|-------|-------------------|----------|
-| `delphi` | invoke_openai (gpt-5.2-codex) | Architecture, strategy |
-| `planner` | Native (Claude Opus) | Pre-implementation planning |
+| Agent | Delegation Target | Full Prompt | Best For |
+|-------|-------------------|-------------|----------|
+| `delphi` | invoke_openai (gpt-5.2-codex) | Yes | Architecture, strategy |
+| `planner` | Native (Claude Opus) | Yes | Pre-implementation planning |
 
 ---
 
@@ -444,14 +444,40 @@ await agent_spawn(
 
 ### research-lead (Research Coordinator)
 
-**Purpose:** Coordinates research tasks by spawning explore/dewey agents and synthesizing findings
+**Purpose:** Coordinates research tasks by spawning explore/dewey agents in parallel and synthesizing findings
 
 **Delegation:** invoke_gemini_agentic -> gemini-3-flash
 
+**Full Delegation Prompt:** Yes - includes parallel spawn instructions for explore/dewey agents
+
+**Delegation Prompt Excerpt:**
+```markdown
+## CRITICAL: YOU ARE A THIN WRAPPER - DELEGATE TO GEMINI IMMEDIATELY
+
+You are the Research Lead agent. Your ONLY job is to delegate ALL work to Gemini Flash
+with full tool access to coordinate research across explore and dewey agents.
+
+**IMMEDIATELY** call `mcp__stravinsky__invoke_gemini_agentic` with:
+- **model**: `gemini-3-flash`
+- **prompt**: The research task with instructions to spawn parallel explore/dewey agents
+- **max_turns**: 15
+
+**CRITICAL**: Use `invoke_gemini_agentic` NOT `invoke_gemini`. The agentic version
+enables Gemini to spawn parallel agents via agent_spawn.
+
+**PARALLEL SPAWN PATTERN**: For complex research:
+1. Spawn multiple explore agents for different code areas
+2. Spawn dewey agents for documentation/examples
+3. Synthesize findings into a research brief
+```
+
 **Best for:**
 - Complex research topics requiring multiple sources
-- Decomposing research goals into sub-tasks
-- Synthesizing findings from multiple agents
+- Decomposing research goals into parallel sub-tasks
+- Spawning explore/dewey agents and synthesizing findings
+- Creating research briefs for implementation-lead
+
+**Allowed Tools:** Read, Grep, Glob, Bash, agent_spawn, agent_output
 
 **Example:**
 ```python
@@ -463,14 +489,42 @@ await agent_spawn(
 
 ### implementation-lead (Execution Coordinator)
 
-**Purpose:** Coordinates implementation based on research briefs
+**Purpose:** Coordinates implementation based on research briefs by delegating to frontend, debugger, and code-reviewer agents
 
-**Delegation:** Native (Claude Sonnet)
+**Delegation:** invoke_gemini_agentic -> gemini-3-flash
+
+**Full Delegation Prompt:** Yes - includes coordination workflow for frontend/debugger/code-reviewer
+
+**Delegation Prompt Excerpt:**
+```markdown
+## CRITICAL: YOU ARE A THIN WRAPPER - DELEGATE TO GEMINI IMMEDIATELY
+
+You are the Implementation Lead agent. Your ONLY job is to delegate ALL work to Gemini Flash
+with full tool access to coordinate implementation across specialized agents.
+
+**IMMEDIATELY** call `mcp__stravinsky__invoke_gemini_agentic` with:
+- **model**: `gemini-3-flash`
+- **prompt**: The implementation task with instructions to coordinate agents
+- **max_turns**: 20
+
+**CRITICAL**: Use `invoke_gemini_agentic` NOT `invoke_gemini`. The agentic version
+enables Gemini to spawn and coordinate agents.
+
+**COORDINATION WORKFLOW**:
+1. Parse the research brief or implementation requirements
+2. Spawn frontend agent for UI/component work
+3. Spawn debugger agent if errors arise during implementation
+4. Spawn code-reviewer agent to validate quality before completion
+5. Use lsp_diagnostics to verify implementation has no errors
+```
 
 **Best for:**
 - Taking a research brief and producing working code
-- Delegating specific tasks to frontend, debugger, and code-reviewer
+- Coordinating frontend, debugger, and code-reviewer agents
+- Managing implementation workflow with quality gates
 - Verifying implementation with diagnostics
+
+**Allowed Tools:** Read, Edit, Write, Grep, Glob, Bash, agent_spawn, agent_output, lsp_diagnostics
 
 **Example:**
 ```python
@@ -609,6 +663,8 @@ Each agent type has a defined set of allowed tools:
 | document_writer | Read, Write, Grep, Glob, Bash, invoke_gemini |
 | multimodal | Read, invoke_gemini |
 | planner | Read, Grep, Glob, Bash |
+| research-lead | Read, Grep, Glob, Bash, agent_spawn, agent_output |
+| implementation-lead | Read, Edit, Write, Grep, Glob, Bash, agent_spawn, agent_output, lsp_diagnostics |
 
 ---
 
@@ -651,6 +707,25 @@ Cannot spawn other workers or orchestrators:
 Location: `mcp_bridge/tools/agent_manager.py`
 
 Dictionary containing full delegation prompts for each agent type.
+
+**Coverage:** 12 of 13 agent types have full delegation prompts:
+
+| Agent | Has Delegation Prompt | Notes |
+|-------|----------------------|-------|
+| explore | Yes | Parallel search with gemini-3-flash |
+| dewey | Yes | Documentation research with gemini-3-flash |
+| delphi | Yes | Strategic advice with gpt-5.2-codex |
+| frontend | Yes | UI/UX with gemini-3-pro |
+| code-reviewer | Yes | Quality analysis with gemini-3-flash |
+| debugger | Yes | Root cause analysis with LSP tools |
+| momus | Yes | Quality gate validation with gemini-3-flash |
+| comment_checker | Yes | Documentation completeness with gemini-3-flash |
+| document_writer | Yes | Technical writing with gemini-3-flash |
+| multimodal | Yes | Visual analysis with gemini-3-flash |
+| planner | Yes | Pre-implementation planning (native Opus) |
+| research-lead | Yes | Parallel spawn for explore/dewey with gemini-3-flash |
+| implementation-lead | Yes | Coordination workflow for frontend/debugger/code-reviewer with gemini-3-flash |
+| stravinsky | No | Primary orchestrator uses native Claude |
 
 ### AGENT_MODEL_ROUTING
 

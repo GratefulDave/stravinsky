@@ -98,14 +98,20 @@ Each agent type has a delegation prompt that instructs it to delegate to its tar
 |------------|-------------------|-----------|
 | explore | Gemini Flash | `invoke_gemini_agentic` with `max_turns=10` |
 | dewey | Gemini Flash | `invoke_gemini_agentic` with `max_turns=10` |
+| research-lead | Gemini Flash | `invoke_gemini_agentic` with `max_turns=10` |
+| implementation-lead | Claude Sonnet 4.5 | Direct execution (no delegation, uses Claude CLI directly) |
 | frontend | Gemini Pro | `invoke_gemini_agentic` with `max_turns=10` |
 | delphi | GPT 5.2 Codex | `invoke_openai` with `reasoning_effort="high"` |
 | code-reviewer | Gemini Flash | `invoke_gemini_agentic` with `max_turns=10` |
-| debugger | (Direct tools) | Uses LSP/AST tools directly, delegates complex analysis to delphi |
+| debugger | Claude Sonnet 4.5 | Uses LSP/AST tools directly, delegates complex analysis to delphi |
 | momus | Gemini Flash | `invoke_gemini_agentic` with `max_turns=10` |
 | document_writer | Gemini Flash | `invoke_gemini_agentic` with `max_turns=10` |
 | multimodal | Gemini Flash | `invoke_gemini` (non-agentic for pure visual analysis) |
 | comment_checker | Gemini Flash | `invoke_gemini_agentic` with `max_turns=10` |
+
+**Orchestrator vs Worker Delegation:**
+- **research-lead**: Coordinates research tasks, delegates to Gemini Flash for cost efficiency (CHEAP tier)
+- **implementation-lead**: Coordinates implementation tasks, uses Claude Sonnet 4.5 directly for code quality (MEDIUM tier). Fixed in v0.4.56 to use correct model routing (was incorrectly using Haiku before this version).
 
 **Critical distinction:**
 - `invoke_gemini_agentic`: Enables Gemini to call tools (semantic_search, grep_search, ast_grep_search, etc.)
@@ -235,6 +241,40 @@ You are the Explore agent. Your ONLY job is to delegate ALL work to Gemini Flash
 
 **CRITICAL**: Use `invoke_gemini_agentic` NOT `invoke_gemini`. The agentic version enables Gemini to call tools like `semantic_search`, `grep_search`, `ast_grep_search` - the plain version cannot.
 ```
+
+---
+
+## Lead Agent Routing
+
+The 7-Phase Orchestrator uses two specialized lead agents for coordinating research and implementation phases. These leads have distinct model routing configurations optimized for their roles.
+
+### research-lead
+
+| Property | Value |
+|----------|-------|
+| **Display Model** | gemini-3-flash |
+| **Cost Tier** | CHEAP (Green) |
+| **Delegation** | `invoke_gemini_agentic` with `max_turns=10` |
+| **Configuration** | `AGENT_MODEL_ROUTING`, `AGENT_COST_TIERS`, `AGENT_DISPLAY_MODELS`, `AGENT_DELEGATION_PROMPTS` |
+
+**Purpose**: Coordinates research phases by spawning and managing explore/dewey agents. Uses Gemini Flash for cost efficiency since research coordination involves primarily task distribution and result aggregation.
+
+**Delegation Pattern**: Delegates to Gemini Flash via `invoke_gemini_agentic`, enabling full tool access for coordinating search operations across multiple worker agents.
+
+### implementation-lead
+
+| Property | Value |
+|----------|-------|
+| **Display Model** | claude-sonnet-4.5 |
+| **Cost Tier** | MEDIUM (Blue) |
+| **Delegation** | Direct execution (no delegation wrapper) |
+| **Configuration** | `AGENT_MODEL_ROUTING`, `AGENT_COST_TIERS`, `AGENT_DISPLAY_MODELS`, `AGENT_DELEGATION_PROMPTS` |
+
+**Purpose**: Coordinates implementation phases by executing code changes and spawning specialist agents (debugger, code-reviewer). Uses Claude Sonnet 4.5 for higher code quality and reasoning capability.
+
+**Delegation Pattern**: Executes directly via Claude CLI without delegating to another model. This ensures high-quality code generation and implementation coordination.
+
+**Version Note**: Prior to v0.4.56, implementation-lead was incorrectly using Haiku due to missing routing configuration. This was fixed to properly route to Claude Sonnet 4.5.
 
 ---
 

@@ -299,8 +299,8 @@ Configured in `.claude/agents/*.md`:
 | Agent            | Purpose                                                               | Location |
 | ---------------- | --------------------------------------------------------------------- | -------- |
 | `stravinsky`     | Task orchestration with 32k extended thinking (Sonnet 4.5)            | .claude/agents/stravinsky.md |
-| `research-lead`  | Research coordinator - spawns explore/dewey, synthesizes findings (Gemini Flash) | .claude/agents/research-lead.md |
-| `implementation-lead` | Implementation coordinator - spawns frontend/debugger/reviewer (Haiku) | .claude/agents/implementation-lead.md |
+| `research-lead`  | Research coordinator - spawns explore/dewey, synthesizes findings (Gemini 3 Flash) | .claude/agents/research-lead.md |
+| `implementation-lead` | Implementation coordinator - spawns frontend/debugger/reviewer (Claude Sonnet 4.5) | .claude/agents/implementation-lead.md |
 | `explore`        | Codebase search and structural analysis (Gemini 3 Flash)              | .claude/agents/explore.md |
 | `dewey`          | Documentation research and web search (Gemini 3 Flash)                | .claude/agents/dewey.md |
 | `code-reviewer`  | Security, quality, and best practice analysis (Claude Sonnet)         | .claude/agents/code-reviewer.md |

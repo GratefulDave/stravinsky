@@ -407,6 +407,233 @@ WORKER_AGENTS = [
 
 This prevents infinite delegation loops and maintains clear responsibility chains.
 
+## Coordinator Agents (research-lead and implementation-lead)
+
+Stravinsky uses a **two-phase coordinator pattern** that separates research from implementation. Both coordinators are ORCHESTRATOR_AGENTS with full agent spawning capabilities and proper AGENT_DELEGATION_PROMPTS for cross-repo MCP compatibility.
+
+### Coordinator Hierarchy
+
+```mermaid
+flowchart TB
+    subgraph "Meta-Orchestrator"
+        STRAV[Stravinsky<br/>Claude Sonnet 4.5]
+    end
+
+    subgraph "Coordinator Layer"
+        RL[research-lead<br/>gemini-3-flash<br/>CHEAP]
+        IL[implementation-lead<br/>claude-sonnet-4.5<br/>MEDIUM]
+    end
+
+    subgraph "Worker Layer - Research"
+        E1[explore<br/>gemini-3-flash]
+        E2[explore<br/>gemini-3-flash]
+        D[dewey<br/>gemini-3-flash]
+    end
+
+    subgraph "Worker Layer - Implementation"
+        FE[frontend<br/>gemini-3-pro-high]
+        DEB[debugger<br/>claude-sonnet-4.5]
+        CR[code-reviewer<br/>gemini-3-flash]
+    end
+
+    STRAV -->|"1. Research objective"| RL
+    RL -->|"parallel spawn"| E1
+    RL -->|"parallel spawn"| E2
+    RL -->|"parallel spawn"| D
+    E1 & E2 & D -->|"findings"| RL
+    RL -->|"2. Research Brief"| STRAV
+    STRAV -->|"3. Research Brief"| IL
+    IL -->|"delegate UI work"| FE
+    IL -->|"escalate failures"| DEB
+    IL -->|"quality check"| CR
+    FE & DEB & CR -->|"results"| IL
+    IL -->|"4. Implementation Report"| STRAV
+```
+
+### research-lead Coordinator
+
+**Role**: Spawns explore and dewey agents in parallel, synthesizes findings into a structured Research Brief.
+
+**Configuration**:
+| Property | Value |
+|----------|-------|
+| Model | gemini-3-flash |
+| Cost Tier | CHEAP |
+| CLI Model | None (default) |
+| Tools | agent_spawn, agent_output, invoke_gemini, Read, Grep, Glob |
+
+**Delegation Prompt** (from `AGENT_DELEGATION_PROMPTS`):
+
+The research-lead receives a delegation prompt that instructs it to:
+1. Act as a research coordinator (not a direct researcher)
+2. Spawn explore agents for codebase search
+3. Spawn dewey agents for documentation research
+4. Use `invoke_gemini_agentic` for synthesis work
+5. Return a structured Research Brief JSON
+
+**Output Format** (Research Brief):
+
+```json
+{
+  "objective": "Original research goal stated clearly",
+  "findings": [
+    {
+      "source": "agent_id or tool_name",
+      "summary": "Key finding in 1-2 sentences",
+      "confidence": "high|medium|low",
+      "evidence": "Specific file paths, function names, or data points"
+    }
+  ],
+  "synthesis": "Combined analysis of all findings (2-3 paragraphs)",
+  "gaps": ["Information we couldn't find", "Areas needing more investigation"],
+  "recommendations": ["Suggested next steps for implementation"]
+}
+```
+
+**Delegation Patterns**:
+
+| Pattern | Description | Agents Spawned |
+|---------|-------------|----------------|
+| Code Search (Parallel) | Find feature implementation | 2-3 explore agents in parallel |
+| Architecture Research (Sequential) | Deep dive after initial findings | explore -> explore -> dewey |
+| Semantic/Conceptual Search | Find code by meaning, not text | explore with semantic_search guidance |
+
+### implementation-lead Coordinator
+
+**Role**: Receives Research Brief from Stravinsky, creates implementation plan, delegates to specialists, verifies with LSP diagnostics.
+
+**Configuration**:
+| Property | Value |
+|----------|-------|
+| Model | claude-sonnet-4.5 |
+| Cost Tier | MEDIUM |
+| CLI Model | sonnet |
+| Tools | agent_spawn, agent_output, lsp_diagnostics, Read, Write, Edit, Grep, Glob |
+
+**Delegation Prompt** (from `AGENT_DELEGATION_PROMPTS`):
+
+The implementation-lead receives a delegation prompt that instructs it to:
+1. Receive Research Brief and create implementation plan
+2. Delegate ALL UI/visual work to frontend agent (BLOCKING)
+3. Spawn debugger after 2+ failed attempts
+4. Spawn code-reviewer for quality checks
+5. ALWAYS run lsp_diagnostics before completion
+6. Return a structured Implementation Report JSON
+
+**Output Format** (Implementation Report):
+
+```json
+{
+  "objective": "What was implemented (1 sentence)",
+  "files_changed": ["path/to/file.py", "path/to/other.ts"],
+  "tests_status": "pass|fail|skipped",
+  "diagnostics": {
+    "status": "clean|warnings|errors",
+    "details": ["List of remaining issues if any"]
+  },
+  "blockers": ["Issues preventing completion"],
+  "next_steps": ["What remains to be done"]
+}
+```
+
+**Delegation Patterns**:
+
+| Pattern | Description | Agents Spawned |
+|---------|-------------|----------------|
+| Pure Backend | No UI work needed | None (direct implementation) |
+| Frontend Required | UI components needed | frontend (BLOCKING) -> code-reviewer |
+| Debugging After Failures | 2+ failed attempts | debugger -> apply suggestions |
+
+**Escalation Rules**:
+
+| Scenario | Action |
+|----------|--------|
+| 2+ failed attempts | Spawn debugger |
+| Debugger fails | Escalate to Stravinsky with full context |
+| Frontend needed | Spawn frontend (BLOCKING) |
+| Quality check | Spawn code-reviewer (async) |
+| Architecture decision | Escalate to Stravinsky (never call Delphi directly) |
+
+### Coordinator Communication Flow
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant S as Stravinsky
+    participant RL as research-lead
+    participant E as explore
+    participant D as dewey
+    participant IL as implementation-lead
+    participant FE as frontend
+
+    U->>S: "Add dark mode to settings"
+
+    rect rgb(200, 230, 255)
+        Note over S,D: Phase 1: Research
+        S->>RL: Research objective
+        par Parallel Research
+            RL->>E: Find current settings UI
+            RL->>E: Find theme patterns
+            RL->>D: Research dark mode best practices
+        end
+        E-->>RL: Files found
+        D-->>RL: External docs
+        RL->>RL: Synthesize via invoke_gemini
+        RL-->>S: Research Brief JSON
+    end
+
+    rect rgb(200, 255, 200)
+        Note over S,FE: Phase 2: Implementation
+        S->>IL: Research Brief + implement instruction
+        IL->>FE: Implement dark mode toggle (BLOCKING)
+        FE-->>IL: UI component complete
+        IL->>IL: Integrate + lsp_diagnostics
+        IL-->>S: Implementation Report JSON
+    end
+
+    S-->>U: Task complete with summary
+```
+
+### Cross-Repo MCP Compatibility
+
+Both coordinator agents have full `AGENT_DELEGATION_PROMPTS` defined in `mcp_bridge/tools/agent_manager.py`. This is critical for cross-repo installations where the `.claude/agents/*.md` files may not be accessible.
+
+**Why this matters**:
+- When Stravinsky is installed via `uvx stravinsky@latest`, the agent markdown files are not deployed
+- The delegation prompts embedded in Python ensure coordinators work correctly regardless of installation method
+- Both coordinators receive their full behavioral instructions via the delegation prompt injection
+
+**Delegation Prompt Injection**:
+
+```python
+# From agent_manager.py - coordinators receive full prompts
+AGENT_DELEGATION_PROMPTS = {
+    "research-lead": """## YOU ARE A RESEARCH COORDINATOR - SPAWN AGENTS AND SYNTHESIZE
+    ...
+    - Pass Research Brief to implementation-lead (via Stravinsky) when complete""",
+
+    "implementation-lead": """## YOU ARE AN IMPLEMENTATION COORDINATOR - RECEIVE BRIEF AND EXECUTE
+    ...
+    - Return Implementation Report JSON when complete"""
+}
+```
+
+### Cost Optimization
+
+The coordinator pattern optimizes costs by:
+
+1. **research-lead uses CHEAP tier** (gemini-3-flash) - research coordination is low-cost
+2. **implementation-lead uses MEDIUM tier** (claude-sonnet-4.5) - code editing requires higher capability
+3. **Workers remain cost-appropriate** - explore/dewey are CHEAP, frontend is MEDIUM
+4. **Delphi (EXPENSIVE) is never spawned by coordinators** - only Stravinsky escalates to Delphi
+
+| Agent | Cost Tier | Typical Task Cost |
+|-------|-----------|-------------------|
+| research-lead | CHEAP | ~$0.01-0.05 |
+| implementation-lead | MEDIUM | ~$0.10-0.50 |
+| explore (per spawn) | CHEAP | ~$0.005 |
+| frontend (per spawn) | MEDIUM | ~$0.05-0.20 |
+
 ## DelegationEnforcer API Reference
 
 ### Setting the Enforcer

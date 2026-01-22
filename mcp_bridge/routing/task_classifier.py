@@ -90,16 +90,16 @@ TASK_PATTERNS: dict[TaskType, list[str]] = {
 
 # Default routing for each task type
 DEFAULT_TASK_ROUTING: dict[TaskType, tuple[str, str | None]] = {
-    TaskType.CODE_GENERATION: ("openai", "gpt-5-codex"),
-    TaskType.CODE_REFACTORING: ("openai", "gpt-5-codex"),
-    TaskType.DEBUGGING: ("openai", "gpt-5-codex"),
-    TaskType.ARCHITECTURE: ("openai", "gpt-5.2-medium"),  # Delphi-style
-    TaskType.ARCHITECTURE_MAJOR: ("openai", "gpt-5.2-high"),  # HIGH tier for major changes
-    TaskType.NEW_FEATURE: ("openai", "gpt-5.2-high"),  # HIGH tier with Opus evaluation
-    TaskType.DOCUMENTATION: ("gemini", "gemini-3-flash"),
-    TaskType.CODE_SEARCH: ("gemini", "gemini-3-flash"),
-    TaskType.SECURITY_REVIEW: ("claude", None),  # Keep in Claude
-    TaskType.GENERAL: ("claude", None),  # Default to Claude
+    TaskType.CODE_GENERATION: ("openai", "gpt-5.2-codex"),
+    TaskType.CODE_REFACTORING: ("openai", "gpt-5.2-codex"),
+    TaskType.DEBUGGING: ("openai", "gpt-5.2-codex"),
+    TaskType.ARCHITECTURE: ("claude", "claude-4.5-sonnet"),
+    TaskType.ARCHITECTURE_MAJOR: ("openai", "gpt-5.2-high"),
+    TaskType.NEW_FEATURE: ("openai", "gpt-5.2-high"),
+    TaskType.DOCUMENTATION: ("gemini", "gemini-3-pro"),
+    TaskType.CODE_SEARCH: ("ollama", "nomic-embed-text"),
+    TaskType.SECURITY_REVIEW: ("claude", "claude-4.5-opus"),
+    TaskType.GENERAL: ("claude", "claude-4.5-sonnet"),
 }
 
 

@@ -33,3 +33,15 @@
 - [x] Task: Add Progress Visualization [9a0d825]
     - [x] Update CLI output to show `[Phase X/7]` status
 - [ ] Task: Conductor - User Manual Verification 'Workflow Enforcement & UX' (Protocol in workflow.md)
+
+## Phase 4: Intelligent Context & Delegation
+- [ ] Task: Implement Query Classification & Routing (per QUERY_CLASSIFICATION_GUIDE)
+    - [ ] Implement `QueryClassifier` with EXACT/STRUCTURAL/SEMANTIC/HYBRID detection
+    - [ ] Integrate Semantic Search as primary tool for conceptual queries
+    - [ ] Update `Context` phase to use new classifier
+- [ ] Task: Implement Parallel Delegation Improvements (per GAP_ANALYSIS)
+    - [ ] Create `dependency_tracker.py` hook for TODO parsing
+    - [ ] Create `execution_state_tracker.py` for tool usage stats
+    - [ ] Implement `parallel_reinforcement_v2.py` for state-based prompting
+    - [ ] Add `agent_batch.json` for visual grouping in console
+- [ ] Task: Conductor - User Manual Verification 'Intelligent Context & Delegation' (Protocol in workflow.md)

@@ -33,3 +33,8 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 - [~] **Track: Implement 7-Phase Orchestrator with Thinking-Variant Routing and Native Rust Output Hygiene**
   *Link: [./conductor/tracks/seven_phase_orchestrator_20260118/](./conductor/tracks/seven_phase_orchestrator_20260118/)*
+
+---
+
+- [ ] **Track: Refactor Stravinsky model routing, agent orchestration, and logging to strictly implement the Oh-My-OpenCode Sisyphus 7-phase process with parallel delegation and dual-model architecture generation.**
+*Link: [./conductor/tracks/refactor_routing_sisyphus_20260121/](./conductor/tracks/refactor_routing_sisyphus_20260121/)*

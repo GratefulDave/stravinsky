@@ -25,33 +25,33 @@ DEFAULT_ROUTING_CONFIG: dict[str, Any] = {
         "enabled": True,
         "task_routing": {
             "code_generation": {
-                "provider": "claude",
-                "model": "claude-4.5-opus",
+                "provider": "openai",
+                "model": "gpt-5.2-codex",
                 "tier": "premium",
             },
             "code_refactoring": {
-                "provider": "claude",
-                "model": "claude-4.5-sonnet",
+                "provider": "openai",
+                "model": "gpt-5.2-codex",
                 "tier": "standard",
             },
             "debugging": {
                 "provider": "openai",
-                "model": "gpt-5.2",
+                "model": "gpt-5.2-codex",
                 "tier": "standard",
             },
             "architecture": {
-                "provider": "openai",
-                "model": "gpt-5.2",
+                "provider": "claude",
+                "model": "claude-4.5-sonnet",
                 "tier": "standard",
             },
             "documentation": {
                 "provider": "gemini",
-                "model": "gemini-3-flash-preview",
+                "model": "gemini-3-pro",
                 "tier": "standard",
             },
             "code_search": {
-                "provider": "gemini",
-                "model": "gemini-3-flash-preview",
+                "provider": "ollama",
+                "model": "nomic-embed-text",
                 "tier": "standard",
             },
             "security_review": {

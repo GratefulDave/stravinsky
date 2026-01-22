@@ -18,6 +18,8 @@ Implement a rigorous 7-phase orchestration lifecycle for Stravinsky agents to en
     *   **Search/Lists:** Smart summarization.
     *   **File Reads:** Truncate with offset/limit support.
 4.  **UX:** Autonomous execution with clear phase visualization (`[Phase X/7]`).
+5.  **Intelligent Query Routing:** Implement the classification logic defined in `QUERY_CLASSIFICATION_GUIDE.md`, prioritizing **Semantic Search** for conceptual/hybrid queries while maintaining GREP/AST for structural/exact matches.
+6.  **Robust Parallel Delegation:** Implement "State-Based Reinforcement" (Option C from Gap Analysis) to maintain parallel execution capabilities throughout extended sessions.
 
 ## Functional Requirements
 *   **Orchestrator Class:** A central state machine managing the current phase and ensuring phase artifacts (e.g., `plan.md`) exist before transitioning.
@@ -25,6 +27,8 @@ Implement a rigorous 7-phase orchestration lifecycle for Stravinsky agents to en
 *   **Critique Step:** The Planning phase must include a self-reflection prompt: "List 3 ways this plan could fail."
 *   **Native Truncator:** A Rust FFI function `compact_output(content, type)` that handles text processing efficiently.
 *   **Manual Phase Gates:** Optional configuration toggle `enable_phase_gates` to require user confirmation between phases.
+*   **Query Classifier:** Implementation of `QUERY_CLASSIFICATION_GUIDE.md` logic (Exact vs Structural vs Semantic) to drive the **Context Gathering** phase.
+*   **Delegation State Tracker:** Persistent tracking of task dependencies and tool usage to enforce parallel execution as per `GAP_ANALYSIS_PARALLEL_DELEGATION.md`.
 
 ## Non-Functional Requirements
 *   **Performance:** Truncation must happen in <1ms overhead (Rust).

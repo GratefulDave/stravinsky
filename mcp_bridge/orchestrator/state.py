@@ -36,7 +36,7 @@ PHASE_REQUIREMENTS: dict[OrchestrationPhase, list[str]] = {
     OrchestrationPhase.PLAN: [],  # Wisdom is optional (may not exist)
     OrchestrationPhase.VALIDATE: ["plan.md"],  # Must have a plan to validate
     OrchestrationPhase.DELEGATE: ["validation_result"],  # Must validate plan first
-    OrchestrationPhase.EXECUTE: ["delegation_targets"],  # Must know what to delegate
+    OrchestrationPhase.EXECUTE: ["delegation_targets", "task_graph"],  # Must have task graph for parallel enforcement
     OrchestrationPhase.VERIFY: ["execution_result"],  # Must have executed something
 }
 

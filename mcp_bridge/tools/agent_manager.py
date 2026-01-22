@@ -18,7 +18,10 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Optional, List, Dict
+from typing import TYPE_CHECKING, Any, Optional, List, Dict
+
+if TYPE_CHECKING:
+    from ..orchestrator.task_graph import DelegationEnforcer
 import subprocess
 from .mux_client import get_mux, MuxClient
 try:
@@ -1005,6 +1008,11 @@ class AgentManager:
 _manager: AgentManager | None = None
 _manager_lock = threading.Lock()
 
+# Parallel execution enforcer (set during DELEGATE phase)
+_delegation_enforcer: "DelegationEnforcer | None" = None
+_enforcer_lock = threading.Lock()
+
+
 def get_manager() -> AgentManager:
     global _manager
     if _manager is None:
@@ -1012,6 +1020,31 @@ def get_manager() -> AgentManager:
             if _manager is None:
                 _manager = AgentManager()
     return _manager
+
+
+def set_delegation_enforcer(enforcer: "DelegationEnforcer") -> None:
+    """
+    Set the delegation enforcer for parallel execution validation.
+
+    Called during the DELEGATE phase after creating a TaskGraph.
+    """
+    global _delegation_enforcer
+    with _enforcer_lock:
+        _delegation_enforcer = enforcer
+        logger.info("[AgentManager] Delegation enforcer activated")
+
+
+def clear_delegation_enforcer() -> None:
+    """Clear the delegation enforcer after execution is complete."""
+    global _delegation_enforcer
+    with _enforcer_lock:
+        _delegation_enforcer = None
+        logger.info("[AgentManager] Delegation enforcer cleared")
+
+
+def get_delegation_enforcer() -> "DelegationEnforcer | None":
+    """Get the current delegation enforcer, if any."""
+    return _delegation_enforcer
 
 
 async def agent_spawn(
@@ -1027,6 +1060,7 @@ async def agent_spawn(
     blocking: bool = False,
     spawning_agent: str | None = None,
     semantic_first: bool = False,
+    task_graph_id: str | None = None,  # Task ID from TaskGraph for parallel enforcement
 ) -> str:
     manager = get_manager()
     if spawning_agent in ORCHESTRATOR_AGENTS:
@@ -1034,6 +1068,19 @@ async def agent_spawn(
             raise ValueError("Orchestrators must provide delegation metadata")
     if required_tools: validate_agent_tools(agent_type, required_tools)
     if spawning_agent: validate_agent_hierarchy(spawning_agent, agent_type)
+
+    # Parallel execution enforcement
+    enforcer = get_delegation_enforcer()
+    if enforcer and task_graph_id:
+        # Validate this spawn is allowed by the task graph
+        is_valid, error = enforcer.validate_spawn(task_graph_id)
+        if not is_valid:
+            from ..orchestrator.task_graph import ParallelExecutionError
+            raise ParallelExecutionError(
+                f"Spawn blocked: {error}\n"
+                f"Independent tasks MUST be spawned in parallel.\n"
+                f"Current wave: {[t.id for t in enforcer.get_current_wave()]}"
+            )
 
     # Build comprehensive system prompt with delegation instructions
     # This is CRITICAL for cross-repo MCP installations
@@ -1063,6 +1110,11 @@ Complete the following task using the delegation pattern above:
         timeout=timeout,
         semantic_first=semantic_first,
     )
+
+    # Record spawn with enforcer for parallel tracking
+    if enforcer and task_graph_id:
+        enforcer.record_spawn(task_graph_id, task_id)
+
     if not blocking:
         monitor_task = asyncio.create_task(manager._monitor_progress_async(task_id))
         manager._progress_monitors[task_id] = monitor_task

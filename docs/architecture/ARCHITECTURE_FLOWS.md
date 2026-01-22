@@ -1,599 +1,641 @@
-# Stravinsky Architecture Flows & Diagrams
+# Stravinsky Architecture Flows and Diagrams
 
-Quick visual reference for how Stravinsky's components interact.
+Quick visual reference for how Stravinsky's 7-phase orchestration and parallel enforcement work.
+
+**Updated**: 2026-01-22
 
 ---
 
-## Flow 1: Complete Request Lifecycle (With Hooks)
+## Flow 1: Complete 7-Phase Orchestration Lifecycle
 
 ```
-┌──────────────────────────────────────────────────────────┐
-│ USER SUBMITS REQUEST                                     │
-│ Example: "Find all authentication implementations"       │
-└───────────────────────┬────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│ USER SUBMITS REQUEST                                                      │
+│ Example: "Implement authentication with OAuth and add tests"              │
+└───────────────────────┬──────────────────────────────────────────────────┘
                         │
                         ↓
-┌──────────────────────────────────────────────────────────┐
-│ UserPromptSubmit Hook (if implemented)                   │
-│ ├─ Inject CLAUDE.md rules                               │
-│ ├─ Add project context (git, todos)                      │
-│ ├─ Enable semantic search if available                  │
-│ └─ Preprocess prompt                                     │
-└───────────────────────┬────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│ PHASE 1: CLASSIFY                                                         │
+│ ┌──────────────────────────────────────────────────────────────────────┐ │
+│ │ - Analyze query type (implementation, research, debug, etc.)         │ │
+│ │ - Determine scope (single file, multi-file, architectural)          │ │
+│ │ - Identify required specialists                                      │ │
+│ │ - Output: query_classification artifact                              │ │
+│ └──────────────────────────────────────────────────────────────────────┘ │
+└───────────────────────┬──────────────────────────────────────────────────┘
                         │
                         ↓
-┌──────────────────────────────────────────────────────────┐
-│ Claude Code AUTO-DELEGATES                               │
-│ Matches stravinsky agent description → launches subagent │
-└───────────────────────┬────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│ PHASE 2: CONTEXT                                                          │
+│ ┌──────────────────────────────────────────────────────────────────────┐ │
+│ │ - Select search strategy based on classification                     │ │
+│ │   - Pattern queries -> grep_search, ast_grep_search                 │ │
+│ │   - Conceptual queries -> semantic_search                           │ │
+│ │   - Symbol queries -> lsp_workspace_symbols                         │ │
+│ │ - Gather relevant code context                                       │ │
+│ │ - Output: context_summary artifact                                   │ │
+│ └──────────────────────────────────────────────────────────────────────┘ │
+└───────────────────────┬──────────────────────────────────────────────────┘
                         │
                         ↓
-┌──────────────────────────────────────────────────────────┐
-│ STRAVINSKY ORCHESTRATOR PROCESSES                        │
-│ ├─ Classify request type                                 │
-│ ├─ Create TodoWrite([search auth, analyze patterns])    │
-│ ├─ Determine delegation strategy                         │
-│ └─ Prepare Task() calls                                  │
-└───────────────────────┬────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│ PHASE 3: WISDOM (Optional)                                                │
+│ ┌──────────────────────────────────────────────────────────────────────┐ │
+│ │ - Load .stravinsky/wisdom.md if exists                              │ │
+│ │ - Inject project-specific learnings into context                     │ │
+│ │ - Include past failures, gotchas, patterns                          │ │
+│ │ - Skip if no wisdom file exists                                      │ │
+│ └──────────────────────────────────────────────────────────────────────┘ │
+└───────────────────────┬──────────────────────────────────────────────────┘
                         │
                         ↓
-┌──────────────────────────────────────────────────────────┐
-│ PreToolUse Hook FIRES (if implemented)                   │
-│ ├─ Intercept: Read, Grep, Bash, Glob tools             │
-│ ├─ Check: Is this a complex search?                      │
-│ │          (AST pattern? Multi-file? Semantic?)          │
-│ ├─ Decision:                                             │
-│ │  ├─ ALLOW: Simple lookup → native tool executes       │
-│ │  └─ BLOCK: Complex → exit code 2, trigger delegation  │
-│ └─ Orchestrator sees block, uses Task() instead         │
-└───────────────────────┬────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│ PHASE 4: PLAN (with Critique Loop)                                        │
+│ ┌──────────────────────────────────────────────────────────────────────┐ │
+│ │ - Create strategic plan for task execution                           │ │
+│ │ - Generate critique: "3 ways this could fail"                       │ │
+│ │ - Iterate up to 3 times for refinement                              │ │
+│ │ - Output: plan.md artifact                                           │ │
+│ └──────────────────────────────────────────────────────────────────────┘ │
+│                             ↑                                             │
+│                             │ (max 3 critique iterations)                 │
+│                             │                                             │
+└───────────────────────┬─────┴────────────────────────────────────────────┘
                         │
-        ┌───────────────┴───────────────┐
-        ↓                               ↓
-    ┌─────────────┐           ┌──────────────────┐
-    │ NATIVE TOOL │           │ TASK DELEGATION  │
-    │ (simple)    │           │ (complex)        │
-    │             │           │                  │
-    │ Example:    │           │ Task(            │
-    │ Read a      │           │   subagent_type= │
-    │ specific    │           │   "explore",     │
-    │ file        │           │   prompt="Find   │
-    │             │           │   all auth       │
-    │ ↓           │           │   implementations"
-    │ Executes    │           │ )                │
-    │ immediately │           │                  │
-    └──────┬──────┘           │ ↓                │
-           │                  │                  │
-           │                  │ Explore Agent   │
-           │                  │ ├─ Receive task │
-           │                  │ ├─ Run searches │
-           │                  │ │ (grep, AST,   │
-           │                  │ │  semantic,    │
-           │                  │ │  lsp)         │
-           │                  │ ├─ Synthesize   │
-           │                  │ │  results      │
-           │                  │ └─ Return to    │
-           │                  │    orchestrator │
-           │                  └──────┬──────────┘
-           │                         │
-           └───────────────┬─────────┘
-                           ↓
-          ┌────────────────────────────────┐
-          │ PostToolUse Hook FIRES         │
-          │ (if implemented)               │
-          │ ├─ Detect Task() completion   │
-          │ ├─ Log agent_type + result    │
-          │ ├─ Aggregate specialist work  │
-          │ └─ Signal synthesis phase     │
-          └──────────────┬─────────────────┘
-                         │
-                         ↓
-          ┌────────────────────────────────┐
-          │ ORCHESTRATOR SYNTHESIZES       │
-          │ ├─ Combine results            │
-          │ ├─ Answer the original query  │
-          │ ├─ Update TodoWrite           │
-          │ └─ Respond to user            │
-          └────────────────────────────────┘
+                        ↓
+┌──────────────────────────────────────────────────────────────────────────┐
+│ PHASE 5: VALIDATE                                                         │
+│ ┌──────────────────────────────────────────────────────────────────────┐ │
+│ │ - Validate plan against project rules                                │ │
+│ │ - Check for constraint violations                                    │ │
+│ │ - Verify feasibility                                                 │ │
+│ │ - If fails: return to PLAN phase                                    │ │
+│ │ - Output: validation_result artifact                                 │ │
+│ └──────────────────────────────────────────────────────────────────────┘ │
+└───────────────────────┬──────────────────────────────────────────────────┘
+                        │
+                        ↓
+┌──────────────────────────────────────────────────────────────────────────┐
+│ PHASE 6: DELEGATE (TaskGraph Construction)                                │
+│ ┌──────────────────────────────────────────────────────────────────────┐ │
+│ │ - Build TaskGraph from plan                                          │ │
+│ │ - Identify independent tasks (no dependencies)                       │ │
+│ │ - Group tasks into execution waves                                   │ │
+│ │ - Assign agent types and models                                      │ │
+│ │ - Create DelegationEnforcer                                          │ │
+│ │ - Output: delegation_targets, task_graph artifacts                   │ │
+│ └──────────────────────────────────────────────────────────────────────┘ │
+│                                                                           │
+│  TaskGraph Example:                                                       │
+│  ┌────────────┐ ┌────────────┐ ┌────────────┐                           │
+│  │search_auth │ │research_   │ │review_     │  Wave 1                   │
+│  │(explore)   │ │patterns    │ │security    │  (all parallel)           │
+│  │deps=[]     │ │(dewey)     │ │(code-rev)  │                           │
+│  └─────┬──────┘ └─────┬──────┘ └────────────┘                           │
+│        │              │                                                   │
+│        └──────┬───────┘                                                   │
+│               ↓                                                           │
+│        ┌────────────┐                                                     │
+│        │implement_  │  Wave 2                                            │
+│        │feature     │  (after Wave 1)                                    │
+│        │(frontend)  │                                                     │
+│        │deps=[a,b]  │                                                     │
+│        └─────┬──────┘                                                     │
+│              ↓                                                            │
+│        ┌────────────┐                                                     │
+│        │write_tests │  Wave 3                                            │
+│        │(code-rev)  │  (after Wave 2)                                    │
+│        │deps=[impl] │                                                     │
+│        └────────────┘                                                     │
+│                                                                           │
+└───────────────────────┬──────────────────────────────────────────────────┘
+                        │
+                        ↓
+┌──────────────────────────────────────────────────────────────────────────┐
+│ PHASE 7: EXECUTE (Parallel Enforcement)                                   │
+│ ┌──────────────────────────────────────────────────────────────────────┐ │
+│ │ FOR each wave in TaskGraph:                                          │ │
+│ │   - Spawn ALL wave tasks in parallel (<500ms window)                │ │
+│ │   - DelegationEnforcer validates parallel spawning                  │ │
+│ │   - If sequential spawning detected: ParallelExecutionError         │ │
+│ │   - Collect results from all wave tasks                             │ │
+│ │   - Advance to next wave after completion                           │ │
+│ │ - Output: execution_result artifact                                  │ │
+│ └──────────────────────────────────────────────────────────────────────┘ │
+│                             ↑                                             │
+│                             │ (retry loop if needed)                      │
+│                             │                                             │
+└───────────────────────┬─────┴────────────────────────────────────────────┘
+                        │
+                        ↓
+┌──────────────────────────────────────────────────────────────────────────┐
+│ PHASE 8: VERIFY                                                           │
+│ ┌──────────────────────────────────────────────────────────────────────┐ │
+│ │ - Synthesize results from all agents                                 │ │
+│ │ - Verify task completion                                             │ │
+│ │ - Run quality checks (lsp_diagnostics, tests)                       │ │
+│ │ - Prepare final response to user                                     │ │
+│ │ - Can start new CLASSIFY cycle if needed                            │ │
+│ └──────────────────────────────────────────────────────────────────────┘ │
+└──────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Flow 2: Tool Selection Decision Tree
+## Flow 2: Parallel Execution Enforcement
 
 ```
-                    ┌─ QUERY RECEIVED ─┐
-                    │   Example: "Find  │
-                    │   auth logic"     │
-                    └────────┬──────────┘
-                             │
-                             ↓
-                 ┌─────────────────────────┐
-                 │ Is it about FILE PATHS? │
-                 └────────┬────────┬───────┘
-                          │        │
-                        YES│        │NO
-                          ↓        │
-                    glob_files     │
-                          │        │
-                          ↓        ↓
-                  ┌─────────────────────────┐
-                  │ EXACT SYNTAX present?   │
-                  │ (@decorator, class,     │
-                  │ function())             │
-                  └────────┬────────┬───────┘
-                           │        │
-                         YES│        │NO
-                           ↓        │
-                     grep_search    │
-                           │        │
-                           ↓        ↓
-                  ┌─────────────────────────┐
-                  │ CODE STRUCTURE query?   │
-                  │ (inheritance, nesting)  │
-                  └────────┬────────┬───────┘
-                           │        │
-                         YES│        │NO
-                           ↓        │
-                    ast_grep_search │
-                           │        │
-                           ↓        ↓
-                  ┌─────────────────────────┐
-                  │ BEHAVIORAL/CONCEPTUAL?  │
-                  │ ("how", "where is",     │
-                  │ "logic", "patterns")    │
-                  └────────┬────────┬───────┘
-                           │        │
-                         YES│        │NO
-                           ↓        │
-                   semantic_search  │
-                           │        │
-                           ↓        ↓
-                  ┌─────────────────────────┐
-                  │ COMPILER-LEVEL NEED?    │
-                  │ (definitions,           │
-                  │ references)             │
-                  └────────┬────────┬───────┘
-                           │        │
-                         YES│        │NO
-                           ↓        │
-                     lsp_*_tools    │
-                           │        │
-                           ↓        ↓
-                        ┌─────┐  ┌──────────┐
-                        │Done │  │fallback: │
-                        └─────┘  │grep_search
-                                 └──────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│ PARALLEL EXECUTION ENFORCEMENT                                            │
+│                                                                           │
+│ Wave 1 Tasks: [search_auth, research_patterns, review_security]          │
+│ All have deps=[] (independent)                                            │
+│                                                                           │
+│ CORRECT EXECUTION:                                                        │
+│ ════════════════════════════════════════════════════════════════════════ │
+│                                                                           │
+│ t=0ms     agent_spawn("search_auth", "explore", task_graph_id="a")       │
+│ t=50ms    agent_spawn("research_patterns", "dewey", task_graph_id="b")   │
+│ t=100ms   agent_spawn("review_security", "code-rev", task_graph_id="c")  │
+│                                                                           │
+│ Time spread: 100ms < 500ms limit                                          │
+│ Result: DelegationEnforcer.check_parallel_compliance() = True            │
+│                                                                           │
+│ ════════════════════════════════════════════════════════════════════════ │
+│                                                                           │
+│ INCORRECT EXECUTION (BLOCKED):                                            │
+│ ════════════════════════════════════════════════════════════════════════ │
+│                                                                           │
+│ t=0ms     agent_spawn("search_auth", "explore", task_graph_id="a")       │
+│ t=0ms     agent_output("a", block=True)  <-- WAIT for result             │
+│ t=5000ms  agent_spawn("research_patterns", "dewey", task_graph_id="b")   │
+│                                                                           │
+│ Time spread: 5000ms > 500ms limit                                         │
+│ Result: ParallelExecutionError raised!                                   │
+│                                                                           │
+│ Error: "Tasks in wave were not spawned in parallel.                       │
+│         Time spread: 5000ms > 500ms limit.                                │
+│         Independent tasks MUST be spawned simultaneously."                │
+│                                                                           │
+└──────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Flow 3: Delegation Decision Matrix
+## Flow 3: Agent Delegation with Injected Prompts
 
 ```
-REQUEST TYPE                    ORCHESTRATOR    SPECIALISTS        EXECUTION
-────────────────────────────────────────────────────────────────────────────
-
-"Find X"                        Classify        └─ explore (async)  Parallel
-                                               └─ return results    Immediate
-
-"Research X"                    Classify        └─ dewey (async)     Parallel
-                                               └─ return results    Immediate
-
-"Review code"                   Classify        └─ code-reviewer     Parallel
-                                               (async)              Immediate
-
-"Fix bug" (attempt #1)          ATTEMPT FIX     (none)              Blocking
-                                └─ fails        ↓
-
-"Fix bug" (attempt #2)          ATTEMPT FIX     (none)              Blocking
-                                └─ fails        ↓
-
-"Fix bug" (attempt #3+)         BLOCK tools     └─ debugger         Blocking
-                                via hook        (blocking)          Wait
-
-"Design UI"                     NEVER direct    └─ frontend         Blocking
-                                execution       (blocking via       Wait
-                                               Gemini 3 Pro High)
-
-"Implement feature"             Plan in         ├─ explore (async)  Parallel
-(complex multi-step)            TodoWrite       ├─ dewey (async)    Immediate
-                                              ├─ frontend (block)  Wait for
-                                              └─ code-reviewer     UI
-                                                (async)
-
-"Architecture decision"         ATTEMPT 1-2     (none)              Blocking
-(after 3+ failures)             └─ fail        └─ delphi (block)    Wait
-                                └─ BLOCK       (GPT-5.2 with
-                                   tools       extended thinking)
-
-"Trivial change"                EXECUTE         (none)              Native
-(typo, single line)             directly                           Immediate
-```
-
----
-
-## Flow 4: Parallel Execution Pattern
-
-```
-┌──────────────────────────────────────────────────────┐
-│ REQUEST: "Implement auth AND test coverage AND docs"│
-└────────────────────┬─────────────────────────────────┘
-                     │
-                     ↓
-        ┌────────────────────────────┐
-        │ TodoWrite([                │
-        │   Implement auth,          │
-        │   Add test coverage,       │
-        │   Write documentation      │
-        │ ])                         │
-        └────────────┬───────────────┘
-                     │
-                     ↓
-        ┌────────────────────────────────────────────┐
-        │ SAME RESPONSE: Spawn all agents in parallel│
-        │                                             │
-        │ Task(                   Task(              │
-        │   subagent_type=        subagent_type=    │
-        │   "frontend",           "code-reviewer",  │
-        │   prompt="Implement     prompt="Write     │
-        │   auth UI..."           tests for auth..." │
-        │ )                       )                  │
-        │                                            │
-        │                         Task(             │
-        │                           subagent_type=  │
-        │                           "dewey",        │
-        │                           prompt="Doc     │
-        │                           best practices" │
-        │                         )                  │
-        └─┬─────────────────────┬─────────────────┬─┘
-          │                     │                 │
-    ┌─────↓─────┐         ┌─────↓─────┐    ┌─────↓─────┐
-    │  Frontend  │         │Code Review │    │  Dewey   │
-    │  Agent     │         │  Agent    │    │ Agent    │
-    │            │         │           │    │          │
-    │Executing:  │         │Executing: │    │Executing:│
-    │├ UI design │         │├ Tests    │    │├Gathering│
-    │├ Layout    │         │├ Coverage │    │ docs    │
-    │├ Forms     │         │├ Edge     │    │├Writing  │
-    │└ Styles   │         ││ cases    │    │examples │
-    └─┬──────────┘         └─┬────────┘    │└Examples│
-      │                      │             │        │
-      └──────────┬───────────┴─────────────┘        │
-                 │                                   │
-                 ↓                                   ↓
-        ┌──────────────────────────────┐  ┌──────────────────┐
-        │ All tasks complete            │  │  All tasks       │
-        │ (or timeout after 300s)       │  │  complete        │
-        └──────────┬───────────────────┘  └────────┬─────────┘
-                   │                               │
-                   └───────────────┬────────────────┘
-                                   │
-                                   ↓
-                    ┌──────────────────────────────┐
-                    │ ORCHESTRATOR SYNTHESIZES     │
-                    │ ├─ Merge UI + backend logic  │
-                    │ ├─ Integrate test suite      │
-                    │ ├─ Add documentation         │
-                    │ ├─ Run final checks          │
-                    │ ├─ Mark todos complete       │
-                    │ └─ Respond to user           │
-                    └──────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│ AGENT DELEGATION FLOW                                                     │
+│                                                                           │
+│ Orchestrator calls:                                                       │
+│   agent_spawn(                                                            │
+│       prompt="Find all authentication implementations",                   │
+│       agent_type="explore",                                               │
+│       task_graph_id="search_auth"                                         │
+│   )                                                                       │
+│                                                                           │
+└───────────────────────┬──────────────────────────────────────────────────┘
+                        │
+                        ↓
+┌──────────────────────────────────────────────────────────────────────────┐
+│ AGENT MANAGER (agent_manager.py)                                          │
+│                                                                           │
+│ 1. Validate spawn with DelegationEnforcer                                │
+│    enforcer.validate_spawn("search_auth") -> (True, None)                │
+│                                                                           │
+│ 2. Get delegation prompt                                                  │
+│    delegation_prompt = get_agent_delegation_prompt("explore")            │
+│                                                                           │
+│    Returns:                                                               │
+│    ┌────────────────────────────────────────────────────────────────────┐│
+│    │ ## CRITICAL: DELEGATE TO GEMINI IMMEDIATELY                        ││
+│    │                                                                     ││
+│    │ You are the Explore agent. Your ONLY job is to delegate ALL        ││
+│    │ work to Gemini Flash with full tool access.                        ││
+│    │                                                                     ││
+│    │ **IMMEDIATELY** call `mcp__stravinsky__invoke_gemini_agentic`:     ││
+│    │ - model: gemini-3-flash                                            ││
+│    │ - prompt: The task description                                     ││
+│    │ - max_turns: 10                                                    ││
+│    │                                                                     ││
+│    │ **CRITICAL**: Use invoke_gemini_agentic NOT invoke_gemini.         ││
+│    │ The agentic version enables tool calling.                          ││
+│    └────────────────────────────────────────────────────────────────────┘│
+│                                                                           │
+│ 3. Build full system prompt                                               │
+│    system_prompt = delegation_prompt + agent_context + task_prompt       │
+│                                                                           │
+│ 4. Spawn Claude CLI with injected prompt                                 │
+│    claude -p "$full_prompt" --model sonnet                               │
+│                                                                           │
+│ 5. Record spawn with enforcer                                             │
+│    enforcer.record_spawn("search_auth", "agent_abc123")                  │
+│                                                                           │
+└───────────────────────┬──────────────────────────────────────────────────┘
+                        │
+                        ↓
+┌──────────────────────────────────────────────────────────────────────────┐
+│ EXPLORE AGENT (Claude CLI subprocess)                                     │
+│                                                                           │
+│ Receives injected delegation prompt, IMMEDIATELY calls:                   │
+│                                                                           │
+│   mcp__stravinsky__invoke_gemini_agentic(                                │
+│       model="gemini-3-flash",                                             │
+│       prompt="Search the codebase for authentication implementations     │
+│               using semantic_search, grep_search, ast_grep_search...",   │
+│       max_turns=10                                                        │
+│   )                                                                       │
+│                                                                           │
+└───────────────────────┬──────────────────────────────────────────────────┘
+                        │
+                        ↓
+┌──────────────────────────────────────────────────────────────────────────┐
+│ GEMINI FLASH (via invoke_gemini_agentic)                                  │
+│                                                                           │
+│ Gemini executes multi-turn search workflow:                               │
+│   Turn 1: grep_search("auth", "*.py")                                    │
+│   Turn 2: ast_grep_search("class $_ extends AuthProvider")              │
+│   Turn 3: semantic_search("OAuth token handling")                        │
+│   Turn 4: lsp_find_references("authenticate")                            │
+│   Turn 5: Synthesize results                                              │
+│                                                                           │
+│ Returns: Comprehensive search results                                     │
+│                                                                           │
+└──────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Flow 5: Hook Integration Points
+## Flow 4: TaskGraph Execution Waves
 
 ```
-HOOK INTEGRATION ARCHITECTURE
-════════════════════════════════════════════════════════════
+TASKGRAPH EXECUTION TIMELINE
+════════════════════════════════════════════════════════════════════════════
 
-        USER PROMPT
-             │
-             ↓
-    ┌─────────────────────┐
-    │ UserPromptSubmit    │ ← HOOK 1: Context injection
-    │ Hook (if wired)     │
-    │ ├─ Inject rules     │
-    │ ├─ Add context      │
-    │ └─ Preprocess       │
-    └──────────┬──────────┘
-               │
-               ↓
-    ┌─────────────────────┐
-    │ Claude Code         │
-    │ Auto-delegates      │
-    │ to stravinsky       │
-    └──────────┬──────────┘
-               │
-               ↓
-    ┌─────────────────────────────────┐
-    │ STRAVINSKY ORCHESTRATOR         │
-    │ Plans work, creates Task()      │
-    │ calls for delegation            │
-    └──────────┬──────────────────────┘
-               │
-               ↓
-    ┌──────────────────────────────┐
-    │ PreToolUse Hook              │ ← HOOK 2: Block/Allow
-    │ (if wired)                   │
-    │ ├─ Intercept Read/Grep/Bash │
-    │ ├─ Check complexity         │
-    │ ├─ Decision: Block or Allow │
-    │ └─ If block: exit code 2    │
-    └───┬──────────────────┬───────┘
-        │                  │
-      ALLOW              BLOCK
-        │                  │
-        ↓                  ↓
-    ┌────────┐       ┌──────────────┐
-    │Native  │       │Orchestrator  │
-    │tool    │       │falls back to │
-    │runs    │       │Task() call   │
-    │directly│       │to specialist │
-    └────┬───┘       └────┬─────────┘
-         │                │
-         │                ↓
-         │         ┌────────────────┐
-         │         │Specialist Agent│
-         │         │executes task   │
-         │         └────┬───────────┘
-         │              │
-         └──────┬───────┘
-                │
-                ↓
-    ┌──────────────────────────┐
-    │ PostToolUse Hook         │ ← HOOK 3: Result aggregation
-    │ (if wired)               │
-    │ ├─ Detect completion     │
-    │ ├─ Log results           │
-    │ ├─ Update state          │
-    │ └─ Signal synthesis      │
-    └──────────┬───────────────┘
-               │
-               ↓
-    ┌──────────────────────────┐
-    │ Orchestrator synthesizes │
-    │ Final response           │
-    └──────────────────────────┘
+Time →
+─────────────────────────────────────────────────────────────────────────→
 
+Wave 1: Independent Tasks (parallel)
+┌────────────────────────────────────────────────────────────────────────┐
+│  t=0ms                                                                  │
+│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐                   │
+│  │ search_auth  │ │ research_    │ │ review_      │                   │
+│  │ (explore)    │ │ patterns     │ │ security     │                   │
+│  │ Gemini Flash │ │ (dewey)      │ │ (code-rev)   │                   │
+│  │ CHEAP        │ │ Gemini Flash │ │ Gemini Flash │                   │
+│  └──────┬───────┘ └──────┬───────┘ └──────┬───────┘                   │
+│         │                │                │                            │
+│         └────────────────┼────────────────┘                            │
+│                          │                                              │
+│  DelegationEnforcer validates: all spawned within 500ms               │
+│                          │                                              │
+│         ┌────────────────┼────────────────┐                            │
+│         ↓                ↓                ↓                            │
+│  t=8000ms (agents complete)                                            │
+│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐                   │
+│  │ Auth code    │ │ OAuth best   │ │ Security     │                   │
+│  │ locations    │ │ practices    │ │ review       │                   │
+│  │ found        │ │ documented   │ │ complete     │                   │
+│  └──────────────┘ └──────────────┘ └──────────────┘                   │
+│                                                                        │
+│  enforcer.advance_wave() -> Wave 2                                    │
+└────────────────────────────────────────────────────────────────────────┘
 
-MISSING IMPLEMENTATION
-══════════════════════════════════════════════════════════════
-✅ Python hook modules: mcp_bridge/hooks/ (30+)
-❌ Hook scripts: .claude/agents/hooks/*.sh (NOT CREATED)
-❌ Hook registration: .claude/settings.json (NOT CREATED)
+Wave 2: Dependent Task
+┌────────────────────────────────────────────────────────────────────────┐
+│  t=8100ms                                                               │
+│  ┌──────────────────────────────────────────────────────┐              │
+│  │ implement_feature                                     │              │
+│  │ (frontend)                                            │              │
+│  │ Gemini Pro High                                       │              │
+│  │ MEDIUM                                                │              │
+│  │ deps=[search_auth, research_patterns] <- SATISFIED   │              │
+│  └───────────────────────┬──────────────────────────────┘              │
+│                          │                                              │
+│  t=25000ms (implementation complete)                                   │
+│  ┌──────────────────────────────────────────────────────┐              │
+│  │ OAuth UI components implemented                       │              │
+│  │ Token handling added                                  │              │
+│  │ Error states covered                                  │              │
+│  └──────────────────────────────────────────────────────┘              │
+│                                                                        │
+│  enforcer.advance_wave() -> Wave 3                                    │
+└────────────────────────────────────────────────────────────────────────┘
 
-WHAT'S NEEDED TO ACTIVATE
-═════════════════════════════════════════════════════════════
-1. Create: .claude/agents/hooks/pre_tool_use.sh
-   ├─ Bash script
-   ├─ Read stdin JSON (tool name, args)
-   ├─ Logic: detect complex searches
-   └─ Return: {"decision": "block"} + exit 2 to block
+Wave 3: Final Task
+┌────────────────────────────────────────────────────────────────────────┐
+│  t=25100ms                                                              │
+│  ┌──────────────────────────────────────────────────────┐              │
+│  │ write_tests                                           │              │
+│  │ (code-reviewer)                                       │              │
+│  │ Gemini Flash                                          │              │
+│  │ CHEAP                                                 │              │
+│  │ deps=[implement_feature] <- SATISFIED                │              │
+│  └───────────────────────┬──────────────────────────────┘              │
+│                          │                                              │
+│  t=35000ms (tests complete)                                            │
+│  ┌──────────────────────────────────────────────────────┐              │
+│  │ Unit tests added for OAuth flow                       │              │
+│  │ Integration tests for token refresh                   │              │
+│  │ Edge cases covered                                    │              │
+│  └──────────────────────────────────────────────────────┘              │
+│                                                                        │
+│  enforcer.advance_wave() -> False (all waves complete)                │
+└────────────────────────────────────────────────────────────────────────┘
 
-2. Create: .claude/agents/hooks/post_tool_use.sh
-   ├─ Bash script
-   ├─ Read stdin JSON (tool name, result)
-   ├─ Log completion
-   └─ Pass through result
-
-3. Create: .claude/settings.json (or update if exists)
-   ├─ Register pre_tool_use.sh hook
-   ├─ Register post_tool_use.sh hook
-   └─ Set execution order
-
-4. Update: .claude/agents/stravinsky.md
-   ├─ Add prompt section: "When you see PreToolUse block..."
-   ├─ "...delegate to specialist via Task() tool"
-   └─ Reference complete guide in stravinsky.md
+Total execution: 35 seconds (vs 50+ seconds if sequential)
+Cost savings: Wave 1 ran 3 cheap agents in parallel
 ```
 
 ---
 
-## Flow 6: Cost Tier Routing
+## Flow 5: Phase Artifact Requirements
 
 ```
-REQUEST COMPLEXITY → DELEGATION ROUTING
-════════════════════════════════════════════════════════════
+PHASE ARTIFACT FLOW
+════════════════════════════════════════════════════════════════════════════
 
-    Trivial
-    (typo, 1-line)
-         │
-         ├─ NO delegation
-         └─ Cost: 1x Sonnet cost (direct execution)
-                │
-                ↓
-    Simple
-    (find specific thing)
-         │
-         ├─ Delegate to: explore (FREE async)
-         └─ Cost: 0.25 Haiku + 0.075 Gemini Flash ≈ $0.001
-                │
-                ↓
-    Medium
-    (research + code)
-         │
-         ├─ Parallel delegates:
-         │  ├─ dewey (CHEAP async)
-         │  ├─ code-reviewer (CHEAP async)
-         │  └─ frontend (MEDIUM blocking)
-         └─ Cost: Variable, but cheap agents async
-                │
-                ↓
-    Hard
-    (debugging)
-         │
-         ├─ Attempt 1: Orchestrator
-         ├─ Attempt 2: Orchestrator
-         ├─ Attempt 3: Delegate to debugger (MEDIUM blocking)
-         └─ Cost: 2x Sonnet attempts + debugger fee
-                │
-                ↓
-    Architectural
-    (after 3+ failures)
-         │
-         ├─ Delegate to: delphi (EXPENSIVE blocking)
-         │  └─ Uses GPT-5.2 + extended thinking
-         └─ Cost: High, but prevents infinite loops
+Phase                 Required to Enter    Produces
+─────────────────────────────────────────────────────────────────────────────
 
-
-TOTAL COST SAVINGS WITH HOOK ENFORCEMENT
-═════════════════════════════════════════════════════════════
-Without hooks:
-  Every search = Sonnet directly
-  Sonnet cost: ~$0.003 per 1K tokens
-  → Expensive for simple tasks
-
-With hooks:
-  Simple searches = free explore agent (parallel)
-  Sonnet only orchestrates
-  Gemini Flash does actual work
-  → 10x cheaper for search-heavy workflows
-
-Example: "Find all auth, doc it, test it"
-  Without hooks: Sonnet does all 3 (expensive)
-  With hooks: Sonnet plans, explore/dewey/frontend execute (cheap)
-  Savings: ~70% for typical workflows
+[1] CLASSIFY          (none - entry)       → query_classification
+        │                                         │
+        └─────────────────────────────────────────┘
+                                                  ↓
+[2] CONTEXT           query_classification → context_summary
+        │                                         │
+        └─────────────────────────────────────────┘
+                                                  ↓
+[3] WISDOM            context_summary      → (wisdom injected)
+        │             (optional phase)            │
+        └─────────────────────────────────────────┘
+                                                  ↓
+[4] PLAN              (none - wisdom opt)  → plan.md
+        │                     ↑                   │
+        │                     │ (critique loop)   │
+        └─────────────────────┘───────────────────┘
+                                                  ↓
+[5] VALIDATE          plan.md              → validation_result
+        │                     ↑                   │
+        │                     │ (if fails)        │
+        └─────────────────────┘───────────────────┘
+                                                  ↓
+[6] DELEGATE          validation_result    → delegation_targets
+        │                                  → task_graph
+        │                                         │
+        └─────────────────────────────────────────┘
+                                                  ↓
+[7] EXECUTE           delegation_targets   → execution_result
+        │             task_graph                  │
+        │                     ↑                   │
+        │                     │ (retry loop)      │
+        └─────────────────────┘───────────────────┘
+                                                  ↓
+[8] VERIFY            execution_result     → (final synthesis)
+        │                                         │
+        └───────── (can start new cycle) ─────────┘
 ```
 
 ---
 
-## Flow 7: Agent Capability Matrix
+## Flow 6: Agent Cost Tier Routing
 
 ```
-WHAT EACH AGENT CAN DO
-════════════════════════════════════════════════════════════
+AGENT COST-BASED ROUTING
+════════════════════════════════════════════════════════════════════════════
 
-STRAVINSKY (Orchestrator)      EXPLORE (Code Search)
-┌─────────────────────────┐    ┌─────────────────────────┐
-│ Core Tools:             │    │ Optimized For:          │
-│ ├─ Read files           │    │ ├─ grep_search          │
-│ ├─ Edit/Write           │    │ ├─ ast_grep_search      │
-│ ├─ Bash commands        │    │ ├─ glob_files           │
-│ ├─ Glob patterns        │    │ ├─ lsp tools            │
-│ ├─ Task delegation      │    │ ├─ semantic_search      │
-│ ├─ TodoWrite            │    │ └─ invoke_gemini        │
-│ └─ Agent management     │    │                         │
-│                         │    │ Returns:                │
-│ Thinking Budget: 32k    │    │ ├─ File paths           │
-│                         │    │ ├─ Line numbers         │
-│ Execution: Primary      │    │ ├─ Code snippets        │
-│ Model: Sonnet 4.5       │    │ └─ Pattern analysis     │
-│ Cost: Moderate          │    │                         │
-│                         │    │ Model: Gemini 3 Flash   │
-│ Blocked from:           │    │ Cost: FREE              │
-│ └─ Doing work directly  │    │ Execution: Async        │
-│    (delegates instead)  │    │ Model: Haiku wrapper    │
-└─────────────────────────┘    └─────────────────────────┘
+Request: "Implement feature with tests and documentation"
 
-DEWEY (Research)                FRONTEND (UI/UX)
-┌─────────────────────────┐    ┌─────────────────────────┐
-│ Optimized For:          │    │ Optimized For:          │
-│ ├─ WebSearch            │    │ ├─ UI component design  │
-│ ├─ External docs        │    │ ├─ Styling              │
-│ ├─ Library examples      │    │ ├─ Layout               │
-│ ├─ Best practices       │    │ ├─ Animations           │
-│ ├─ Official docs        │    │ ├─ Responsive design    │
-│ └─ Integration patterns │    │ ├─ Accessibility        │
-│                         │    │ └─ User experience      │
-│ Returns:                │    │                         │
-│ ├─ Documentation links  │    │ Returns:                │
-│ ├─ Code examples        │    │ ├─ Component code       │
-│ ├─ Best practices       │    │ ├─ Styling (CSS/Tailwind)
-│ └─ Recommendations      │    │ ├─ Layout templates     │
-│                         │    │ └─ UX patterns          │
-│ Model: Gemini 3 Flash   │    │                         │
-│ Cost: CHEAP             │    │ Model: Gemini 3 Pro High
-│ Execution: Async        │    │ Cost: MEDIUM            │
-│ Has: WebSearch access   │    │ Execution: BLOCKING     │
-│                         │    │ (always for visual)     │
-└─────────────────────────┘    └─────────────────────────┘
+Orchestrator Decisions:
+─────────────────────────────────────────────────────────────────────────────
 
-CODE-REVIEWER (Quality)          DEBUGGER (Root Cause)
-┌─────────────────────────┐    ┌─────────────────────────┐
-│ Optimized For:          │    │ Optimized For:          │
-│ ├─ Security analysis    │    │ ├─ Error analysis       │
-│ ├─ Code quality         │    │ ├─ Stack trace parsing  │
-│ ├─ Best practices       │    │ ├─ Root cause finding   │
-│ ├─ Anti-patterns        │    │ ├─ Fix strategy         │
-│ ├─ Bug detection        │    │ ├─ Edge case discovery  │
-│ └─ Test coverage        │    │ └─ Debugging guidance   │
-│                         │    │                         │
-│ Returns:                │    │ Returns:                │
-│ ├─ Security issues      │    │ ├─ Root cause analysis  │
-│ ├─ Quality metrics      │    │ ├─ Hypothesis list      │
-│ ├─ Improvement ideas    │    │ ├─ Debugging steps      │
-│ └─ Code examples        │    │ └─ Fix recommendations  │
-│                         │    │                         │
-│ Model: Gemini 3 Flash   │    │ Model: Claude Sonnet    │
-│ Cost: CHEAP             │    │ Cost: MEDIUM            │
-│ Execution: Async        │    │ Execution: BLOCKING     │
-│                         │    │ (after 2+ failures)     │
-└─────────────────────────┘    └─────────────────────────┘
+ALWAYS PARALLEL (Cheap - Wave 1):
+┌─────────────────────────────────────────────────────────────────────────┐
+│                                                                          │
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐              │
+│  │   EXPLORE    │    │    DEWEY     │    │  CODE-REV    │              │
+│  │              │    │              │    │              │              │
+│  │ Gemini Flash │    │ Gemini Flash │    │ Gemini Flash │              │
+│  │              │    │ + WebSearch  │    │              │              │
+│  │ Cost: FREE   │    │ Cost: CHEAP  │    │ Cost: CHEAP  │              │
+│  │              │    │              │    │              │              │
+│  │ "Find code"  │    │ "Research"   │    │ "Review"     │              │
+│  └──────────────┘    └──────────────┘    └──────────────┘              │
+│                                                                          │
+│  All spawn within 500ms window - PARALLEL ENFORCED                      │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
 
-DELPHI (Architecture)
-┌─────────────────────────┐
-│ Optimized For:          │
-│ ├─ Architecture design  │
-│ ├─ System design        │
-│ ├─ Trade-off analysis   │
-│ ├─ Technology selection │
-│ ├─ Complex decisions    │
-│ └─ Strategic advice     │
-│                         │
-│ Returns:                │
-│ ├─ Architecture proposal│
-│ ├─ Rationale/trade-offs │
-│ ├─ Implementation plan  │
-│ ├─ Risk assessment      │
-│ └─ Alternatives analysis│
-│                         │
-│ Model: GPT-5.2          │
-│ Cost: EXPENSIVE         │
-│ Execution: BLOCKING     │
-│ (after 3+ failures)     │
-│ Has: Extended thinking  │
-│ (reasoning_effort)      │
-└─────────────────────────┘
+BLOCKING WHEN NEEDED (Medium - Wave 2):
+┌─────────────────────────────────────────────────────────────────────────┐
+│                                                                          │
+│  ┌───────────────────────────────┐                                      │
+│  │          FRONTEND             │                                      │
+│  │                               │                                      │
+│  │      Gemini 3 Pro High        │                                      │
+│  │                               │                                      │
+│  │        Cost: MEDIUM           │                                      │
+│  │                               │                                      │
+│  │   "Implement UI components"   │                                      │
+│  │                               │                                      │
+│  │  BLOCKING - waits for Wave 1  │                                      │
+│  └───────────────────────────────┘                                      │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+
+STRATEGIC ONLY (Expensive - When Needed):
+┌─────────────────────────────────────────────────────────────────────────┐
+│                                                                          │
+│  ┌───────────────────────────────┐                                      │
+│  │           DELPHI              │     Only invoked:                    │
+│  │                               │     - After 3+ failures              │
+│  │          GPT-5.2              │     - For architecture decisions     │
+│  │                               │     - When explicitly requested      │
+│  │       Cost: EXPENSIVE         │                                      │
+│  │                               │                                      │
+│  │  "Strategic architecture"     │                                      │
+│  │                               │                                      │
+│  │  BLOCKING - extended thinking │                                      │
+│  └───────────────────────────────┘                                      │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Flow 8: Token Cost Comparison
+## Flow 7: DelegationEnforcer State Machine
 
 ```
-TYPICAL WORKFLOW: "Find auth code, test it, document it"
-═════════════════════════════════════════════════════════════
+DELEGATIONENFORCER STATE MACHINE
+════════════════════════════════════════════════════════════════════════════
 
-WITHOUT HOOKS (All Sonnet):
-────────────────────────────────────
-Task 1 - Find auth:     5k tokens × $0.003 = $0.015  ←─ Expensive
-Task 2 - Test code:     8k tokens × $0.003 = $0.024      (Sonnet)
-Task 3 - Document:      4k tokens × $0.003 = $0.012
-                        ────────────────────────────
-Total:                  17k tokens = $0.051 per request
-
-
-WITH HOOKS (Specialized delegation):
-──────────────────────────────────────
-Orchestrator plan:       2k tokens × $0.003 = $0.006  ← Cheap
-Explore (find):          3k tokens × FREE   = $0.000  ← Free
-Code-reviewer (test):    5k tokens × FREE   = $0.000  ← Free
-Dewey (document):        6k tokens × CHEAP  = $0.001  ← Cheap
-Orchestrator synthesis:  2k tokens × $0.003 = $0.006
-                        ────────────────────────────
-Total:                   18k tokens = $0.013 per request
-
-SAVINGS: 75% cheaper (4x cost reduction)
-ADDITIONAL BENEFIT: Parallel execution (faster response)
+                    ┌─────────────────────────────────────┐
+                    │ DelegationEnforcer.__post_init__()  │
+                    │                                     │
+                    │ - Compute execution waves           │
+                    │ - Initialize _current_wave = 0      │
+                    │ - Log wave structure                │
+                    └─────────────────┬───────────────────┘
+                                      │
+                                      ↓
+              ┌─────────────────────────────────────────────┐
+              │ get_current_wave() -> [task_a, task_b, ...]  │
+              └─────────────────────┬───────────────────────┘
+                                    │
+                                    ↓
+     ┌──────────────────────────────────────────────────────────────┐
+     │ FOR each task in current wave:                               │
+     │   validate_spawn(task_id)                                    │
+     │   ├─ Is task in current wave? Yes -> (True, None)           │
+     │   ├─ Is task in future wave? Yes -> (False, "unmet deps")   │
+     │   └─ Unknown task? -> (False, "unknown task")               │
+     └────────────────────────────┬─────────────────────────────────┘
+                                  │
+                                  ↓
+     ┌──────────────────────────────────────────────────────────────┐
+     │ record_spawn(task_id, agent_task_id)                         │
+     │   - Append (task_id, timestamp) to _spawn_batch             │
+     │   - Mark task as SPAWNED in TaskGraph                        │
+     └────────────────────────────┬─────────────────────────────────┘
+                                  │
+                                  ↓
+     ┌──────────────────────────────────────────────────────────────┐
+     │ All wave tasks spawned?                                      │
+     │   YES -> check_parallel_compliance()                        │
+     │          ├─ Time spread < 500ms? -> (True, None)           │
+     │          └─ Time spread > 500ms? -> (False, "not parallel") │
+     │                                      │                       │
+     │                                      ↓                       │
+     │                        If strict=True: raise ParallelError  │
+     └────────────────────────────┬─────────────────────────────────┘
+                                  │
+                                  ↓
+     ┌──────────────────────────────────────────────────────────────┐
+     │ All wave tasks completed?                                    │
+     │   YES -> advance_wave()                                     │
+     │          ├─ _current_wave += 1                              │
+     │          ├─ Clear _spawn_batch                              │
+     │          └─ Return: more waves? True/False                  │
+     └────────────────────────────┬─────────────────────────────────┘
+                                  │
+                                  ↓
+     ┌──────────────────────────────────────────────────────────────┐
+     │ More waves?                                                  │
+     │   YES -> Continue with next wave                            │
+     │   NO  -> All execution complete                             │
+     └──────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-**These flows form the foundation of Stravinsky's architecture.**
+## Flow 8: OrchestratorState Transitions
 
-Key takeaway: The system is **almost complete**, but needs **hook integration** to enforce the delegation patterns automatically.
+```
+ORCHESTRATORSTATE TRANSITION VALIDATION
+════════════════════════════════════════════════════════════════════════════
 
-Status: Ready for Phase 1 (Hook Integration) implementation.
+transition_to(next_phase) Flow:
+─────────────────────────────────────────────────────────────────────────────
+
+                    ┌────────────────────────────┐
+                    │ transition_to(next_phase)  │
+                    └─────────────┬──────────────┘
+                                  │
+                                  ↓
+              ┌──────────────────────────────────────────┐
+              │ 1. Validate transition is allowed        │
+              │    VALID_TRANSITIONS[current] contains   │
+              │    next_phase?                           │
+              │    ├─ YES -> continue                   │
+              │    └─ NO  -> raise ValueError           │
+              └─────────────────┬────────────────────────┘
+                                │
+                                ↓
+              ┌──────────────────────────────────────────┐
+              │ 2. Check artifact requirements           │
+              │    (if strict_mode=True)                 │
+              │    PHASE_REQUIREMENTS[next_phase] all    │
+              │    present in artifacts?                 │
+              │    ├─ YES -> continue                   │
+              │    └─ NO  -> raise ValueError           │
+              │           "Missing: [list of artifacts]" │
+              └─────────────────┬────────────────────────┘
+                                │
+                                ↓
+              ┌──────────────────────────────────────────┐
+              │ 3. Check critique loop limit             │
+              │    (if next_phase=PLAN from VALIDATE)    │
+              │    critique_count < max_critiques?       │
+              │    ├─ YES -> increment critique_count   │
+              │    └─ NO  -> raise ValueError           │
+              │           "Max critiques reached"        │
+              └─────────────────┬────────────────────────┘
+                                │
+                                ↓
+              ┌──────────────────────────────────────────┐
+              │ 4. Check phase gates                     │
+              │    (if enable_phase_gates=True)          │
+              │    approver() returns True?              │
+              │    ├─ YES -> continue                   │
+              │    └─ NO  -> raise PermissionError      │
+              └─────────────────┬────────────────────────┘
+                                │
+                                ↓
+              ┌──────────────────────────────────────────┐
+              │ 5. Execute transition                    │
+              │    - history.append(current_phase)      │
+              │    - current_phase = next_phase         │
+              │    - Log transition                      │
+              │    - Return True                         │
+              └──────────────────────────────────────────┘
+```
+
+---
+
+## Flow 9: Phase Visualization
+
+```
+PHASE PROGRESS VISUALIZATION
+════════════════════════════════════════════════════════════════════════════
+
+format_phase_progress(OrchestrationPhase.DELEGATE) returns:
+
+  [Phase 6/8: DELEGATE] ━━━━━●──
+
+Legend:
+  ━  = Completed phase (green)
+  ●  = Current phase (cyan)
+  ─  = Pending phase (gray)
+
+
+display_agent_execution("explore", "gemini-3-flash", "Find auth") returns:
+
+  EXPLORE -> gemini-3-flash
+     Task: Find auth implementations in codebase
+
+
+display_parallel_batch_header(3) returns:
+
+  ══════════════════════════════════════════════════
+  PARALLEL DELEGATION (3 agents)
+  ══════════════════════════════════════════════════
+```
+
+---
+
+## Summary
+
+The 7-phase orchestration with TaskGraph and DelegationEnforcer provides:
+
+1. **Structured Workflow**: Clear phases with artifact requirements
+2. **Hard Parallel Enforcement**: Independent tasks MUST run in parallel
+3. **Cost Optimization**: Cheap agents run in parallel, expensive agents only when needed
+4. **Cross-Repo Compatibility**: Delegation prompts injected at spawn time
+5. **Audit Trail**: Full transition logging and enforcement status
+
+---
+
+**Last Updated**: 2026-01-22
+**Architecture Version**: 7-Phase Orchestration with Hard Parallel Enforcement

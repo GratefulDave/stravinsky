@@ -1,6 +1,6 @@
 # Stravinsky Architecture Guide
 
-**Version:** v0.5.x (Updated 2026-01-11)
+**Version:** v0.5.x (Updated 2026-01-22)
 **Purpose:** Comprehensive architectural documentation for developers and contributors
 
 ---
@@ -8,34 +8,34 @@
 ## Executive Summary
 
 Stravinsky is a **Model Context Protocol (MCP) bridge** that enables Claude Code to:
-- Orchestrate multi-model AI workflows (Gemini, OpenAI, Claude)
-- Spawn background agents with full tool access
+- Orchestrate multi-model AI workflows (Gemini, OpenAI, Claude) via 7-phase orchestration
+- Spawn background agents with full tool access and parallel execution enforcement
 - Perform semantic code understanding via vector embeddings
 - Leverage Language Server Protocol for code refactoring
 
 ### Core Design Principles
 
-1. **Zero-Import-Weight Startup**: Sub-second initialization via aggressive lazy loading
-2. **OAuth-First with API Fallback**: Automatic degradation to API keys on rate limits
-3. **Parallel Agent Execution**: Background agents run as independent Claude CLI processes
-4. **Semantic-First Search**: Vector embeddings + AST patterns for code discovery
-5. **Defense in Depth**: Multi-layer hook architecture for safety and flexibility
+1. **7-Phase Orchestration**: CLASSIFY -> CONTEXT -> WISDOM -> PLAN -> VALIDATE -> DELEGATE -> EXECUTE -> VERIFY
+2. **Hard Parallel Enforcement**: Independent tasks MUST be spawned simultaneously via TaskGraph and DelegationEnforcer
+3. **Zero-Import-Weight Startup**: Sub-second initialization via aggressive lazy loading
+4. **OAuth-First with API Fallback**: Automatic degradation to API keys on rate limits
+5. **Agent Delegation Prompts**: Injected at spawn time for cross-repo MCP installations
 
 ---
 
 ## Table of Contents
 
 1. [Quick Reference](#quick-reference)
-2. [Project Structure](#project-structure)
-3. [Core Components](#core-components)
-4. [Tool Categories](#tool-categories)
-5. [Authentication Flows](#authentication-flows)
-6. [Hook System](#hook-system)
-7. [Design Patterns](#design-patterns)
-8. [Deployment Architecture](#deployment-architecture)
-9. [Performance Optimizations](#performance-optimizations)
-10. [Native Subagent Migration](#native-subagent-migration)
-11. [Contributing Guidelines](#contributing-guidelines)
+2. [7-Phase Orchestration](#7-phase-orchestration)
+3. [TaskGraph and Parallel Enforcement](#taskgraph-and-parallel-enforcement)
+4. [Agent Delegation System](#agent-delegation-system)
+5. [Project Structure](#project-structure)
+6. [Core Components](#core-components)
+7. [Tool Categories](#tool-categories)
+8. [Authentication Flows](#authentication-flows)
+9. [Hook System](#hook-system)
+10. [Design Patterns](#design-patterns)
+11. [Performance Optimizations](#performance-optimizations)
 12. [Troubleshooting](#troubleshooting)
 
 ---
@@ -45,1025 +45,553 @@ Stravinsky is a **Model Context Protocol (MCP) bridge** that enables Claude Code
 | Component | File | Purpose |
 |-----------|------|---------|
 | **MCP Server** | `mcp_bridge/server.py` | Protocol entry point (zero-import-weight) |
-| **Agent Manager** | `tools/agent_manager.py` | Background agent orchestration |
-| **Model Routing** | `routing/config.py` | Tier-aware multi-provider routing & OAuth fallback |
+| **Agent Manager** | `tools/agent_manager.py` | Background agent orchestration with parallel enforcement |
+| **Orchestrator State** | `orchestrator/state.py` | 7-phase workflow state machine |
+| **TaskGraph** | `orchestrator/task_graph.py` | DAG for parallel task execution |
+| **Model Routing** | `routing/config.py` | Tier-aware multi-provider routing and OAuth fallback |
 | **Model Invoke** | `tools/model_invoke.py` | Multi-model API calls via proxy/direct |
 | **Semantic Search** | `tools/semantic_search.py` | Vector-based code search (ChromaDB) |
 | **OAuth** | `auth/google_auth.py`, `auth/openai_auth.py` | Authentication flows |
-| **Hook Manager** | `hooks/manager.py` | Tool execution middleware |
-| **Native Hooks** | `.claude/hooks/` | PreToolUse/PostToolUse delegation |
 
 ---
 
-## Hooks Architecture
+## 7-Phase Orchestration
 
-### The Hook Split: Native vs MCP
+Stravinsky implements a strict 7-phase workflow for task orchestration. Each phase has specific requirements and valid transitions.
 
-Stravinsky uses a **hybrid hook architecture** with two layers:
-
-**Native Claude Code Hooks** (5 hooks in `.claude/settings.json`):
-- `PreToolUse`: stravinsky_mode.py (blocks Read/Grep/Bash in orchestrator mode)
-- `UserPromptSubmit`: context.py (prepends CLAUDE.md/README.md/AGENTS.md)
-- `PostToolUse`: truncator.py, edit_recovery.py, todo_delegation.py
-
-**MCP Internal Hooks** (17+ hooks in `mcp_bridge/hooks/`):
-- 5 tiers: post_tool_call, context management, optimization, behavior, lifecycle
-- Examples: model routing, token tracking, session state, auto-save
-
-### Why the Split is Necessary
-
-This is **NOT a design flaw** - it's an intentional architectural pattern called "defense in depth":
-
-#### 1. Process Isolation Boundary
+### Phase Overview
 
 ```
-Claude Code Process
-├── Native Hook (subprocess shell)  ← Intercepts BEFORE MCP call
-└── MCP Server Process
-    └── MCP Hook (async Python)     ← Intercepts INSIDE MCP tool dispatch
+CLASSIFY -> CONTEXT -> WISDOM -> PLAN -> VALIDATE -> DELEGATE -> EXECUTE -> VERIFY
+   [1]       [2]        [3]      [4]       [5]        [6]        [7]       [8]
 ```
 
-- **Native hooks** run as separate subprocesses spawned by Claude Code
-- **MCP hooks** run in-process within the Stravinsky MCP server
-- These execute at **different lifecycle points** in fundamentally **different processes**
-
-#### 2. Protocol Incompatibility
-
-- Native hooks communicate via **stdin/stdout JSON** with Claude Code
-- MCP hooks communicate via **MCP protocol (stdio transport)** between Claude Code and Stravinsky
-- Native hooks can't access MCP server internals (tokens, model state)
-- MCP hooks can't intercept Claude Code lifecycle events (tool approval, user prompts)
-
-#### 3. Capability Separation
-
-| Capability | Native Hooks | MCP Hooks |
-|------------|--------------|-----------|
-| Block tool execution | ✅ (hard boundary) | ❌ (tool already dispatched) |
-| Inject context to user prompts | ✅ (UserPromptSubmit) | ❌ (no access to prompts) |
-| Route model invocations | ❌ (no model access) | ✅ (invoke_gemini/openai) |
-| Track token usage | ❌ (no token access) | ✅ (post_model_invoke) |
-| Modify tool results | ✅ (PostToolUse) | ✅ (post_tool_call) |
-| Session persistence | ❌ (stateless subprocess) | ✅ (session_idle, compact) |
-
-#### 4. Defense in Depth Pattern
-
-From Delphi (GPT-5.2 strategic analysis):
-
-> "This is textbook 'defense in depth' - you want hard security boundaries (native hooks block unsafe tools) enforced OUTSIDE the MCP process, while allowing flexible orchestration (MCP hooks route models) INSIDE. If you move everything to MCP hooks, a bug in your MCP server could bypass all safety checks."
-
-**Validated Pattern**: Used in production systems (Kubernetes admission webhooks, WAF + app-layer validation)
-
-### Current Hook Inventory
-
-#### Native Hooks (10+)
-
-1. **stravinsky_mode.py** (PreToolUse)
-   - Blocks Read/Grep/Bash when orchestrator mode active
-   - Hard enforcement boundary
-
-2. **context.py** (UserPromptSubmit)
-   - Prepends project context (CLAUDE.md, README.md, AGENTS.md)
-   - Context injection at prompt boundary
-
-3. **truncator.py** (PostToolUse)
-   - Truncates large tool outputs
-   - Output size management
-
-4. **edit_recovery.py** (PostToolUse)
-   - Recovers from Edit tool failures
-   - Error resilience
-
-5. **todo_delegation.py** (PostToolUse)
-   - Reminds to use parallel agent spawning after TodoWrite
-   - Orchestration guidance
-
-6. **dependency_tracker.py** (UserPromptSubmit)
-   - Tracks task dependencies to enable smart parallelization suggestions
-
-7. **execution_state_tracker.py** (UserPromptSubmit)
-   - Monitors execution patterns to detect sequential fallback
-
-8. **parallel_reinforcement_v2.py** (UserPromptSubmit)
-   - Injects smart reminders when parallel execution degrades
-
-9. **ralph_loop.py** (PostAssistantMessage)
-   - Automatically continues work if TODOs are incomplete (RALPH Loop)
-
-10. **notification_hook_v2.py** (Notification)
-    - Enhanced agent spawn notifications with colors and formatting
-
-#### MCP Hooks (17+, 5 tiers)
-
-**Tier 1: Post-Tool-Call**
-- model_routing (route Gemini vs GPT based on task)
-- token_tracking (track usage per model)
-- task_persistence (save agent state to `.stravinsky/agents.json`)
-
-**Tier 2: Context Management**
-- context_injection (add session history to prompts)
-- session_state (maintain conversation state)
-
-**Tier 3: Optimization**
-- cache_warming (preload frequently used data)
-- rate_limiting (prevent API quota exhaustion)
-
-**Tier 4: Behavior**
-- auto_delegation (suggest agent spawning for complex tasks)
-- parallel_reminder (enforce parallel execution patterns)
-
-**Tier 5: Lifecycle**
-- session_idle (cleanup after inactivity)
-- pre_compact (prepare for context compression)
-
-### Recommended Hook Strategy
-
-**Keep the Hybrid Architecture** with these enhancements:
-
-### The Unified Hook Interface (NEW in v0.4.58)
-
-To reduce duplication and enable shared logic, Stravinsky now uses a **Unified Hook Interface** via `mcp_bridge/hooks/events.py`.
-
-#### Canonical Event Model:
-- `ToolCallEvent`: A unified data structure for all hook types (Native and MCP).
-- `HookPolicy`: An abstract base class for implementing cross-environment policies.
-- Adapters: Built-in support for running policies as standalone native scripts (`run_as_native`) or internal MCP callables.
-
-#### Benefits:
-- **Shared Logic**: Policies like Truncation and Edit Recovery run the same code in both environments.
-- **Improved Testing**: Policies can be unit-tested in isolation without mocking the entire Claude Code lifecycle.
-
----
-
-### Model Proxy Architecture (NEW in v0.4.58)
-
-To solve the "Head-of-Line Blocking" problem in MCP stdio, Stravinsky implements a local **Model Proxy**.
-
-#### Data Flow (NEW):
-```
-Claude Code
-└── Native Subagent
-    └── Calls invoke_gemini (MCP)
-        └── Stravinsky Bridge
-            └── Proxy Client (httpx)
-                └── Model Proxy (FastAPI @ localhost:8765)
-                    └── External API (Gemini/GPT)
-```
-
-#### Why This Matters:
-MCP stdio transport is inherently single-threaded and blocking. By offloading model generation to a separate FastAPI process, the bridge can handle other tool calls (like search or read) immediately, even while multiple models are generating responses in parallel.
-
----
-
-## Native Subagent Migration
-
-### The Key Insight
-
-**Native subagents use the Task tool to delegate to OTHER native subagents**, with PreToolUse hooks controlling delegation behavior.
-
-This enables the orchestration pattern:
-
-```
-Claude Code
-└── Native Subagent "stravinsky" (auto-delegated orchestrator)
-    ├── PreToolUse Hook: Intercepts Read/Grep/Bash → Blocks and delegates
-    ├── Calls: TodoWrite (native Claude tool for planning)
-    ├── Calls: Task(subagent_type="explore", prompt="search Y")
-    ├── Calls: Task(subagent_type="dewey", prompt="research X")
-    ├── Calls: Task(subagent_type="code-reviewer", prompt="review Z")
-    └── PostToolUse Hook: Aggregates results from specialist agents
-```
-
-**Why This is the CORRECT Architecture**:
-- **Native Task tool** for delegation (not agent_spawn CLI spawning)
-- **PreToolUse hooks** can block native tools (exit code 2 or {"decision": "block"})
-- **Specialists are native subagents** (.claude/agents/explore.md, dewey.md, etc.)
-- **Specialists use MCP tools** (invoke_gemini, invoke_openai) for multi-model routing
-- **No CLI overhead** - all native delegation via Task tool
-- **Hard boundaries** - PreToolUse hooks enforce delegation policy
-
-### Current Slash Command Pattern (To Be Deprecated)
-
-```bash
-# User manually invokes:
-/stravinsky "implement feature X"
-
-# Claude Code expands to full prompt from slash command
-# Then executes inline (no delegation)
-```
-
-**Problems**:
-- ❌ Manual invocation required (no auto-delegation)
-- ❌ Executes in main conversation (context pollution)
-- ❌ Can't differentiate orchestrator from execution
-
-### Proposed Native Subagent Pattern
-
-#### Step 1: Create Stravinsky Orchestrator Agent
-
-Create `.claude/agents/stravinsky.md`:
-
-```yaml
----
-name: stravinsky
-description: |
-  Task orchestrator and planner. Use PROACTIVELY for:
-  - Complex multi-step tasks (3+ steps)
-  - Research + implementation workflows
-  - Tasks requiring multiple file changes
-  - Parallel exploration of multiple solutions
-model: sonnet
----
-
-You are Stravinsky, the task orchestrator and parallel execution specialist.
-
-Core Responsibilities:
-1. Task Planning: Use TodoWrite to break down complex tasks
-2. Parallel Delegation: Spawn specialized agents concurrently
-3. Result Synthesis: Collect and integrate agent outputs
-4. Execution Coordination: Ensure all subtasks complete successfully
-
-Available Specialist Agents (use agent_spawn):
-- explore: Codebase search, structural analysis
-- dewey: Documentation research, library usage examples
-- frontend: UI/UX implementation (uses Gemini 3 Pro)
-- delphi: Strategic advice, architecture decisions (uses GPT-5.2)
-
-Execution Rules:
-- For 2+ independent tasks, spawn ALL agents in a SINGLE response
-- Monitor progress with agent_progress(task_id)
-- Collect results with agent_output(task_id, block=true)
-- Always synthesize findings before presenting to user
-```
-
-**Benefits**:
-- ✅ Auto-delegation (Claude detects complex tasks automatically)
-- ✅ Isolated execution (runs as subagent, not inline)
-- ✅ Full parallelism (via agent_spawn MCP tool)
-- ✅ Better UX (no manual `/stravinsky` needed)
-
-#### Step 2: Migrate Specialist Agents
-
-Create native subagents for Claude-native specialists:
-
-**`.claude/agents/code-reviewer.md`**:
-```yaml
----
-name: code-reviewer
-description: |
-  Code review specialist. Use for:
-  - Reviewing pull requests
-  - Analyzing code quality
-  - Suggesting improvements
-model: sonnet
----
-
-You are a code review specialist focused on identifying bugs, security issues, and code quality improvements.
-```
-
-**`.claude/agents/debugger.md`**:
-```yaml
----
-name: debugger
-description: |
-  Debugging specialist. Use for:
-  - Analyzing errors and stack traces
-  - Root cause analysis
-  - Fixing complex bugs
-model: sonnet
----
-
-You are a debugging specialist focused on systematic root cause analysis.
-```
-
-**Keep as CLI Spawns** (via agent_spawn):
-- delphi (uses GPT-5.2 via invoke_openai)
-- frontend (uses Gemini 3 Pro via invoke_gemini)
-- dewey (uses Gemini + web search)
-- multimodal (uses Gemini vision)
-
----
-
-## Hybrid Architecture Recommendations
-
-### Final Recommended Structure
-
-```
-Stravinsky Architecture (CORRECT - Native Subagents + Hooks)
-├── Native Claude Code Hooks (Global - .claude/settings.json)
-│   ├── PreToolUse: stravinsky_mode.py (hard enforcement - DEPRECATED)
-│   ├── UserPromptSubmit: context.py (context injection)
-│   └── PostToolUse: truncator.py, edit_recovery.py, todo_delegation.py
-│
-├── Native Subagent Hooks (Orchestrator-specific)
-│   ├── PreToolUse: Delegation control (blocks Read/Grep → delegates to Task)
-│   ├── PostToolUse: Result aggregation from specialist agents
-│   └── UserPromptSubmit: Context injection for orchestrator
-│
-├── MCP Internal Hooks (17+ - mcp_bridge/hooks/)
-│   ├── Tier 1: post_tool_call (model routing, token tracking, task persistence)
-│   ├── Tier 2: context management (session state, context injection)
-│   ├── Tier 3: optimization (cache warming, rate limiting)
-│   ├── Tier 4: behavior (auto delegation, parallel reminder)
-│   └── Tier 5: lifecycle (session idle, pre compact)
-│
-├── Native Subagents (.claude/agents/)
-│   ├── stravinsky.md (orchestrator - uses Task tool + PreToolUse hooks)
-│   ├── explore.md (code search - uses invoke_gemini MCP tool)
-│   ├── dewey.md (documentation - uses invoke_gemini + WebSearch)
-│   ├── code-reviewer.md (quality analysis - Claude Sonnet)
-│   ├── debugger.md (root cause - Claude Sonnet)
-│   └── frontend.md (UI/UX - uses invoke_gemini with Gemini 3 Pro High)
-│
-└── MCP Tools (31 - used BY native subagents)
-    ├── Model Invocation: invoke_gemini, invoke_openai
-    ├── Code Search: ast_grep_search, grep_search, glob_files
-    ├── LSP: lsp_hover, lsp_goto_definition, lsp_find_references, etc.
-    └── Legacy (deprecated): agent_spawn, agent_output, agent_progress, agent_list
-```
-
-### Decision Matrix
-
-| Agent Type | Implementation | Reasoning |
-|------------|---------------|-----------|
-| **Stravinsky Orchestrator** | Native subagent + Task tool + PreToolUse hooks | Auto-delegation, hook-based control |
-| **Explore** | Native subagent + invoke_gemini | Uses Gemini 3 Flash via MCP tool |
-| **Dewey** | Native subagent + invoke_gemini | Uses Gemini 3 Flash + WebSearch |
-| **Code Reviewer** | Native subagent | Claude Sonnet (native, no MCP needed) |
-| **Debugger** | Native subagent | Claude Sonnet (native, no MCP needed) |
-| **Frontend** | Native subagent + invoke_gemini | Uses Gemini 3 Pro High via MCP tool |
-| **Delphi (future)** | Native subagent + invoke_openai | Uses GPT-5.2 via MCP tool |
-
-### Migration Benefits
-
-**Before (Current - agent_spawn CLI spawning)**:
-- User types: `/stravinsky "implement feature"`
-- Executes inline with full system prompt
-- Manual slash command invocation
-- CLI subprocess overhead (agent_spawn)
-- No automatic delegation
-
-**After (CORRECT - Native Task tool + Hooks)**:
-- User types: "implement a complex feature with X, Y, Z"
-- Claude auto-delegates to stravinsky native subagent
-- Stravinsky PreToolUse hooks intercept and delegate via Task tool
-- Specialists execute as native subagents (no CLI spawning)
-- PostToolUse hooks aggregate results
-- Clean separation of orchestration vs execution
-
-**Measured Improvements**:
-- ✅ **Zero user friction**: Auto-delegation (no slash commands)
-- ✅ **Hook-based control**: PreToolUse enforces delegation policy
-- ✅ **Context isolation**: Each specialist runs as separate native subagent
-- ✅ **True parallelism**: Multiple Task() calls execute concurrently
-- ✅ **Multi-model routing**: Specialists use invoke_gemini/openai MCP tools
-- ✅ **No CLI overhead**: All delegation via native Task tool
-- ✅ **Hard boundaries**: PreToolUse can block unsafe operations
-
----
-
-## Implementation Roadmap
-
-## Comparison: Stravinsky vs oh-my-opencode
-
-### Architecture Alignment
-
-Stravinsky's architecture **matches and exceeds** oh-my-opencode's design patterns:
-
-| Feature | oh-my-opencode (Sisyphus) | Stravinsky | Status |
-|---------|---------------------------|------------|--------|
-| **Orchestrator** | Sisyphus (Opus 4.5, 32k thinking) | Stravinsky (Sonnet 4.5) | ✅ MATCH |
-| **Delegation** | Task tool + background_task (CLI spawns) | Task tool (native subagents, zero overhead) | ✅ **BETTER** |
-| **Parallel Execution** | Async background agents | Native Task tool (parallel by default) | ✅ **BETTER** |
-| **Strategic Advisor** | Oracle (GPT-5.2, after 3 failures) | Delphi (GPT-5.2 Medium, systematic) | ✅ MATCH |
-| **Frontend Specialist** | Gemini 3 Pro (ALL visual changes) | Gemini 3 Pro High (UI/UX specialist) | ✅ **BETTER** |
-| **Code Search** | Explore (Grok/Gemini/Haiku, always async) | Explore (Gemini 3 Flash, native subagent) | ✅ MATCH |
-| **Documentation** | Librarian (Sonnet/Gemini, always async) | Dewey (Gemini 3 Flash + WebSearch) | ✅ MATCH |
-| **Code Review** | Not mentioned | Code Reviewer (Claude Sonnet, native) | ✅ **BETTER** |
-| **Debugging** | Not mentioned | Debugger (Claude Sonnet, systematic) | ✅ **BETTER** |
-| **Tool Access** | Explicit include lists | MCP tools + native inheritance | ✅ **BETTER** |
-| **Hook System** | PostToolUse hooks | Pre/PostToolUse + UserPromptSubmit | ✅ **BETTER** |
-| **Todo Continuation** | Enforcer hook (prevents abandonment) | Native hook (already implemented) | ✅ MATCH |
-| **Context Management** | AnthropicAutoCompact | Claude Code native compaction | ✅ MATCH |
-| **Model Fallbacks** | 3-tier (user/installer/default) | OAuth + token refresh | ✅ MATCH |
-| **PreToolUse Blocking** | Not mentioned | Hard boundaries (exit code 2) | ✅ **BETTER** |
-| **Multi-Model Routing** | Background vs blocking agents | invoke_gemini/openai MCP tools | ✅ MATCH |
-
-### Key Innovations from oh-my-opencode
-
-#### 1. Agent Classification (Cost-Based Routing)
-
-**oh-my-opencode Pattern**:
-- **Async (Always Background)**: explore (free), librarian (cheap)
-- **Blocking (Synchronous)**: oracle (expensive, only after 3 failures), frontend (medium, ALL visual)
-
-**Stravinsky Enhancement**:
-```markdown
-# Agent Cost Classification
-
-| Agent | Cost | Execution | When to Use |
-|-------|------|-----------|-------------|
-| **explore** | Free | Async (Task tool parallel) | Always for code search |
-| **dewey** | Cheap | Async (Task tool parallel) | Always for docs research |
-| **code-reviewer** | Cheap | Async (Task tool parallel) | Always for quality checks |
-| **debugger** | Medium | Blocking | After 2+ failed fixes |
-| **frontend** | Medium | Blocking | ALL visual changes |
-| delphi | GPT-5.2 | N/A (reasoning_effort) | Strategic architectural decisions |
-```
-
-#### 2. Todo Continuation Enforcer
-
-**Status**: ✅ Already implemented in `mcp_bridge/native_hooks/todo_continuation.py`
-
-**Pattern**:
-- Injects `[SYSTEM REMINDER - TODO CONTINUATION]` via UserPromptSubmit hook
-- Lists IN_PROGRESS and PENDING todos
-- Forces continuation before new work
-- Prevents chronic LLM task abandonment
-
-#### 3. Delegation Discipline
-
-**oh-my-opencode Rule**: "Sisyphus never works alone when specialists are available"
-
-**Stravinsky Implementation**:
-- Orchestrator has PreToolUse hooks that **block** Read/Grep/Bash
-- Forces delegation via Task tool to specialists
-- Hard enforcement (exit code 2) prevents bypass
-
-#### 4. Search Stop Conditions
-
-**oh-my-opencode Pattern**:
-- Sufficient context exists
-- Same info across sources
-- 2 iterations yield nothing new
-- Direct answer found
-
-**Stravinsky Integration**: Already documented in explore.md and dewey.md
-
-### Stravinsky Advantages Over oh-my-opencode
-
-1. **Zero CLI Overhead**: Native Task tool delegation vs CLI subprocess spawning (500ms+ per agent)
-2. **Hard Boundaries**: PreToolUse hooks can block tools with exit code 2
-3. **Additional Specialists**: code-reviewer.md, debugger.md (not in oh-my-opencode)
-4. **Higher Quality Frontend**: Gemini 3 Pro High vs Gemini 3 Pro
-5. **MCP Tool Isolation**: Specialists use MCP tools without direct CLI access
-6. **Hook Architecture**: 3-layer (native global, native subagent, MCP internal)
-
-### Features to Add (oh-my-opencode Parity)
-
-1. **Agent Classification in Configs**: Add cost/execution metadata to agent YAML frontmatter
-2. **Background Result Collection**: Implement non-blocking result aggregation
-3. **Extended Thinking Budget**: Add to Stravinsky orchestrator (32k token thinking)
-
----
-
-### Phase 1: Native Subagent Prototype (COMPLETED)
-### Phase 2: Specialist Agent Migration (COMPLETED)
-### Phase 3: Hook Unification Layer (COMPLETED)
-### Phase 4: Model Proxy (COMPLETED)
-
----
-
-## User Messaging Integration
-
-### Hook-Based Transparency
-
-Stravinsky now provides real-time transparency about which tools and agents are being used through PostToolUse messaging hooks.
-
-**Implementation**: `mcp_bridge/native_hooks/tool_messaging.py`
-
-**Configuration**:
-```json
-{
-  "PostToolUse": [{
-    "matcher": "mcp__stravinsky__*,mcp__grep-app__*,Task",
-    "hooks": [{
-      "type": "command",
-      "command": "python3 .../tool_messaging.py"
-    }]
-  }]
+### Phase Descriptions
+
+| Phase | Number | Purpose | Required Artifacts |
+|-------|--------|---------|-------------------|
+| **CLASSIFY** | 1 | Query classification and scope definition | None (entry point) |
+| **CONTEXT** | 2 | Gather codebase context using appropriate search strategy | `query_classification` |
+| **WISDOM** | 3 | Inject project wisdom from `.stravinsky/wisdom.md` | `context_summary` |
+| **PLAN** | 4 | Strategic planning with critique loop | None (wisdom optional) |
+| **VALIDATE** | 5 | Validate plan against rules and constraints | `plan.md` |
+| **DELEGATE** | 6 | Route to appropriate models/agents, build TaskGraph | `validation_result` |
+| **EXECUTE** | 7 | Execute the plan with parallel enforcement | `delegation_targets`, `task_graph` |
+| **VERIFY** | 8 | Verify results and synthesize output | `execution_result` |
+
+### Valid Phase Transitions
+
+```python
+VALID_TRANSITIONS = {
+    CLASSIFY: [CONTEXT],
+    CONTEXT: [WISDOM, PLAN],  # Wisdom is optional
+    WISDOM: [PLAN],
+    PLAN: [VALIDATE, PLAN],   # Can loop for critique (max 3 iterations)
+    VALIDATE: [DELEGATE, PLAN],  # Can return to PLAN if validation fails
+    DELEGATE: [EXECUTE],
+    EXECUTE: [VERIFY, EXECUTE],  # Can loop for retries
+    VERIFY: [CLASSIFY],  # Can start new cycle
 }
 ```
 
-### Message Format
+### Implementation Files
 
-**MCP Tools**:
+- **State Machine**: `mcp_bridge/orchestrator/state.py`
+- **Phase Enums**: `mcp_bridge/orchestrator/enums.py`
+- **Visualization**: `mcp_bridge/orchestrator/visualization.py`
+- **Wisdom Loader**: `mcp_bridge/orchestrator/wisdom.py`
+- **Model Router**: `mcp_bridge/orchestrator/router.py`
+
+### Phase Artifact Requirements
+
+```python
+PHASE_REQUIREMENTS = {
+    CLASSIFY: [],  # Entry point, no requirements
+    CONTEXT: ["query_classification"],
+    WISDOM: ["context_summary"],
+    PLAN: [],  # Wisdom is optional
+    VALIDATE: ["plan.md"],
+    DELEGATE: ["validation_result"],
+    EXECUTE: ["delegation_targets", "task_graph"],  # TaskGraph required for parallel
+    VERIFY: ["execution_result"],
+}
 ```
-🔧 tool-name('description')
-```
-
-**Examples**:
-- `🔧 ast-grep('Searching AST in src/ for class definitions')`
-- `🔧 grep('Searching for authentication patterns')`
-- `🔧 lsp-diagnostics('Checking server.py for errors')`
-
-**Agent Delegations**:
-```
-🎯 agent:model('description')
-```
-
-**Examples**:
-- `🎯 explore:gemini-3-flash('Finding all API endpoints')`
-- `🎯 delphi:gpt-5.2-medium('Analyzing architecture trade-offs')`
-- `🎯 frontend:gemini-3-pro-high('Designing login component')`
-
-### Benefits
-
-1. **Cost Awareness**: Model names (gemini-3-flash, gpt-5.2-medium) indicate cost tier
-2. **Transparency**: Users see exactly which specialist is handling their task
-3. **Debugging**: Easy to trace which tools/agents were used for a result
-4. **Workflow Clarity**: Parallel agent execution is visible in real-time
-
-### Integration with Delegation Enforcement
-
-The messaging hooks work in tandem with PreToolUse delegation enforcement:
-
-```
-User: "Find all authentication code"
-  ↓
-PreToolUse (stravinsky_mode.py)
-  ↓ Output: 🎭 explore('Delegating Grep (searching for 'auth')')
-  ↓ BLOCK Grep tool
-  ↓
-Claude uses Task tool instead
-  ↓
-PostToolUse (tool_messaging.py)
-  ↓ Output: 🎯 explore:gemini-3-flash('Find auth code')
-  ↓
-User sees both:
-  🎭 explore('Delegating Grep (searching for 'auth')')
-  🎯 explore:gemini-3-flash('Find auth code')
-```
-
-This provides complete visibility: **why** delegation happened (PreToolUse) and **which agent** is executing (PostToolUse).
 
 ---
 
-## Parallel Delegation Enforcement Gap
+## TaskGraph and Parallel Enforcement
 
-### Overview
+Stravinsky enforces **hard parallel execution** for independent tasks. This is not advisory - the system will block sequential execution of tasks that should run in parallel.
 
-Stravinsky's core value proposition is **parallel execution** for multi-step tasks. However, there is a critical gap between the *advisory* hooks that **remind** about parallel delegation and the actual **enforcement** of parallel patterns. This section documents the current state, why the problem exists, and proposes solutions for future implementation.
+### TaskGraph Overview
 
-### The Problem
+The `TaskGraph` is a Directed Acyclic Graph (DAG) that tracks task dependencies and determines which tasks can execute in parallel.
 
-**Observed Behavior**: Despite parallel delegation reminders from hooks, Claude (Sonnet 4.5) frequently executes tasks sequentially:
-
-```
-User: "Implement feature X with Y and Z"
-  ↓
-Claude: TodoWrite([todo1, todo2, todo3])
-  ↓
-Hook outputs: [PARALLEL DELEGATION REQUIRED]
-  ↓
-Claude response ENDS without agent_spawn calls  ← PROBLEM
-  ↓
-Next response: Mark todo1 as in_progress, work on it directly
-  ↓
-Next response: Mark todo2 as in_progress, work on it directly
-  ↓
-Result: Sequential execution, no parallelism
-```
-
-**Impact**:
-- Defeats Stravinsky's core value (multi-model parallel orchestration)
-- Wastes time (sequential vs parallel execution)
-- Underutilizes cheap models (gemini-3-flash unused)
-- Users get Claude Sonnet behavior instead of orchestrated multi-model execution
-
-### Current Advisory System
-
-#### Hook Implementation: `todo_delegation.py`
-
-**Location**: `/Users/davidandrews/PycharmProjects/stravinsky/.claude/hooks/todo_delegation.py`
-
-**Hook Type**: `PostToolUse` (triggers after TodoWrite)
-
-**Current Behavior**:
 ```python
-def main():
-    # ... read hook input ...
+from mcp_bridge.orchestrator.task_graph import TaskGraph, DelegationEnforcer
 
-    if tool_name != "TodoWrite":
-        return 0
+# Create a task graph
+graph = TaskGraph()
+graph.add_task("task_a", "Find auth code", "explore", dependencies=[])
+graph.add_task("task_b", "Research best practices", "dewey", dependencies=[])
+graph.add_task("task_c", "Implement feature", "frontend", dependencies=["task_a", "task_b"])
 
-    # Count pending todos
-    pending_count = sum(1 for t in todos if t.get("status") == "pending")
-
-    if pending_count < 2:
-        return 0
-
-    # Output reminder message
-    reminder = f"""
-[PARALLEL DELEGATION REQUIRED]
-
-You just created {pending_count} pending TODOs. Before your NEXT response:
-
-1. Identify which TODOs are INDEPENDENT (can run simultaneously)
-2. For EACH independent TODO, spawn a Task agent:
-   Task(subagent_type="Explore", prompt="[TODO details]", run_in_background=true)
-3. Fire ALL Task calls in ONE response - do NOT wait between them
-4. Do NOT mark any TODO as in_progress until agents return
-
-WRONG: Create TODO list -> Mark TODO 1 in_progress -> Work -> Complete -> Repeat
-CORRECT: Create TODO list -> Spawn Task for each -> Collect results -> Mark complete
-"""
-    print(reminder)
-    return 0  # ← EXIT CODE 0: Advisory only, does NOT block
+# Get parallel execution waves
+waves = graph.get_independent_groups()
+# Result: [[task_a, task_b], [task_c]]
+# Wave 1: task_a and task_b run in parallel
+# Wave 2: task_c runs after both complete
 ```
 
-**Key Limitation**: `return 0` means the hook is **advisory only**. Claude sees the reminder but can ignore it.
+### DelegationEnforcer
 
-#### Configuration Conflict: Task vs agent_spawn
+The `DelegationEnforcer` validates that independent tasks are spawned within a time window (500ms default), indicating true parallel execution.
 
-**Two contradictory instructions exist**:
+```python
+from mcp_bridge.orchestrator.task_graph import DelegationEnforcer, ParallelExecutionError
 
-**File 1**: `.claude/commands/stravinsky.md` (slash command, line 132-134)
-```markdown
-## Hard Blocks (NEVER violate)
+# Create enforcer from task graph
+enforcer = DelegationEnforcer(task_graph=graph, parallel_window_ms=500, strict=True)
 
-- ❌ **NEVER use Claude Code's Task tool** - It runs Claude, not Gemini/GPT
-- ❌ WRONG: `Task(subagent_type="Explore", ...)` - Uses Claude Sonnet, wastes money
-- ✅ CORRECT: `agent_spawn(agent_type="explore", ...)` - Uses gemini-3-flash, cheap
+# Before spawning, validate the spawn is allowed
+is_valid, error = enforcer.validate_spawn("task_a")
+if not is_valid:
+    raise ParallelExecutionError(error)
+
+# After spawning, record the spawn
+enforcer.record_spawn("task_a", "agent_12345678")
+
+# After all tasks in wave complete, check parallel compliance
+is_compliant, error = enforcer.check_parallel_compliance()
+# If tasks were spawned sequentially (>500ms apart), this raises ParallelExecutionError
 ```
 
-**File 2**: `.claude/agents/stravinsky.md` (native subagent, lines 48-71)
-```markdown
+### Integration with Agent Manager
+
+The `AgentManager` integrates with the `DelegationEnforcer` to enforce parallel execution:
+
+```python
+# In agent_manager.py
+from ..orchestrator.task_graph import DelegationEnforcer
+
+# Global enforcer (set during DELEGATE phase)
+_delegation_enforcer: DelegationEnforcer | None = None
+
+def set_delegation_enforcer(enforcer: DelegationEnforcer) -> None:
+    """Set the delegation enforcer for parallel execution validation."""
+    global _delegation_enforcer
+    _delegation_enforcer = enforcer
+
+async def agent_spawn(
+    prompt: str,
+    agent_type: str,
+    task_graph_id: str | None = None,  # Link to TaskGraph for enforcement
+    ...
+) -> str:
+    enforcer = get_delegation_enforcer()
+    if enforcer and task_graph_id:
+        # Validate spawn is allowed
+        is_valid, error = enforcer.validate_spawn(task_graph_id)
+        if not is_valid:
+            raise ParallelExecutionError(error)
+
+        # Record spawn after successful validation
+        task_id = await manager.spawn_async(...)
+        enforcer.record_spawn(task_graph_id, task_id)
+```
+
+### Task Status Lifecycle
+
+```python
+class TaskStatus(Enum):
+    PENDING = "pending"    # Task not yet spawned
+    SPAWNED = "spawned"    # Task spawned, waiting to run
+    RUNNING = "running"    # Task actively executing
+    COMPLETED = "completed" # Task finished successfully
+    FAILED = "failed"      # Task failed
+```
+
+### Parallel Execution Errors
+
+When parallel execution rules are violated, a `ParallelExecutionError` is raised:
+
+```python
+class ParallelExecutionError(Exception):
+    """Raised when parallel execution rules are violated."""
+    pass
+
+# Example error messages:
+# "Task 'task_c' has unmet dependencies. Current wave tasks: ['task_a', 'task_b']"
+# "Tasks in wave were not spawned in parallel. Time spread: 1200ms > 500ms limit."
+```
+
+---
+
+## Agent Delegation System
+
+### Agent Delegation Prompts
+
+Stravinsky injects **delegation prompts** into agents at spawn time. This ensures agents properly delegate to their designated models (Gemini, OpenAI, etc.) even in external repositories where `.claude/agents/*.md` files are not available.
+
+```python
+# In agent_manager.py
+
+AGENT_DELEGATION_PROMPTS = {
+    "explore": """## CRITICAL: YOU ARE A THIN WRAPPER - DELEGATE TO GEMINI IMMEDIATELY
+
+You are the Explore agent. Your ONLY job is to delegate ALL work to Gemini Flash.
+
+**IMMEDIATELY** call `mcp__stravinsky__invoke_gemini_agentic` with:
+- **model**: `gemini-3-flash`
+- **prompt**: The complete task description
+- **max_turns**: 10
+
+**CRITICAL**: Use `invoke_gemini_agentic` NOT `invoke_gemini`. The agentic version
+enables Gemini to call tools like `semantic_search`, `grep_search`, `ast_grep_search`.
+""",
+    "dewey": "...",
+    "delphi": "...",  # Delegates to OpenAI/GPT
+    # ... other agents
+}
+
+def get_agent_delegation_prompt(agent_type: str) -> str:
+    """Get the delegation prompt for an agent type."""
+    return AGENT_DELEGATION_PROMPTS.get(agent_type, DEFAULT_DELEGATION_PROMPT)
+```
+
+### Agent Model Routing
+
+Each agent type is mapped to a specific model and cost tier:
+
+```python
+AGENT_MODEL_ROUTING = {
+    "explore": None,           # Uses Gemini Flash via delegation
+    "dewey": None,             # Uses Gemini Flash via delegation
+    "delphi": None,            # Uses GPT-5.2 via delegation
+    "frontend": None,          # Uses Gemini Pro via delegation
+    "implementation-lead": "sonnet",  # Direct Claude Sonnet
+    "debugger": "sonnet",      # Direct Claude Sonnet
+    "planner": "opus",         # Direct Claude Opus
+    "_default": "sonnet",
+}
+
+AGENT_COST_TIERS = {
+    "explore": "CHEAP",
+    "dewey": "CHEAP",
+    "delphi": "EXPENSIVE",
+    "frontend": "MEDIUM",
+    "debugger": "MEDIUM",
+    "planner": "EXPENSIVE",
+}
+
+AGENT_DISPLAY_MODELS = {
+    "explore": "gemini-3-flash",
+    "dewey": "gemini-3-flash",
+    "delphi": "gpt-5.2",
+    "frontend": "gemini-3-pro-high",
+    "debugger": "claude-sonnet-4.5",
+    "planner": "opus-4.5",
+}
+```
+
+### Agent Tool Access
+
+Each agent type has a defined set of allowed tools:
+
+```python
+AGENT_TOOLS = {
+    "stravinsky": ["all"],
+    "research-lead": ["agent_spawn", "agent_output", "invoke_gemini", "Read", "Grep", "Glob"],
+    "implementation-lead": ["agent_spawn", "agent_output", "lsp_diagnostics", "Read", "Edit", "Write", "Grep", "Glob"],
+    "explore": ["Read", "Grep", "Glob", "Bash", "semantic_search", "ast_grep_search", "lsp_workspace_symbols"],
+    "dewey": ["Read", "Grep", "Glob", "Bash", "WebSearch", "WebFetch"],
+    "frontend": ["Read", "Edit", "Write", "Grep", "Glob", "Bash", "invoke_gemini"],
+    "delphi": ["Read", "Grep", "Glob", "Bash", "invoke_openai"],
+    "debugger": ["Read", "Grep", "Glob", "Bash", "lsp_diagnostics", "lsp_hover", "ast_grep_search"],
+    "code-reviewer": ["Read", "Grep", "Glob", "Bash", "lsp_diagnostics", "ast_grep_search"],
+}
+```
+
+### Agent Hierarchy Enforcement
+
+The system enforces a strict agent hierarchy:
+
+```python
+ORCHESTRATOR_AGENTS = ["stravinsky", "research-lead", "implementation-lead"]
+WORKER_AGENTS = ["explore", "dewey", "delphi", "frontend", "debugger", "code-reviewer", ...]
+
+def validate_agent_hierarchy(spawning_agent: str, target_agent: str) -> None:
+    """Prevent workers from spawning orchestrators or other workers."""
+    if spawning_agent in WORKER_AGENTS and target_agent in ORCHESTRATOR_AGENTS:
+        raise ValueError("Worker cannot spawn orchestrator")
+    if spawning_agent in WORKER_AGENTS and target_agent in WORKER_AGENTS:
+        raise ValueError("Worker cannot spawn another worker")
+```
+
+---
+
+## Project Structure
+
+```
+stravinsky/
+├── mcp_bridge/                    # Python MCP server
+│   ├── server.py                  # Entry point
+│   ├── orchestrator/              # 7-Phase Orchestration (NEW)
+│   │   ├── enums.py               # OrchestrationPhase enum
+│   │   ├── state.py               # OrchestratorState machine
+│   │   ├── task_graph.py          # TaskGraph and DelegationEnforcer
+│   │   ├── router.py              # Intelligent model router
+│   │   ├── wisdom.py              # WisdomLoader and CritiqueGenerator
+│   │   └── visualization.py       # Phase progress visualization
+│   ├── tools/                     # MCP Tools
+│   │   ├── agent_manager.py       # Agent spawning with parallel enforcement
+│   │   ├── model_invoke.py        # Multi-model invocation
+│   │   ├── code_search.py         # grep, ast-grep, glob
+│   │   ├── semantic_search.py     # Vector search with embeddings
+│   │   └── lsp/                   # Language Server Protocol tools
+│   ├── auth/                      # OAuth (Google and OpenAI)
+│   ├── hooks/                     # MCP internal hooks
+│   ├── routing/                   # Model routing configuration
+│   └── prompts/                   # Agent system prompts
+├── .claude/                       # Claude Code configuration
+│   ├── agents/                    # Native subagent definitions
+│   ├── commands/                  # Slash commands (skills)
+│   ├── hooks/                     # Native Claude Code hooks
+│   └── settings.json              # Hook registration
+├── .stravinsky/                   # Runtime state
+│   ├── agents/                    # Agent task state
+│   └── wisdom.md                  # Project learnings
+├── pyproject.toml                 # Build system
+└── CLAUDE.md                      # Claude Code guide
+```
+
+---
+
+## Core Components
+
+### OrchestratorState (state.py)
+
+The central state machine for the 7-phase workflow:
+
+```python
+@dataclass
+class OrchestratorState:
+    current_phase: OrchestrationPhase = OrchestrationPhase.CLASSIFY
+    history: list[OrchestrationPhase] = field(default_factory=list)
+    artifacts: dict[str, str] = field(default_factory=dict)
+    transition_log: list[PhaseTransitionEvent] = field(default_factory=list)
+    enable_phase_gates: bool = False  # Require user approval
+    strict_mode: bool = True  # Enforce artifact requirements
+    critique_count: int = 0   # Track PLAN iterations
+    max_critiques: int = 3    # Max before forcing forward
+
+    def transition_to(self, next_phase: OrchestrationPhase) -> bool:
+        """Transition to next phase if requirements met."""
+
+    def register_artifact(self, name: str, content: str) -> None:
+        """Register an artifact for phase validation."""
+
+    def get_phase_display(self) -> str:
+        """Get formatted phase display: [Phase 3/8] Injecting project wisdom"""
+```
+
+### Router (router.py)
+
+Intelligent model routing with multi-provider fallback:
+
+```python
+class Router:
+    def select_model(
+        self,
+        phase: OrchestrationPhase,
+        task_type: TaskType | None = None,
+        prompt: str | None = None,
+    ) -> str:
+        """Select best model for phase and task type."""
+        # Task-based routing takes precedence
+        # Falls back to phase-based routing
+        # Checks provider availability
+        # Applies OAuth fallback chain
+```
+
+### WisdomLoader (wisdom.py)
+
+Loads project-specific learnings from `.stravinsky/wisdom.md`:
+
+```python
+class WisdomLoader:
+    def load_wisdom(self) -> str:
+        """Load project wisdom for injection into WISDOM phase."""
+
+class CritiqueGenerator:
+    def generate_critique_prompt(self, plan_content: str) -> str:
+        """Generate self-critique prompt for PLAN phase iteration."""
+```
+
+---
+
+## Tool Categories
+
+### Category 1: Model Invocation (3 tools)
+
+| Tool | Purpose | Model Access |
+|------|---------|--------------|
+| `invoke_gemini` | Invoke Gemini models | Direct API call |
+| `invoke_gemini_agentic` | Gemini with tool access | Multi-turn with tools |
+| `invoke_openai` | Invoke OpenAI/GPT models | Direct API call |
+
+### Category 2: Agent Management (6 tools)
+
+| Tool | Purpose | Execution |
+|------|---------|-----------|
+| `agent_spawn` | Launch background agent with parallel enforcement | Async |
+| `agent_output` | Get agent results | Blocking or polling |
+| `agent_progress` | Real-time agent progress | Non-blocking |
+| `agent_cancel` | Stop running agent | Immediate |
+| `agent_list` | List all agents | Non-blocking |
+| `agent_retry` | Retry failed agent | Async |
+
+### Category 3: Code Search (4 tools)
+
+| Tool | Pattern Type | Best For |
+|------|-------------|----------|
+| `grep_search` | Exact text/regex | Keywords, function names |
+| `ast_grep_search` | AST patterns | Code structure, decorators |
+| `glob_files` | Filesystem patterns | File discovery |
+| `semantic_search` | Natural language | Conceptual queries |
+
+### Category 4: LSP Tools (12 tools)
+
+Full Language Server Protocol support: hover, goto_definition, find_references, document_symbols, workspace_symbols, rename, code_actions, diagnostics, and more.
+
+---
+
+## Authentication Flows
+
+### OAuth-First Architecture
+
+1. **OAuth is tried first** (if configured)
+2. On OAuth 429 rate limit -> **Automatically switch to API key** for 5 minutes
+3. After 5-minute cooldown -> Retry OAuth
+
+### Supported Providers
+
+- **Google (Gemini)**: Browser-based OAuth 2.0 with PKCE
+- **OpenAI (ChatGPT)**: Browser-based OAuth on port 1455
+
+---
+
+## Hook System
+
+### Hybrid Architecture
+
+Stravinsky uses a **hybrid hook architecture** with two layers:
+
+**Native Claude Code Hooks** (in `.claude/settings.json`):
+- `PreToolUse`: Block/allow tool execution
+- `PostToolUse`: Result processing
+- `UserPromptSubmit`: Context injection
+
+**MCP Internal Hooks** (in `mcp_bridge/hooks/`):
+- Model routing
+- Token tracking
+- Session state
+
+### Why Two Layers?
+
+| Capability | Native Hooks | MCP Hooks |
+|------------|--------------|-----------|
+| Block tool execution | Yes (exit 2) | No |
+| Inject prompt context | Yes | No |
+| Route model invocations | No | Yes |
+| Track token usage | No | Yes |
+
+---
+
+## Design Patterns
+
+### Parallel Execution Pattern
+
+```python
+# CORRECT: Spawn all independent tasks simultaneously
+task_a = agent_spawn("Find auth code", "explore", task_graph_id="task_a")
+task_b = agent_spawn("Research patterns", "dewey", task_graph_id="task_b")
+task_c = agent_spawn("Review security", "code-reviewer", task_graph_id="task_c")
+# All spawn within 500ms window
+
+# Wait for results
+result_a = agent_output(task_a, block=True)
+result_b = agent_output(task_b, block=True)
+result_c = agent_output(task_c, block=True)
+
+# WRONG: Sequential spawning (will raise ParallelExecutionError)
+# task_a = agent_spawn(...)
+# result_a = agent_output(task_a, block=True)  # Wait before next spawn
+# task_b = agent_spawn(...)  # ERROR: Should have been spawned with task_a
+```
+
 ### Delegation Pattern
 
-Use the **Task tool** to delegate to native subagents:
-
 ```python
-# Example: Delegate to specialist agents in parallel
-# All in ONE response:
-Task(
-    subagent_type="explore",
-    prompt="Find all authentication implementations...",
-    description="Find auth implementations"
-)
-```
-```
+# Agents are thin wrappers that delegate to specialized models
+# Example: explore agent delegates to Gemini Flash
 
-**File 3**: `.claude/hooks/todo_delegation.py` (PostToolUse hook, line 42)
-```python
-reminder = f"""
-2. For EACH independent TODO, spawn a Task agent:
-   Task(subagent_type="Explore", prompt="[TODO details]", run_in_background=true)
+# System prompt injected at spawn time:
+"""
+You are the Explore agent. IMMEDIATELY call invoke_gemini_agentic with:
+- model: gemini-3-flash
+- prompt: The task description
+- max_turns: 10
+
+DO NOT answer directly. Delegate to Gemini FIRST.
 """
 ```
 
-**Analysis**:
-- The slash command (`/stravinsky`) says "NEVER use Task tool, use agent_spawn"
-- The native subagent (`.claude/agents/stravinsky.md`) says "Use Task tool for delegation"
-- The hook (`todo_delegation.py`) says "Spawn a Task agent"
-- This confusion contributes to inconsistent behavior
+---
 
-### Why Advisory Hooks Don't Work
+## Performance Optimizations
 
-#### 1. Exit Code 0 = No Enforcement
-
-Hook return codes in Claude Code:
-- `0` = Success, advisory message only
-- `1` = Error/warning, but execution continues
-- `2` = BLOCK tool execution (hard enforcement)
-
-Current hook returns `0`, meaning:
-- Reminder is printed to conversation
-- TodoWrite executes successfully
-- Claude is FREE to ignore the reminder
-- No mechanism forces parallel delegation
-
-#### 2. PostToolUse Timing Issue
-
-`PostToolUse` hooks trigger **AFTER** the tool has already executed:
-
-```
-Claude decides to use TodoWrite
-  ↓
-TodoWrite executes (creates todos)
-  ↓
-PostToolUse hook runs (prints reminder)  ← Too late to block
-  ↓
-Claude's response ends (no agent_spawn calls)
-```
-
-**Problem**: By the time the hook runs, TodoWrite has already completed. The hook can only *suggest* what to do next, not *enforce* behavior in the current response.
-
-#### 3. LLM Behavioral Patterns
-
-Large language models (including Claude Sonnet 4.5) exhibit **task continuation bias**:
-- After planning (TodoWrite), the model defaults to immediate execution
-- "Mark first todo as in_progress" is the natural next action
-- Delegation requires breaking this pattern (context switch)
-- Advisory reminders compete with strong sequential instincts
-
-From testing:
-- Reminders work ~30-40% of the time
-- Longer prompts/reminders are more easily ignored
-- Model prioritizes "making progress" over "orchestration"
-
-#### 4. Logging Evidence
-
-**Observation from logs**: Zero agent spawning activity despite reminders
-
-From `logs/application-2026-01-05.log`:
-```
-# Many TodoWrite calls observed
-# Many tool invocations (Read, Grep, Edit)
-# Zero agent_spawn MCP tool calls
-# Zero background task creation
-```
-
-**Conclusion**: Hook reminders are being ignored consistently.
-
-### Proposed Enforcement Solutions
-
-#### Solution 1: Exit Code 1 Hard Block (PreToolUse)
-
-**Strategy**: Block TodoWrite if parallel delegation didn't happen
-
-**Implementation**:
-```python
-# .claude/hooks/parallel_enforcement.py (PreToolUse hook)
-
-def main():
-    hook_input = json.load(sys.stdin)
-    tool_name = hook_input.get("tool_name", "")
-
-    # Check session state for "todos created but no agents spawned"
-    if tool_name == "TodoWrite":
-        # Load session state
-        state = load_session_state()
-
-        # Check if previous TodoWrite had pending todos
-        if state.get("pending_todos_count", 0) >= 2:
-            # Check if agents were spawned since then
-            if state.get("agents_spawned_since_todowrite", 0) == 0:
-                # BLOCK: Parallel delegation was not done
-                print(json.dumps({
-                    "decision": "block",
-                    "reason": "Previous TodoWrite created 2+ pending todos but ZERO agents were spawned. You MUST spawn Task agents for independent todos before creating more."
-                }))
-                return 2  # BLOCK
-
-        # Allow this TodoWrite but track it
-        return 0
-```
-
-**Benefits**:
-- Hard enforcement (exit code 2 blocks execution)
-- Provides clear error message explaining violation
-- Forces Claude to spawn agents before creating more todos
-
-**Drawbacks**:
-- Requires session state tracking (complex)
-- May block legitimate use cases (user wants sequential execution)
-- Can't detect agents spawned in same response (timing issue)
-
-#### Solution 2: Runtime Validation (MCP Hook)
-
-**Strategy**: Validate delegation immediately after TodoWrite via MCP hook
-
-**Implementation**:
-```python
-# mcp_bridge/hooks/post_tool/parallel_validation.py
-
-async def validate_parallel_delegation(
-    tool_name: str,
-    tool_input: dict,
-    result: Any,
-    context: HookContext
-) -> HookResult:
-    """Validate parallel delegation after TodoWrite"""
-
-    if tool_name != "TodoWrite":
-        return HookResult.CONTINUE
-
-    todos = tool_input.get("todos", [])
-    pending_count = sum(1 for t in todos if t.get("status") == "pending")
-
-    if pending_count < 2:
-        return HookResult.CONTINUE
-
-    # Track this TodoWrite in session
-    context.session_state["last_todowrite"] = {
-        "timestamp": time.time(),
-        "pending_count": pending_count,
-        "agent_spawn_required": True
-    }
-
-    # Set a flag that next response MUST include agent_spawn
-    context.session_state["require_agent_spawn"] = True
-
-    return HookResult.CONTINUE
-
-# mcp_bridge/hooks/pre_tool/agent_spawn_validator.py
-
-async def validate_agent_spawn_happened(
-    tool_name: str,
-    tool_input: dict,
-    context: HookContext
-) -> HookResult:
-    """Block tools if agent_spawn was required but didn't happen"""
-
-    # If agent_spawn is required
-    if context.session_state.get("require_agent_spawn", False):
-        # Check if we're calling agent_spawn now
-        if tool_name == "agent_spawn":
-            # Good! Clear the requirement
-            context.session_state["require_agent_spawn"] = False
-            return HookResult.CONTINUE
-
-        # Otherwise, block any other tool
-        return HookResult.BLOCK(
-            reason="TodoWrite created 2+ pending todos. You MUST call agent_spawn for each independent todo before using other tools."
-        )
-
-    return HookResult.CONTINUE
-```
-
-**Benefits**:
-- Runtime validation within MCP server (no subprocess overhead)
-- Can track state across tool calls in same response
-- Provides immediate feedback
-
-**Drawbacks**:
-- Only works for MCP tools (can't block native tools like Read/Grep)
-- Requires session state management
-- Complex hook orchestration
-
-#### Solution 3: Tool Response Interception (Response Modification)
-
-**Strategy**: Modify TodoWrite response to FORCE agent_spawn calls
-
-**Implementation**:
-```python
-# mcp_bridge/hooks/post_tool/inject_agent_spawn.py
-
-async def inject_agent_spawn_calls(
-    tool_name: str,
-    tool_input: dict,
-    result: Any,
-    context: HookContext
-) -> HookResult:
-    """Automatically inject agent_spawn calls into response"""
-
-    if tool_name != "TodoWrite":
-        return HookResult.CONTINUE
-
-    todos = tool_input.get("todos", [])
-    pending_todos = [t for t in todos if t.get("status") == "pending"]
-
-    if len(pending_todos) < 2:
-        return HookResult.CONTINUE
-
-    # Generate agent_spawn calls for each pending todo
-    spawn_calls = []
-    for todo in pending_todos:
-        spawn_call = {
-            "tool": "agent_spawn",
-            "input": {
-                "agent_type": "explore",  # Default to explore
-                "prompt": generate_delegation_prompt(todo),
-                "description": todo.get("content", "")[:50]
-            }
-        }
-        spawn_calls.append(spawn_call)
-
-    # Modify result to include spawn calls
-    modified_result = {
-        "original": result,
-        "injected_calls": spawn_calls,
-        "message": f"Auto-spawned {len(spawn_calls)} agents for parallel execution"
-    }
-
-    return HookResult.MODIFY(modified_result)
-```
-
-**Benefits**:
-- Automatic parallel delegation (no user intervention)
-- Guarantees parallel execution pattern
-- Transparent to Claude (happens at hook level)
-
-**Drawbacks**:
-- Removes Claude's agency (may spawn wrong agents)
-- Hard to determine correct agent_type per todo
-- May spawn agents for todos that shouldn't be delegated
-- Experimental (MCP hook response modification is complex)
-
-### Recommended Approach
-
-**Phase 1: Configuration Clarity (Immediate)**
-
-1. **Resolve Task vs agent_spawn conflict**:
-   - Decision: Use **Task tool** for native subagent delegation (matches `.claude/agents/stravinsky.md`)
-   - Update `.claude/commands/stravinsky.md` to remove "NEVER use Task" warning
-   - Update `todo_delegation.py` hook to use consistent terminology
-
-2. **Strengthen hook messaging**:
-   - Make reminder more prominent (ASCII art border, ALL CAPS)
-   - Add examples of CORRECT vs WRONG patterns
-   - Reference specific line numbers in agent configs
-
-**Phase 2: Soft Enforcement (Short Term)**
-
-1. **Add progress tracking**:
-   - Hook tracks if agents were spawned after TodoWrite
-   - Next TodoWrite shows warning if no agents were used
-   - Non-blocking but creates visible accountability
-
-2. **Session state persistence**:
-   - Store last TodoWrite timestamp and pending count
-   - Track agent_spawn calls in session
-   - Display statistics at end of session
-
-**Phase 3: Hard Enforcement (Long Term)**
-
-1. **Implement Solution 2 (Runtime Validation)**:
-   - MCP hook blocks non-agent-spawn tools after TodoWrite
-   - Provides clear error messages
-   - Allows override flag for legitimate sequential work
-
-2. **Add configuration option**:
-   - `.stravinsky/config.json` → `"enforce_parallel_delegation": true/false`
-   - Default: `false` (advisory only, backward compatible)
-   - Users can opt-in to strict enforcement
-
-### Testing & Validation
-
-**Success Metrics**:
-- Parallel delegation rate increases from ~30% to >80%
-- Agent spawn count correlates with TodoWrite pending count
-- Logs show agent_spawn calls after TodoWrite
-- User feedback: "Stravinsky feels more automated"
-
-**Test Cases**:
-1. **Basic**: TodoWrite with 3 pending todos → Should spawn 3 agents
-2. **Sequential**: TodoWrite with 1 pending todo → Should NOT require agents
-3. **Mixed**: TodoWrite with 2 dependent + 1 independent → Should spawn 1 agent
-4. **Override**: User explicitly wants sequential work → Should allow bypass
-
-### Open Questions
-
-1. **Should enforcement apply to native subagents only or all contexts?**
-   - Native subagents (`.claude/agents/stravinsky.md`) are orchestrators
-   - Main conversation may want flexibility
-   - Proposal: Enforce for native subagents, advisory for main
-
-2. **How to detect dependent vs independent todos?**
-   - Natural language analysis? (complex, error-prone)
-   - User annotation? (`todo: {..., "independent": true}`)
-   - Conservative default: Assume all pending todos are independent
-
-3. **Should Task tool support run_in_background parameter?**
-   - Current Task tool is synchronous (blocks until complete)
-   - Native subagents can't do "fire and forget" delegation
-   - May need async Task support in Claude Code
-
-4. **What about non-delegation workflows?**
-   - Some tasks genuinely need sequential execution
-   - Example: "Read file X, then based on content, modify file Y"
-   - Need escape hatch: `TodoWrite([..., {"parallel": false}])`
-
-### Conclusion
-
-The parallel delegation enforcement gap exists because:
-1. Hooks are advisory (exit code 0), not enforcement (exit code 2)
-2. PostToolUse timing is too late to block behavior
-3. LLM task continuation bias defaults to sequential execution
-4. Configuration conflicts create inconsistent guidance
-
-**Immediate Action**: Resolve Task vs agent_spawn documentation conflict
-
-**Future Work**: Implement runtime validation with opt-in enforcement flag
-
-**Goal**: Make parallel delegation the **default, enforced pattern** rather than an optional suggestion.
+1. **Zero-Import-Weight Startup**: Lazy loading of heavy dependencies
+2. **Persistent LSP Instances**: 35x speedup via LSPManager
+3. **TaskGraph Caching**: Pre-computed parallel execution waves
+4. **OAuth Token Caching**: Keyring-based token storage with refresh
 
 ---
 
-## Appendix
+## Troubleshooting
 
-### Delphi Strategic Recommendations (GPT-5.2)
+### Parallel Execution Blocked
 
-From comprehensive architecture analysis:
+If you see `ParallelExecutionError`:
+1. Check that independent tasks are spawned in the same response
+2. Verify `task_graph_id` is provided for all spawns
+3. Ensure tasks are truly independent (no shared dependencies)
 
-1. **Keep the Hook Split** - It's defense in depth, not duplication
-2. **Add Model Proxy** - Critical for true parallelism
-3. **Unified Interface** - Share policies between hook types
-4. **Native Subagents** - Enable auto-delegation without friction
-5. **Hybrid Pattern** - Native for Claude tasks, CLI spawn for multi-model
+### Phase Transition Failed
 
-### Key Metrics
+If `ValueError` on phase transition:
+1. Check required artifacts are registered
+2. Verify transition is valid (see VALID_TRANSITIONS)
+3. Check critique count hasn't exceeded max
 
-- **Native Hooks**: 5 (hard enforcement boundaries)
-- **MCP Hooks**: 17+ (orchestration, optimization, lifecycle)
-- **MCP Tools**: 31 (agent, model, search, LSP, session, skill)
-- **Agent Types**: 7 (stravinsky, delphi, dewey, explore, frontend, document_writer, multimodal)
-- **Current Architecture**: Slash commands + CLI spawns
-- **Target Architecture**: Native subagents + MCP tools + CLI spawns
+### Agent Delegation Failed
 
-### Questions & Discussion
+If agents aren't delegating properly:
+1. Verify `invoke_gemini_agentic` is used (not `invoke_gemini`)
+2. Check AGENT_DELEGATION_PROMPTS contains the agent type
+3. Ensure MCP tools are accessible
 
-For questions about this architecture or to discuss migration strategy:
-- Review Delphi analysis in `.stravinsky/agents.json` (task_id: a37cb8e)
-- Check hook research outputs (task_ids: ad11edb, a1f808d, a0ea7cf, etc.)
-- Consult native subagent research (task_ids: adeec70, a3a3825)
+---
+
+## Key Metrics
+
+- **Orchestration Phases**: 8 (CLASSIFY through VERIFY)
+- **MCP Tools**: 40+
+- **Agent Types**: 10+ (orchestrators + specialists)
+- **Native Hooks**: 10+
+- **MCP Hooks**: 17+
+
+---
+
+**Last Updated**: 2026-01-22
+**Architecture Version**: 7-Phase Orchestration with Hard Parallel Enforcement

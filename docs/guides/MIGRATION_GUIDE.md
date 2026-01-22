@@ -1,6 +1,22 @@
-# Stravinsky Migration Guide (v0.4.x → v0.5.x)
+# Stravinsky Migration Guide (v0.4.x to v0.5.x)
 
 This guide helps you transition from legacy slash commands and `agent_spawn` patterns to the modern **Native Subagent Architecture**.
+
+---
+
+## Prerequisites
+
+Before migrating, ensure your installation uses the correct Python version:
+
+```bash
+# Recommended installation (Python 3.11-3.13 required)
+claude mcp add --scope user stravinsky -- uvx --python python3.13 stravinsky@latest
+
+# Development installation
+uv pip install -e .
+```
+
+**Python Version Requirement:** Stravinsky requires Python 3.11-3.13. Python 3.14+ is not supported due to chromadb/onnxruntime dependencies.
 
 ---
 
@@ -91,6 +107,42 @@ class MyPolicy(HookPolicy):
 ```
 
 Register your new policy in `mcp_bridge/hooks/__init__.py` or run it as a native script with `policy.run_as_native()`.
+
+---
+
+## 5. Configure API Key Fallback (Recommended)
+
+For high-volume usage, add an API key fallback to avoid OAuth rate limits:
+
+```bash
+# Add to your .env file
+GEMINI_API_KEY=your_api_key_here
+```
+
+**How it works:**
+1. OAuth is tried first (if configured)
+2. On OAuth 429 rate limit - automatically switch to API key for 5 minutes
+3. After 5-minute cooldown - retry OAuth
+
+---
+
+## Available Commands Reference
+
+| Command | Description |
+|---------|-------------|
+| `stravinsky` | Start the MCP server |
+| `stravinsky --version` | Check installed version |
+| `stravinsky-auth` | Authentication CLI |
+| `stravinsky-proxy` | Start proxy mode |
+
+**Authentication commands:**
+```bash
+stravinsky-auth login gemini    # Authenticate with Google
+stravinsky-auth login openai    # Authenticate with OpenAI
+stravinsky-auth status          # Check authentication status
+stravinsky-auth logout gemini   # Remove Gemini tokens
+stravinsky-auth logout openai   # Remove OpenAI tokens
+```
 
 ---
 

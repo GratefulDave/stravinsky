@@ -1,15 +1,19 @@
 # Gemini API Key Authentication
 
-Stravinsky now supports **two authentication methods** for accessing Gemini models:
+Stravinsky uses an **OAuth-first with automatic API key fallback** architecture for Gemini authentication:
 
-1. **API Key** (Simple, recommended for development)
-2. **OAuth** (Advanced, for production with scopes)
+1. **OAuth** (Primary) - Configured via `stravinsky-auth login gemini`
+2. **API Key** (Automatic Fallback) - Used when OAuth hits rate limits or is not configured
 
-## Quick Start: API Key Authentication
+This guide focuses on API key configuration for the fallback mechanism.
+
+## Quick Start: API Key Setup (Tier 3 Recommended)
 
 ### Step 1: Get Your API Key
 
-Visit [Google AI Studio](https://aistudio.google.com/app/apikey) and create a free API key.
+Visit [Google AI Studio](https://aistudio.google.com/app/apikey) and create an API key.
+
+**Recommendation:** Use a **Tier 3 API key** for optimal quotas when the fallback mechanism activates.
 
 ### Step 2: Add to Environment
 
@@ -53,66 +57,103 @@ print(response)
 
 ## Authentication Priority
 
-When both authentication methods are configured, **API key takes precedence**:
+Stravinsky uses **OAuth-first with automatic API key fallback**:
 
-1. **API Key** - If `GEMINI_API_KEY` or `GOOGLE_API_KEY` is set → uses API key
-2. **OAuth Fallback** - If no API key → uses OAuth tokens from `stravinsky-auth login gemini`
+1. **OAuth** (Primary) - If tokens exist from `stravinsky-auth login gemini`, OAuth is tried first
+2. **API Key Fallback** - On OAuth 429 rate limit, automatically switches to API key for 5 minutes
+3. **Cooldown Recovery** - After 5 minutes, retries OAuth
 
-## Comparison: API Key vs OAuth
+### Rate Limit Handling
 
-| Feature | API Key | OAuth |
-|---------|---------|-------|
-| **Setup** | 2 minutes (get key, add to .env) | 5-10 minutes (browser flow, token storage) |
-| **Best For** | Development, testing, prototypes | Production, user-based access |
-| **Requires** | Free API key from Google AI Studio | Google Account + OAuth consent |
-| **Token Refresh** | Not needed (key doesn't expire) | Automatic background refresh |
-| **Scopes** | Limited (public API only) | Full OAuth scopes available |
-| **Multi-User** | Single key for all requests | Per-user authentication |
-
-## When to Use Each Method
-
-### Use API Key When:
-- ✅ Quick development and testing
-- ✅ Personal projects
-- ✅ Don't need user-specific access control
-- ✅ Want the simplest setup
-- ✅ Using Gemini Developer API (free tier)
-
-### Use OAuth When:
-- ✅ Production applications
-- ✅ Need OAuth scopes (cloud-platform, userinfo, etc.)
-- ✅ User-based authentication required
-- ✅ Using Vertex AI integration
-- ✅ Need automatic token refresh with expiration handling
-
-## Switching Between Methods
-
-### From OAuth to API Key
-
-Simply add `GEMINI_API_KEY` to your `.env` file. Stravinsky will automatically prefer the API key.
-
-```bash
-# Add this line to .env
-GEMINI_API_KEY=your_key_here
-
-# Stravinsky will now use API key instead of OAuth
-# (OAuth tokens remain stored but won't be used)
+```
+OAuth Request --> 429 Rate Limited --> Switch to API-Only Mode (5 min timer)
+                                              |
+                                              v
+                                       Use API Key (Tier 3 quotas)
+                                              |
+                                       Timer expires --> Retry OAuth
 ```
 
-### From API Key to OAuth
+**Why this architecture?**
+- OAuth is convenient (no API key management required)
+- API keys (especially Tier 3) have higher rate limits for heavy workloads
+- Automatic fallback means uninterrupted operation
 
-Remove `GEMINI_API_KEY` from your environment and authenticate via OAuth:
+## Comparison: OAuth vs API Key
+
+| Feature | OAuth (Primary) | API Key (Fallback) |
+|---------|-----------------|-------------------|
+| **Setup** | `stravinsky-auth login gemini` | Add to `.env` file |
+| **Rate Limits** | Lower (shared quota) | Higher (Tier 3 recommended) |
+| **Best For** | Interactive use, typical workloads | Heavy usage, batch processing |
+| **Token Refresh** | Automatic background refresh | Not needed (key doesn't expire) |
+| **Requires** | Google Account + OAuth consent | API key from Google AI Studio |
+
+## Recommended Configuration
+
+For optimal reliability, configure **both** authentication methods:
+
+### Step 1: Configure OAuth (Primary)
 
 ```bash
-# Remove from .env or unset
+stravinsky-auth login gemini
+```
+
+### Step 2: Configure API Key Fallback
+
+```bash
+# Add Tier 3 API key to .env
+echo "GEMINI_API_KEY=your_tier_3_key" >> ~/.stravinsky/.env
+```
+
+### Step 3: Verify Configuration
+
+```bash
+stravinsky-auth status
+```
+
+## When Each Method is Used
+
+### OAuth is Used When:
+- OAuth tokens exist and are valid
+- No recent 429 rate limit errors (within 5-minute cooldown)
+
+### API Key Fallback Activates When:
+- OAuth returns 429 (rate limited)
+- OAuth is not configured
+- OAuth token refresh fails
+
+## Forcing a Specific Authentication Method
+
+### Force API Key Only (Skip OAuth)
+
+Remove OAuth tokens to use API key exclusively:
+
+```bash
+# Logout from OAuth
+stravinsky-auth logout gemini
+
+# Ensure API key is configured
+grep GEMINI_API_KEY ~/.stravinsky/.env
+```
+
+### Force OAuth Only (No Fallback)
+
+Remove API key from environment:
+
+```bash
+# Remove API key from .env
+# Edit ~/.stravinsky/.env and remove GEMINI_API_KEY line
+
+# Or unset for current session
 unset GEMINI_API_KEY
 unset GOOGLE_API_KEY
 
-# Authenticate with OAuth
-stravinsky-auth login gemini
-
-# Stravinsky will now use OAuth
+# Ensure OAuth is configured
+stravinsky-auth status
 ```
+
+**Note:** Without API key fallback, you may experience interruptions during heavy usage due to OAuth rate limits.
 
 ## Testing Your Setup
 
@@ -224,24 +265,33 @@ python3 -c "import os; from pathlib import Path; from dotenv import load_dotenv;
 # Step 5: Restart Claude Code completely
 ```
 
-### Still Using OAuth When API Key is Set?
+### API Key Not Being Used as Fallback?
 
-**Check precedence:**
+**Verify API key is configured:**
 
 ```python
 import os
 
-# This should print your API key if set
+# Check if API key is available
 print(os.getenv("GEMINI_API_KEY"))
 print(os.getenv("GOOGLE_API_KEY"))
 
 # If both print None, your .env isn't loaded
 from dotenv import load_dotenv
-load_dotenv()
+from pathlib import Path
+
+# Load from recommended location
+load_dotenv(Path.home() / ".stravinsky" / ".env")
 
 # Now try again
 print(os.getenv("GEMINI_API_KEY"))
 ```
+
+**Note:** API key is only used when:
+1. OAuth returns 429 rate limit error, OR
+2. OAuth is not configured
+
+If OAuth is working, you won't see API key being used until rate limits are hit.
 
 ## Security Best Practices
 
@@ -273,8 +323,23 @@ GEMINI_API_KEY=prod_key_here
 3. Test that it works
 4. Delete old key from Google AI Studio
 
+## Tier 3 API Key Benefits
+
+Tier 3 API keys provide significantly higher rate limits:
+
+| Tier | Requests/Minute | Tokens/Minute | Best For |
+|------|-----------------|---------------|----------|
+| Free | 15 | 32,000 | Testing only |
+| Tier 1 | 500 | 500,000 | Light usage |
+| Tier 2 | 1,000 | 1,000,000 | Moderate usage |
+| **Tier 3** | 2,000+ | 2,000,000+ | **Recommended for fallback** |
+
+To upgrade your tier, visit [Google AI Studio](https://aistudio.google.com/app/apikey) and follow the billing setup instructions.
+
 ## Additional Resources
 
 - [Google AI Studio](https://aistudio.google.com/)
 - [Gemini API Documentation](https://ai.google.dev/gemini-api/docs)
 - [google-genai Python SDK](https://googleapis.github.io/python-genai/)
+- [OAuth Flow Architecture](../architecture/OAUTH_FLOW.md)
+- [Keyring Auth Fix](../reports/KEYRING_AUTH_FIX.md)

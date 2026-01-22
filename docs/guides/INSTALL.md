@@ -7,10 +7,12 @@ Complete guide to installing and configuring Stravinsky in your projects.
 ### One-Line Installation
 
 ```bash
-claude mcp add --scope user stravinsky -- uvx stravinsky@latest
+claude mcp add --scope user stravinsky -- uvx --python python3.13 stravinsky@latest
 ```
 
 This installs Stravinsky as an MCP server for Claude Code using `uvx` (no global installation needed).
+
+**Why Python 3.13 is required:** Stravinsky depends on chromadb, which uses onnxruntime. The onnxruntime package does not have pre-built wheels for Python 3.14+, so Python 3.11-3.13 is required.
 
 ### Verify Installation
 
@@ -30,19 +32,21 @@ Best for: Quick setup, trying Stravinsky, CI/CD environments.
 
 ```bash
 # Add to Claude Code (runs via uvx each time)
-claude mcp add --scope user stravinsky -- uvx stravinsky@latest
+claude mcp add --scope user stravinsky -- uvx --python python3.13 stravinsky@latest
 ```
 
 **Pros:** No global packages, always latest version
 **Cons:** Slightly slower startup (downloads on first run)
+
+**Python Version:** Requires Python 3.11-3.13 (chromadb/onnxruntime limitation)
 
 ### Method 2: Global Tool Installation
 
 Best for: Daily use, faster startup, offline availability.
 
 ```bash
-# Install globally with uv
-uv tool install stravinsky
+# Install globally with uv (specify Python 3.13)
+uv tool install --python python3.13 stravinsky
 
 # Add to Claude Code
 claude mcp add --scope user stravinsky -- stravinsky
@@ -59,6 +63,8 @@ uv tool uninstall stravinsky
 claude mcp remove stravinsky
 ```
 
+**Python Version:** Requires Python 3.11-3.13 (chromadb/onnxruntime limitation)
+
 ### Method 3: Development Installation
 
 Best for: Contributing, customizing, debugging.
@@ -68,12 +74,14 @@ Best for: Contributing, customizing, debugging.
 git clone https://github.com/GratefulDave/stravinsky.git
 cd stravinsky
 
-# Install in editable mode
-uv tool install --editable .
+# Install in editable mode with pip
+uv pip install -e .
 
 # Add to Claude Code
 claude mcp add --scope user stravinsky -- stravinsky
 ```
+
+**Python Version:** Requires Python 3.11-3.13 (chromadb/onnxruntime limitation)
 
 ---
 
@@ -108,6 +116,32 @@ stravinsky-auth login gemini
 - macOS: Keychain
 - Linux: Secret Service API
 - Windows: Credential Locker
+
+### API Key Fallback (Gemini)
+
+For high-volume usage or when OAuth rate limits are exhausted, configure an API key as a fallback.
+
+**Setup:**
+Add `GEMINI_API_KEY` to your `.env` file in the project root:
+
+```bash
+# .env file
+GEMINI_API_KEY=your_api_key_here
+
+# Or use GOOGLE_API_KEY (same effect)
+GOOGLE_API_KEY=your_api_key_here
+```
+
+**Get your API key:** Visit [Google AI Studio](https://aistudio.google.com/app/apikey)
+
+**Rate Limit Architecture:**
+- **OAuth**: Lower rate limits, but convenient (no API key management)
+- **API Key**: Tier 3 high quotas - automatic fallback for heavy usage
+
+**Auth Priority:**
+1. OAuth is tried first (if configured)
+2. On OAuth 429 rate limit - automatically switch to API key for 5 minutes
+3. After 5-minute cooldown - retry OAuth
 
 ### OpenAI (ChatGPT)
 
@@ -285,9 +319,9 @@ uvx stravinsky --help
 ### MCP Server Not Loading
 
 ```bash
-# Remove and re-add
+# Remove and re-add (with Python 3.13)
 claude mcp remove stravinsky
-claude mcp add --scope user stravinsky -- uvx stravinsky@latest
+claude mcp add --scope user stravinsky -- uvx --python python3.13 stravinsky@latest
 ```
 
 ### OpenAI "Port 1455 in use"
@@ -333,10 +367,19 @@ uv tool upgrade stravinsky
 ### Check Version
 
 ```bash
-uvx stravinsky --version
-# or
 stravinsky --version
 ```
+
+---
+
+## Available Commands
+
+| Command | Description |
+|---------|-------------|
+| `stravinsky` | Start the MCP server |
+| `stravinsky --version` | Check installed version |
+| `stravinsky-auth` | Authentication CLI |
+| `stravinsky-proxy` | Start proxy mode for long-running generations |
 
 ---
 

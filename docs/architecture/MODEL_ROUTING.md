@@ -1,8 +1,43 @@
-# Model Routing & Fallback Architecture
+# Model Routing and Delegation Architecture
 
 Stravinsky features a sophisticated **Tier-Aware Multi-Provider Routing System** designed for high availability, cost-efficiency, and resilience.
 
-## Model Tiers
+---
+
+## Agent Model Configuration
+
+Model routing is defined in `mcp_bridge/tools/agent_manager.py`. Each agent type has a designated display model and cost tier.
+
+### AGENT_DISPLAY_MODELS
+
+| Agent Type | Display Model | Purpose |
+|------------|---------------|---------|
+| `explore` | gemini-3-flash | Codebase search, file discovery |
+| `dewey` | gemini-3-flash | Documentation research, web search |
+| `document_writer` | gemini-3-flash | Technical documentation generation |
+| `multimodal` | gemini-3-flash | Visual analysis (screenshots, diagrams) |
+| `research-lead` | gemini-3-flash | Research coordination |
+| `momus` | gemini-3-flash | Quality gate validation |
+| `comment_checker` | gemini-3-flash | Documentation completeness checking |
+| `code-reviewer` | gemini-3-flash | Code quality and security review |
+| `implementation-lead` | claude-sonnet-4.5 | Implementation coordination |
+| `debugger` | claude-sonnet-4.5 | Root cause analysis |
+| `frontend` | gemini-3-pro-high | UI/UX implementation |
+| `delphi` | gpt-5.2 | Strategic technical advice |
+| `planner` | opus-4.5 | Complex planning tasks |
+| `_default` | sonnet-4.5 | Fallback for unknown agent types |
+
+### AGENT_COST_TIERS
+
+| Tier | Agents | Indicator |
+|------|--------|-----------|
+| **CHEAP** | explore, dewey, document_writer, multimodal, research-lead, momus, comment_checker, code-reviewer | Green |
+| **MEDIUM** | implementation-lead, debugger, frontend | Blue |
+| **EXPENSIVE** | delphi, planner | Purple |
+
+---
+
+## Model Tiers by Provider
 
 Models are classified into three tiers based on capability, cost, and use case:
 
@@ -10,16 +45,16 @@ Models are classified into three tiers based on capability, cost, and use case:
 |------|--------------------|------------------|-----------------|----------|
 | **HIGH** | Claude 4.5 Opus (Thinking) | GPT 5.2 | Gemini 3 Pro | Architecture, strategic decisions, complex debugging |
 | **PREMIUM** | Claude 4.5 Opus | GPT 5.2 Codex | Gemini 3 Pro | Code generation, complex implementation |
-| **STANDARD**| Claude 4.5 Sonnet | GPT 5.2 | Gemini 3 Flash Preview | Documentation, code search, simple tasks |
+| **STANDARD** | Claude 4.5 Sonnet | GPT 5.2 | Gemini 3 Flash | Documentation, code search, simple tasks |
 
 ### HIGH Tier: Strategic Reasoning
 
 The **HIGH tier** is reserved for tasks requiring deep strategic thinking:
-- **Architecture review and design decisions**
-- **Complex debugging after 2+ failed attempts**
-- **Security vulnerability analysis**
-- **Performance optimization strategies**
-- **Multi-system tradeoff evaluation**
+- Architecture review and design decisions
+- Complex debugging after 2+ failed attempts
+- Security vulnerability analysis
+- Performance optimization strategies
+- Multi-system tradeoff evaluation
 
 | Provider | Model | Configuration | Strengths |
 |----------|-------|---------------|-----------|
@@ -28,7 +63,53 @@ The **HIGH tier** is reserved for tasks requiring deep strategic thinking:
 | Gemini | 3 Pro | Default | Multi-modal analysis, UI/UX evaluation |
 
 ### Claude 4.5 Opus "Thinking" Mode
+
 The HIGH-tier Claude 4.5 Opus model supports an extended "Thinking" mode (enabled via `thinking_budget` > 0), allowing for deep reasoning on complex architectural or logic problems.
+
+---
+
+## Delegation Flow
+
+### Agent Spawn Delegation Chain
+
+```
+agent_spawn(prompt, agent_type, task_graph_id)
+    |
+    v
+[DelegationEnforcer validates parallel execution]
+    |
+    v
+[System prompt includes AGENT_DELEGATION_PROMPTS[agent_type]]
+    |
+    v
+[Claude CLI subprocess spawned with model from AGENT_MODEL_ROUTING]
+    |
+    v
+[Agent delegates to target model via invoke_gemini_agentic or invoke_openai]
+```
+
+### Agent Delegation Prompts
+
+Each agent type has a delegation prompt that instructs it to delegate to its target model. These prompts are injected into agents spawned via MCP, ensuring proper delegation even in cross-repository installations.
+
+**Key delegation patterns:**
+
+| Agent Type | Delegation Target | Tool Used |
+|------------|-------------------|-----------|
+| explore | Gemini Flash | `invoke_gemini_agentic` with `max_turns=10` |
+| dewey | Gemini Flash | `invoke_gemini_agentic` with `max_turns=10` |
+| frontend | Gemini Pro | `invoke_gemini_agentic` with `max_turns=10` |
+| delphi | GPT 5.2 Codex | `invoke_openai` with `reasoning_effort="high"` |
+| code-reviewer | Gemini Flash | `invoke_gemini_agentic` with `max_turns=10` |
+| debugger | (Direct tools) | Uses LSP/AST tools directly, delegates complex analysis to delphi |
+| momus | Gemini Flash | `invoke_gemini_agentic` with `max_turns=10` |
+| document_writer | Gemini Flash | `invoke_gemini_agentic` with `max_turns=10` |
+| multimodal | Gemini Flash | `invoke_gemini` (non-agentic for pure visual analysis) |
+| comment_checker | Gemini Flash | `invoke_gemini_agentic` with `max_turns=10` |
+
+**Critical distinction:**
+- `invoke_gemini_agentic`: Enables Gemini to call tools (semantic_search, grep_search, ast_grep_search, etc.)
+- `invoke_gemini`: Simple completion without tool access
 
 ---
 
@@ -47,11 +128,11 @@ When a model call fails (e.g., due to a 429 Rate Limit or 5xx error), Stravinsky
 | **3** | **API Key Fallback** | As a last resort, attempts the original model tier using a configured API key. |
 
 **Example Chain (Starting with GPT 5.2 Codex OAuth):**
-1. → Gemini 3 Pro (OAuth)
-2. → Claude 4.5 Opus (OAuth)
-3. → GPT 5.2 (OAuth)
-4. → Gemini 3 Flash Preview (OAuth)
-5. → GPT 5.2 Codex (API Key)
+1. Gemini 3 Pro (OAuth)
+2. Claude 4.5 Opus (OAuth)
+3. GPT 5.2 (OAuth)
+4. Gemini 3 Flash (OAuth)
+5. GPT 5.2 Codex (API Key)
 
 ---
 
@@ -93,13 +174,13 @@ Project-local routing rules are stored in `.stravinsky/routing.json`. This confi
       },
       "documentation": {
         "provider": "gemini",
-        "model": "gemini-3-flash-preview",
+        "model": "gemini-3-flash",
         "tier": "standard",
         "description": "Documentation writing"
       },
       "code_search": {
         "provider": "gemini",
-        "model": "gemini-3-flash-preview",
+        "model": "gemini-3-flash",
         "tier": "standard",
         "description": "Finding code patterns"
       }
@@ -128,6 +209,63 @@ Manage provider health and routing configuration via the CLI:
 
 ---
 
-## Thin Wrapper Pattern (Internal)
+## Thin Wrapper Pattern
 
-To maintain low latency and cost, Stravinsky uses "Thin Wrapper" agents (Claude Haiku) that immediately delegate work to the routed external models via MCP tools. This achieves ~10x cost savings compared to running all agents on Claude Sonnet.
+To maintain low latency and cost, Stravinsky uses "Thin Wrapper" agents (Claude Haiku/Sonnet) that immediately delegate work to the routed external models via MCP tools. This achieves significant cost savings compared to running all agents on expensive models.
+
+### How It Works
+
+1. **Agent receives task** via `agent_spawn`
+2. **Delegation prompt injected** - tells agent to delegate to target model
+3. **Agent calls MCP tool** - `invoke_gemini_agentic` or `invoke_openai`
+4. **Target model executes** with full tool access
+5. **Result returned** through the chain
+
+### Example Delegation Prompt (explore agent)
+
+```
+## CRITICAL: YOU ARE A THIN WRAPPER - DELEGATE TO GEMINI IMMEDIATELY
+
+You are the Explore agent. Your ONLY job is to delegate ALL work to Gemini Flash with full tool access.
+
+**IMMEDIATELY** call `mcp__stravinsky__invoke_gemini_agentic` with:
+- **model**: `gemini-3-flash`
+- **prompt**: The complete task description below, plus instructions to use search tools
+- **max_turns**: 10 (allow multi-step search workflows)
+
+**CRITICAL**: Use `invoke_gemini_agentic` NOT `invoke_gemini`. The agentic version enables Gemini to call tools like `semantic_search`, `grep_search`, `ast_grep_search` - the plain version cannot.
+```
+
+---
+
+## Agent Hierarchy
+
+### Orchestrator Agents
+
+Orchestrators coordinate work and can spawn any agent type:
+- `stravinsky`
+- `research-lead`
+- `implementation-lead`
+
+### Worker Agents
+
+Workers execute specific tasks and cannot spawn other agents:
+- `explore` - Codebase search specialist
+- `dewey` - Documentation researcher
+- `delphi` - Strategic advisor
+- `frontend` - UI/UX specialist
+- `debugger` - Root cause analyst
+- `code-reviewer` - Quality reviewer
+- `momus` - Quality gate validator
+- `comment_checker` - Documentation checker
+- `document_writer` - Technical writer
+- `multimodal` - Visual analyst
+- `planner` - Planning specialist
+
+### Hierarchy Rules
+
+1. **Orchestrators can spawn any agent**
+2. **Workers cannot spawn orchestrators**
+3. **Workers cannot spawn other workers**
+
+This prevents runaway agent chains and ensures clear execution paths.

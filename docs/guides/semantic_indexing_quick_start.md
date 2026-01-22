@@ -1,57 +1,75 @@
 # Semantic Indexing Quick Start Guide
 
-## Current Status
+This guide covers how to create and manage semantic search indexes for your codebase.
 
-Stravinsky has a **fully functional semantic search system** with these components:
+## System Overview
 
 ```
-semantic_search.py (1754 lines)
-├── Embedding Providers
-│   ├── OllamaProvider (local, free) - nomic-embed-text
-│   ├── MxbaiProvider (local, free) - mxbai-embed-large (better)
-│   ├── GeminiProvider (cloud) - Google embeddings
-│   ├── OpenAIProvider (cloud) - OpenAI embeddings
-│   └── HuggingFaceProvider (cloud) - sentence-transformers
-├── CodebaseVectorStore
-│   ├── ChromaDB storage (~/.stravinsky/vectordb/)
-│   ├── AST-aware chunking (Python)
-│   ├── Smart metadata extraction
-│   └── File locking for concurrency
-└── Search Functions
-    ├── semantic_search() - Natural language queries
-    ├── enhanced_search() - Auto-selects mode
-    ├── hybrid_search() - Semantic + AST patterns
-    ├── multi_query_search() - Query expansion
-    ├── decomposed_search() - Complex queries
-    ├── index_codebase() - Manual indexing
-    ├── semantic_stats() - Index info
-    └── semantic_health() - Provider health
+mcp_bridge/tools/semantic_search.py
+|
++-- Embedding Providers
+|   +-- OllamaProvider (local, free) - nomic-embed-text (768 dims)
+|   +-- MxbaiProvider (local, free) - mxbai-embed-large (1024 dims)
+|   +-- GeminiProvider (cloud) - gemini-embedding-001 (768 dims)
+|   +-- OpenAIProvider (cloud) - text-embedding-3-small (1536 dims)
+|   +-- HuggingFaceProvider (cloud) - all-mpnet-base-v2 (768 dims)
+|
++-- CodebaseVectorStore
+|   +-- ChromaDB storage (~/.stravinsky/vectordb/)
+|   +-- AST-aware chunking (Python)
+|   +-- Smart metadata extraction
+|   +-- Incremental indexing with manifest
+|   +-- File locking for concurrency
+|
++-- Search Functions
+|   +-- semantic_search() - Natural language queries
+|   +-- enhanced_search() - Auto-selects mode
+|   +-- hybrid_search() - Semantic + AST patterns
+|   +-- multi_query_search() - Query expansion
+|   +-- decomposed_search() - Complex queries
+|
++-- Index Management
+|   +-- index_codebase() - Create/update index
+|   +-- semantic_stats() - View statistics
+|   +-- semantic_health() - Check provider status
+|   +-- delete_index() - Remove index
+|   +-- cancel_indexing() - Stop ongoing indexing
+|
++-- File Watcher
+    +-- start_file_watcher() - Auto-reindex on changes
+    +-- stop_file_watcher() - Stop watching
+    +-- list_file_watchers() - View active watchers
+    +-- get_file_watcher() - Get specific watcher
 ```
 
 ## Getting Started (3 Steps)
 
-### Step 1: Install Embedding Provider
+### Step 1: Install an Embedding Provider
 
-**Option A: Local (Free, No Auth) - RECOMMENDED**
+**Option A: Ollama (Local, Free) - Recommended**
 
 ```bash
-# Install Ollama (one-time setup)
+# Install Ollama
 brew install ollama
 
-# Pull the recommended lightweight model (274MB)
+# Start the service
+ollama serve
+
+# Pull the lightweight model (274MB)
 ollama pull nomic-embed-text
 ```
 
 **Why nomic-embed-text?**
-- Lightweight (274MB) - perfect for MacBooks and space-constrained systems
+- Lightweight (274MB) - works well on laptops
 - Fast indexing and search
-- Works great for code search
+- Good quality for code search
 - No authentication required
-- Runs 100% locally (no API calls)
+- Runs 100% locally
 
-**Advanced Option: Better Accuracy (670MB)**
+**Option B: Mxbai (Local, Free, Better Accuracy)**
+
 ```bash
-# For power users who want maximum accuracy
+# After installing Ollama
 ollama pull mxbai-embed-large
 ```
 
@@ -59,364 +77,454 @@ ollama pull mxbai-embed-large
 
 | Model | Size | Dimensions | Speed | Accuracy | Best For |
 |-------|------|------------|-------|----------|----------|
-| **nomic-embed-text** | 274MB | 768 | Fast | Good | **Most users (recommended)** |
-| **mxbai-embed-large** | 670MB | 1024 | Medium | Better | Power users with disk space |
+| **nomic-embed-text** | 274MB | 768 | Fast | Good | Most users |
+| **mxbai-embed-large** | 670MB | 1024 | Medium | Better | Power users |
 
-**Option B: Cloud (OAuth)**
+**Option C: Cloud Providers (OAuth)**
+
 ```bash
-stravinsky auth login gemini   # Google embeddings
-# or
-stravinsky auth login openai   # OpenAI embeddings
+# Gemini (free tier available)
+stravinsky-auth login gemini
+
+# OpenAI (requires subscription)
+stravinsky-auth login openai
 ```
 
-**Option C: HuggingFace (Token-based)**
+**Option D: HuggingFace (Token-based)**
+
 ```bash
-# Install HuggingFace CLI
-pip install huggingface-hub
-
-# Login with your HF token
-huggingface-cli login
-
-# Or set environment variable
+# Set token from https://huggingface.co/settings/tokens
 export HF_TOKEN="your_hf_token_here"
 
-# Or set in .env file
-echo "HF_TOKEN=your_hf_token_here" >> .env
+# Or use HF CLI
+huggingface-cli login
 ```
 
-**Getting a HuggingFace token:**
-1. Go to https://huggingface.co/settings/tokens
-2. Create a new token (read access is sufficient)
-3. Copy the token and use one of the methods above
-
-**Note:** HuggingFace free Inference API has limited model availability. Many models have been moved to paid tiers or removed. The provider is implemented but may require:
-- A paid HuggingFace Pro subscription for reliable access
-- Specifying a different model that's available on the free tier
-- Consider using Ollama (local, free) instead for consistent availability
+**Note:** HuggingFace free tier has limited model availability. Many models have been moved to paid tiers. Consider Ollama for reliable local embeddings.
 
 ### Step 2: Index Your Codebase
 
-**First time (one-shot):**
-```bash
-# Via CLI (if exposed)
-stravinsky semantic_index --project .
+**Via Python:**
 
-# Via Python
-python -c "
+```python
 import asyncio
 from mcp_bridge.tools.semantic_search import index_codebase
-asyncio.run(index_codebase(project_path='.'))
-"
 
-# Via Claude Code (MCP tool)
-# Call tool: semantic_index(project_path=".", force=false, provider="ollama")
-```
+# Basic indexing with default provider (ollama)
+result = asyncio.run(index_codebase(project_path="."))
+print(result)
 
-**Incremental updates (only new/changed files):**
-```bash
-# Same command, but it detects what changed
-# Only re-indexes modified files
-stravinsky semantic_index --project .
+# Index with specific provider
+result = asyncio.run(index_codebase(
+    project_path=".",
+    provider="mxbai"
+))
 ```
 
-**Force full reindex (clear and rebuild):**
-```bash
-# Via Python
-asyncio.run(index_codebase(project_path=".", force=True))
+**Via Claude Code (MCP tool):**
 
-# Via Claude Code
-# Call tool: semantic_index(project_path=".", force=true, provider="ollama")
+```
+Call tool: semantic_index(project_path=".", force=false, provider="ollama")
 ```
 
-### Step 3: Search!
+**Force Full Reindex:**
 
-**Basic semantic search:**
-```
-query: "find authentication logic"
-```
-
-**Enhanced search (auto-mode):**
-```
-query: "how does the database connection work"
-mode: "auto"  # Detects complexity, uses expand or decompose
+```python
+# Clear and rebuild entire index
+result = asyncio.run(index_codebase(
+    project_path=".",
+    force=True
+))
 ```
 
-**Hybrid search (semantic + AST patterns):**
-```
-query: "error handling"
-pattern: "try ... except"  # ast-grep pattern
+### Step 3: Search
+
+```python
+from mcp_bridge.tools.semantic_search import semantic_search
+
+# Basic search
+results = await semantic_search(
+    query="authentication logic",
+    project_path="."
+)
+print(results)
 ```
 
-**Multi-query expansion:**
-```
-query: "database connection"
-# Automatically expands to:
-# - "SQLAlchemy engine configuration"
-# - "postgres connection setup"
-# - "db session factory pattern"
+## Index Management
+
+### Check Index Status
+
+```python
+from mcp_bridge.tools.semantic_search import semantic_stats, semantic_health
+
+# Get statistics
+stats = await semantic_stats(project_path=".", provider="ollama")
+print(stats)
+# Output:
+# Project: /path/to/project
+# Database: /Users/.../.stravinsky/vectordb/project_ollama
+# Chunks indexed: 1,247
+# Embedding provider: ollama (768 dims)
+
+# Check health
+health = await semantic_health(project_path=".", provider="ollama")
+print(health)
+# Output:
+# Provider (ollama): Online
+# Vector DB: Online (1,247 documents)
 ```
 
-**Decomposed search (for complex queries):**
+### Delete Index
+
+```python
+from mcp_bridge.tools.semantic_search import delete_index
+
+# Delete specific provider index for project
+result = delete_index(project_path=".", provider="ollama")
+print(result)
+
+# Delete all provider indexes for project
+result = delete_index(project_path=".")
+print(result)
+
+# Delete ALL indexes for ALL projects
+result = delete_index(delete_all=True)
+print(result)
 ```
-query: "initialize the DB and create a user model"
-# Splits into:
-# - "database initialization"
-# - "user model definition"
+
+### Cancel Ongoing Indexing
+
+```python
+from mcp_bridge.tools.semantic_search import cancel_indexing
+
+# Request cancellation (happens between batches)
+result = cancel_indexing(project_path=".", provider="ollama")
+print(result)
 ```
+
+## Provider Comparison
+
+| Provider | Type | Size | Cost | Speed | Dims | Status |
+|----------|------|------|------|-------|------|--------|
+| **nomic-embed-text** | Local | 274MB | Free | Fast | 768 | Stable |
+| **mxbai-embed-large** | Local | 670MB | Free | Medium | 1024 | Stable |
+| **Gemini** | Cloud | N/A | Free tier | Medium | 768 | Stable |
+| **OpenAI** | Cloud | N/A | $0.02/M | Medium | 1536 | Stable |
+| **HuggingFace** | Cloud | N/A | Free/Pro | Medium | 768 | Limited |
+
+**Recommendations:**
+- **Most users (local):** nomic-embed-text - lightweight, fast, good quality
+- **Power users (local):** mxbai-embed-large - better accuracy
+- **Cloud (free):** gemini - generous free tier, OAuth auth
+- **Cloud (paid):** openai - highest quality, predictable costs
+- **HuggingFace:** Use Ollama instead for reliable local embeddings
 
 ## File Locations
 
 ```
 Implementation:
-  /Users/davidandrews/PycharmProjects/stravinsky/
-  ├── mcp_bridge/
-  │   ├── server.py (lines 498-551: tool dispatch)
-  │   └── tools/
-  │       └── semantic_search.py (main, 1754 lines)
-  └── docs/
-      └── semantic_indexing_analysis.md (detailed analysis)
+  mcp_bridge/
+  +-- tools/
+      +-- semantic_search.py (main implementation)
 
 Vector Storage:
-  ~/.stravinsky/vectordb/<project_hash>_<provider>/
-  ├── chroma.sqlite3
-  ├── hnswlib_data/
-  ├── data.parquet
-  └── .chromadb.lock
+  ~/.stravinsky/vectordb/<project_name>_<provider>/
+  +-- chroma.sqlite3
+  +-- hnswlib_data/
+  +-- data.parquet
+  +-- .chromadb.lock
+  +-- manifest.json (incremental indexing state)
 
-Status:
-  ✅ Fully implemented
-  ✅ Multiple providers supported
-  ✅ Advanced search capabilities
-  ❌ No auto-indexing on startup (requires manual trigger)
+Logs:
+  ~/.stravinsky/logs/file_watcher.log
 ```
 
-## Provider Comparison
+## Indexing Details
 
-| Provider | Type | Size | Cost | Speed | Setup | Dims | Status |
-|----------|------|------|------|-------|-------|------|--------|
-| **nomic-embed-text** | Local | 274MB | Free | Fast | `ollama pull` | 768 | ✅ Stable |
-| **mxbai-embed-large** | Local | 670MB | Free | Medium | `ollama pull` | 1024 | ✅ Stable |
-| **Gemini** | Cloud | N/A | $0/30K tokens | Medium | OAuth | 768-3072 | ✅ Stable |
-| **OpenAI** | Cloud | N/A | $0.02/M tokens | Medium | OAuth | 1536 | ✅ Stable |
-| **HuggingFace** | Cloud | N/A | Free/Pro | Medium | HF Token | 768 | ⚠️ Limited availability |
+### Chunking Strategy
 
-**Recommendations:**
-- **Best for most users (local):** `nomic-embed-text` - lightweight (274MB), fast, works great for code search, perfect for space-constrained systems
-- **Best for power users (local):** `mxbai-embed-large` - better accuracy, larger model (670MB), ideal if you have disk space
-- **Best for cloud (free):** `gemini` - generous free tier, OAuth auth
-- **Best for scale (cloud):** `openai` - highest quality, predictable costs
-- **HuggingFace:** Implemented but many models unavailable on free tier. Use Ollama instead for reliable local embeddings.
+**Python files (AST-aware):**
+- Each function becomes a chunk
+- Each class becomes a chunk
+- Methods are separate chunks (for granular search)
+- Module-level code chunked if no functions/classes
+- Metadata includes: decorators, async status, base classes, return types
 
-## Index Statistics
+**Other languages (line-based):**
+- 50 lines per chunk
+- 10 lines overlap between chunks
+- Skips tiny files (<5 lines)
 
-After indexing, check what's in your index:
+### Supported Languages
+
+```python
+CODE_EXTENSIONS = {
+    ".py", ".js", ".ts", ".tsx", ".jsx",
+    ".go", ".rs", ".rb", ".java",
+    ".c", ".cpp", ".h", ".hpp", ".cs",
+    ".swift", ".kt", ".scala",
+    ".vue", ".svelte",
+    ".md", ".txt", ".yaml", ".yml", ".json", ".toml"
+}
+```
+
+### Skipped Directories
+
+```python
+SKIP_DIRS = {
+    # Python
+    "__pycache__", ".venv", "venv", "env", ".env",
+    ".pytest_cache", ".mypy_cache", ".ruff_cache",
+
+    # Node.js
+    "node_modules", ".npm", ".yarn",
+
+    # Build outputs
+    "dist", "build", "out", ".next", ".nuxt",
+
+    # Version control
+    ".git", ".svn", ".hg",
+
+    # IDE/Editor
+    ".idea", ".vscode", ".vs",
+
+    # Misc
+    ".stravinsky", "logs", "tmp", "temp"
+}
+```
+
+### Whitelist Mode (.stravinskyadd)
+
+Create a `.stravinskyadd` file to index ONLY specific paths:
 
 ```bash
-# Via Python
-python -c "
-import asyncio
-from mcp_bridge.tools.semantic_search import semantic_stats, semantic_health
-print(asyncio.run(semantic_stats(project_path='.')))
-print(asyncio.run(semantic_health(project_path='.')))
-"
+# .stravinskyadd - whitelist specific files/directories
+src/
+lib/
+*.py
+src/**/*.ts
+!src/generated/
 ```
 
-**Sample Output:**
-```
-Project: /Users/davidandrews/PycharmProjects/stravinsky
-Database: /Users/davidandrews/.stravinsky/vectordb/abc123def456_ollama
-Chunks indexed: 1,247
-Embedding provider: ollama (1024 dims)
+When `.stravinskyadd` exists, only listed paths are indexed.
 
-Provider (ollama): Online
-Vector DB: Online (1,247 documents)
+### Gitignore Support
+
+The indexer respects:
+- `.gitignore` - standard git ignore patterns
+- `.stravignore` - Stravinsky-specific ignore patterns
+
+```bash
+# .stravignore
+*.generated.py
+test_fixtures/
+experimental/
 ```
+
+## Incremental Indexing
+
+The indexer uses a manifest to track file changes:
+
+1. **First index:** Full codebase scan and embedding
+2. **Subsequent indexes:** Only new/changed files
+3. **Manifest tracks:** file path, mtime, size, chunk IDs
+
+**How it works:**
+- Compare current file mtime/size to manifest
+- Skip unchanged files (reuse existing chunks)
+- Re-embed changed files
+- Prune deleted file chunks
+
+**Force full reindex:**
+```python
+await index_codebase(project_path=".", force=True)
+```
+
+## File Watcher (Auto-Indexing)
+
+The file watcher automatically reindexes when code changes.
+
+```python
+from mcp_bridge.tools.semantic_search import (
+    start_file_watcher,
+    stop_file_watcher,
+    list_file_watchers,
+)
+
+# Start watching (auto-starts on first search)
+watcher = await start_file_watcher(
+    project_path=".",
+    provider="ollama",
+    debounce_seconds=2.0
+)
+
+# Check active watchers
+watchers = list_file_watchers()
+for w in watchers:
+    print(f"{w['project_path']}: {w['status']}")
+
+# Stop watching
+stop_file_watcher(".")
+```
+
+**Features:**
+- 2-second debounce (configurable)
+- Batches rapid changes
+- Dedicated worker thread (prevents concurrent access)
+- Auto-starts on first semantic_search call
 
 ## Troubleshooting
 
 ### "Embedding service not available"
 
-**For Ollama providers:**
+**For Ollama:**
 ```bash
+# Check if running
+curl http://localhost:11434/api/tags
+
+# Start if not running
 ollama serve
-# In another terminal:
-ollama list  # Should show your models
-```
 
-**Check model is downloaded:**
-```bash
+# Check model installed
+ollama list
+
+# Pull missing model
 ollama pull nomic-embed-text
-ollama pull mxbai-embed-large
 ```
 
-**For HuggingFace provider:**
+**For Cloud Providers:**
 ```bash
-# Check if token is set
-echo $HF_TOKEN
-
-# Or check HF CLI config
-cat ~/.cache/huggingface/token
-cat ~/.huggingface/token
-
-# If not found, login:
-huggingface-cli login
-```
-
-**For OAuth providers (Gemini/OpenAI):**
-```bash
+# Check auth status
 stravinsky-auth status
-# If not authenticated:
+
+# Re-authenticate
 stravinsky-auth login gemini
-# or
 stravinsky-auth login openai
 ```
 
 ### "No documents indexed"
 
-**Index the codebase first:**
-```bash
-stravinsky semantic_index --project .
-# Wait for it to complete
+```python
+# Check stats
+stats = await semantic_stats()
+print(stats)  # Shows chunks_indexed
+
+# If zero, index the codebase
+await index_codebase(".")
 ```
 
-**Check what was indexed:**
-```bash
-# Should show > 0 documents
-python -c "import asyncio; from mcp_bridge.tools.semantic_search import semantic_stats; print(asyncio.run(semantic_stats()))"
-```
+### Slow Indexing
 
-### Slow indexing?
-
-**Reasons:**
-- First indexing is slower (needs to embed all chunks)
-- Incremental indexing is faster (only new/changed files)
+**Causes:**
+- First index is always slower (full embedding)
 - Large codebases take longer
+- Cloud providers have network latency
 
-**Speed up with Ollama:**
-- Use `mxbai-embed-large` instead of `nomic-embed-text`
-- Run `ollama` on same machine (local)
-- Ensure Ollama has GPU acceleration enabled
+**Solutions:**
+- Use local provider (ollama/mxbai) for faster indexing
+- Use incremental indexing (default, only changed files)
+- Add patterns to .stravignore to exclude large directories
 
-### Index goes stale?
+### Index Goes Stale
 
-**Solution:** Run incremental reindex
-```bash
-# Only re-indexes changed files
-stravinsky semantic_index --project .
+**Solution:** Use file watcher for automatic updates
+
+```python
+await start_file_watcher(".")
 ```
 
-**Full reset if needed:**
-```bash
-rm -rf ~/.stravinsky/vectordb/<project_hash>*
-stravinsky semantic_index --project . --force
+**Or manual reindex:**
+```python
+await index_codebase(".")  # Incremental
+await index_codebase(".", force=True)  # Full rebuild
 ```
 
-### HuggingFace-specific issues
+### HuggingFace Issues
 
-**410 Model Unavailable (Common Issue):**
+**410 Model Unavailable:**
 ```
-ValueError: Model [...] is no longer available on HF free Inference API (410 Gone)
+Many models removed from free tier.
+Use Ollama instead: ollama pull mxbai-embed-large
 ```
-HuggingFace has removed many embedding models from the free Inference API tier. Solutions:
-- **Recommended:** Use Ollama instead (`ollama pull mxbai-embed-large`)
-- Upgrade to HuggingFace Pro subscription
-- Try a different model that may be available on free tier (model availability changes frequently)
 
-**503 Model Loading Error:**
+**503 Model Loading:**
 ```
-⚠️ Model is loading, retrying...
+First request takes 20-30s. Provider retries automatically.
 ```
-HuggingFace Inference API loads models on-demand. First request may take 20-30 seconds. The provider automatically retries with exponential backoff.
 
 **429 Rate Limit:**
 ```
-⚠️ HF API rate limit hit, retrying with backoff...
-```
-Free HuggingFace accounts have rate limits. The provider automatically retries. For higher limits:
-- Upgrade to HuggingFace Pro
-- Or use local Ollama provider instead
-
-**401 Authentication Failed:**
-```
-ValueError: Hugging Face authentication failed
-```
-Token is invalid or expired. Solutions:
-```bash
-# Re-login with HF CLI
-huggingface-cli login
-
-# Or get a new token from https://huggingface.co/settings/tokens
-export HF_TOKEN="new_token_here"
+Provider retries with backoff. Use local provider for high volume.
 ```
 
 ## Advanced Usage
 
-### Filtering Search Results
+### Custom Store Access
 
 ```python
-# Only search Python functions
-semantic_search(
+from mcp_bridge.tools.semantic_search import get_store
+
+# Get store instance
+store = get_store(".", provider="ollama")
+
+# Direct search (returns list of dicts)
+results = await store.search(
     query="authentication",
+    n_results=10,
     language="py",
     node_type="function"
 )
 
-# Only async functions with @router decorator
-semantic_search(
-    query="endpoint handler",
-    language="py",
-    node_type="method",
-    decorator="@router",
-    is_async=True
-)
+# Get stats
+stats = store.get_stats()
 
-# Only classes inheriting from BaseHandler
-semantic_search(
-    query="request processing",
-    language="py",
-    node_type="class",
-    base_class="BaseHandler"
-)
+# Check embedding service
+available = await store.check_embedding_service()
 ```
 
-### Custom Chunking
+### Batch Embeddings
 
-The system automatically:
-- Respects Python function/class boundaries
-- Extracts docstrings and type hints
-- Preserves file:line metadata for navigation
-- Skips auto-generated files and common junk dirs
-
-**To change chunking:**
-Edit `CodebaseVectorStore` in `semantic_search.py`:
 ```python
-CHUNK_SIZE = 50      # lines per chunk
-CHUNK_OVERLAP = 10   # lines of overlap
-SKIP_DUW = {...}    # directories to skip
-CODE_EXTENSIONS = {...}  # file types to index
+from mcp_bridge.tools.semantic_search import get_store
+
+store = get_store(".", provider="ollama")
+
+# Parallel embedding with concurrency control
+texts = ["query 1", "query 2", "query 3"]
+embeddings = await store.get_embeddings_batch(
+    texts,
+    max_concurrent=10  # Limit concurrent requests
+)
 ```
 
-## Next Steps
+### Custom Filtering
 
-### Recommended Reading
+```python
+# Filter by multiple criteria
+results = await semantic_search(
+    query="API endpoints",
+    language="py",
+    node_type="function",
+    decorator="@router",
+    is_async=True,
+    n_results=5
+)
 
-1. **Detailed Architecture:**
-   - Read: `/Users/davidandrews/PycharmProjects/stravinsky/docs/semantic_indexing_analysis.md`
-   - Sections: 1-3 (current system state)
+# Filter by base class
+results = await semantic_search(
+    query="request handlers",
+    base_class="BaseHandler",
+    n_results=10
+)
+```
 
-2. **For Auto-Indexing:**
-   - Read: Sections 4-6 (three options for automation)
-   - Decision: Which option fits your workflow?
+## See Also
 
-3. **For Integration:**
-   - Check: `mcp_bridge/server.py` lines 498-551
-   - Learn: How tools are dispatched to Claude Code
+- [Quick Start Guide](./SEMANTIC_SEARCH_QUICK_START.md) - Search usage
+- [Best Practices Guide](./SEMANTIC_SEARCH_BEST_PRACTICES.md) - Query optimization
+- [File Watcher Usage](./SEMANTIC_WATCHER_USAGE.md) - Auto-indexing setup
 
-### Ideas for Enhancement
+---
 
-1. **Add startup auto-indexing** (Section 4, Option A)
-2. **Create slash command** for easy manual indexing
-3. **Add progress UI integration** for long indexing jobs
-4. **Implement file watcher** for real-time incremental updates
-5. **Cache index metadata** to speed up health checks
-
+**Last Updated:** January 2026
+**Status:** Complete indexing guide

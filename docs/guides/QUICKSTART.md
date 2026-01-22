@@ -7,8 +7,11 @@ Get up and running with Stravinsky in 2 minutes.
 ## Step 1: Install
 
 ```bash
-claude mcp add stravinsky -- uvx stravinsky
+# Recommended (user-scoped with Python 3.13)
+claude mcp add --scope user stravinsky -- uvx --python python3.13 stravinsky@latest
 ```
+
+**Note:** Python 3.11-3.13 is required (chromadb/onnxruntime limitation).
 
 ## Step 2: Authenticate
 
@@ -18,9 +21,35 @@ stravinsky-auth login gemini
 
 # For OpenAI (requires ChatGPT Plus/Pro)
 stravinsky-auth login openai
+
+# Check authentication status
+stravinsky-auth status
 ```
 
-## Step 3: Initialize Project Routing
+### API Key Fallback (Optional)
+
+For high-volume usage, add a Gemini API key to your `.env` file:
+
+```bash
+# .env file in project root
+GEMINI_API_KEY=your_api_key_here
+```
+
+This provides automatic fallback when OAuth rate limits are reached.
+
+## Step 3: Verify Installation
+
+```bash
+# Check version
+stravinsky --version
+
+# List MCP servers
+claude mcp list
+```
+
+You should see `stravinsky` in the list of MCP servers.
+
+## Step 4: Initialize Project Routing (Optional)
 
 Create a project-local routing configuration to optimize model usage for different tasks:
 
@@ -30,7 +59,7 @@ stravinsky-auth routing init
 
 This creates `.stravinsky/routing.json` with default rules for code generation, debugging, and search.
 
-## Step 4: Add to Your Project
+## Step 5: Add to Your Project
 
 Create or update `CLAUDE.md` in your project root:
 
@@ -55,7 +84,7 @@ Use Stravinsky for parallel agent execution.
 - `multimodal` - Analyze screenshots/diagrams
 ```
 
-## Step 4: Use It
+## Step 6: Use It
 
 Start Claude Code in your project and try:
 
@@ -127,6 +156,17 @@ Quick access to common workflows:
 /dewey - Documentation research
 /get-context - Refresh Git/rules/todos
 ```
+
+---
+
+## Available Commands
+
+| Command | Description |
+|---------|-------------|
+| `stravinsky` | Start the MCP server |
+| `stravinsky --version` | Check installed version |
+| `stravinsky-auth` | Authentication CLI |
+| `stravinsky-proxy` | Start proxy mode |
 
 ---
 

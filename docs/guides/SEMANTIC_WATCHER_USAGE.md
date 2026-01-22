@@ -1,400 +1,519 @@
-# Semantic Watcher - Quick Start Guide
+# Semantic Watcher Usage Guide
 
-## What is the Semantic Watcher?
+The Semantic File Watcher automatically monitors your codebase and updates the semantic search index whenever you make changes. No manual reindexing needed.
 
-The Semantic Watcher automatically monitors your Python codebase and updates the semantic search index whenever you make changes. No manual reindexing needed!
+## Overview
 
-**Every change triggers an update**: Edit a function, change a class, modify imports - the vector database stays in sync automatically.
+**What it does:**
+- Monitors Python files for changes (create, modify, delete, move)
+- Debounces rapid changes to batch them efficiently
+- Triggers incremental reindexing automatically
+- Runs in background threads for non-blocking operation
+- Auto-starts on first semantic search (no manual setup required)
 
-## Installation & Setup
+**Key features:**
+- 2-second default debounce (configurable)
+- Skips hidden directories (.git, __pycache__, venv, etc.)
+- Uses native file watching when available (falls back to watchdog)
+- Thread-safe with daemon threads for clean shutdown
+- Dedicated indexing worker prevents concurrent access issues
 
-### 1. Ensure Dependencies Are Installed
+## Quick Start
 
-The FileWatcher requires `watchdog` (already in `pyproject.toml`):
+### Automatic Mode (Recommended)
 
-```bash
-# Already installed, but verify:
-uv pip list | grep watchdog
-```
-
-### 2. Start the Semantic Index
-
-Before watching, initialize the index:
-
-```bash
-# Option 1: Use Claude Code (recommended)
-# In Claude Code, run:
-@semantic_index project_path="."
-
-# Option 2: Command line (if integrated)
-stravinsky semantic-index /path/to/project
-```
-
-### 3. Start the File Watcher
+The file watcher starts automatically on your first semantic search:
 
 ```python
-from mcp_bridge.tools.semantic_search import start_file_watcher
+from mcp_bridge.tools.semantic_search import semantic_search
 
-# Start watching your project
-watcher = start_file_watcher(
-    project_path="/path/to/project",
-    provider="ollama"  # or mxbai, gemini, openai
+# First search auto-creates index and starts watcher
+results = await semantic_search(
+    query="authentication logic",
+    project_path="."
 )
 
-print(f"Watching {watcher.project_path} for changes...")
+# Files are now auto-reindexed on change
 ```
 
-## Common Workflows
-
-### Workflow 1: Development Session
+### Manual Control
 
 ```python
-# At start of work session
-from mcp_bridge.tools.semantic_search import start_file_watcher
-
-watcher = start_file_watcher(".", provider="ollama")
-
-# Now work normally - files are auto-indexed as you edit
-# Edit src/auth.py - automatically indexed
-# Create new src/models/user.py - automatically indexed
-# Delete src/old_code.py - automatically reindexed
-
-# At end of work session
-from mcp_bridge.tools.semantic_search import stop_file_watcher
-stop_file_watcher(".")
-```
-
-### Workflow 2: Long-Running Server
-
-```python
-# In your main server initialization
-from mcp_bridge.tools.semantic_search import start_file_watcher
-
-async def initialize_watchers():
-    """Start file watchers for all projects."""
-    projects = [
-        "/Users/dev/projects/frontend",
-        "/Users/dev/projects/backend",
-        "/Users/dev/projects/ml",
-    ]
-    
-    for project in projects:
-        watcher = start_file_watcher(project, provider="ollama")
-        print(f"Watching {project}")
-```
-
-### Workflow 3: CI/CD Integration
-
-```python
-# In your CI pipeline
 from mcp_bridge.tools.semantic_search import (
     start_file_watcher,
     stop_file_watcher,
+    list_file_watchers,
+    get_file_watcher,
 )
 
-# Start watcher for test environment
-watcher = start_file_watcher(".", provider="ollama")
-
-# Run tests - any file changes are tracked
-run_tests()
-
-# Ensure index is up-to-date before deployment
-stop_file_watcher(".")
-```
-
-## Usage with Claude Code
-
-### Option 1: Direct Python Integration
-
-```python
-# In Claude Code, create a skill or script:
-from mcp_bridge.tools.semantic_search import start_file_watcher
-
 # Start watching
-watcher = start_file_watcher(".")
-print(f"FileWatcher running for {watcher.project_path}")
-```
+watcher = await start_file_watcher(
+    project_path=".",
+    provider="ollama",
+    debounce_seconds=2.0
+)
 
-### Option 2: Using MCP Tools (when exposed)
+# Check if watcher exists
+active = get_file_watcher(".")
+if active:
+    print(f"Watcher active for {active.project_path}")
 
-```
-# In Claude Code chat:
-Use the semantic_watcher_start tool to monitor my codebase
-@semantic_watcher_start project_path="."
-
-# Check status
-@semantic_watcher_list
-
-# Stop watching
-@semantic_watcher_stop project_path="."
-```
-
-## Monitoring and Debugging
-
-### Check Active Watchers
-
-```python
-from mcp_bridge.tools.semantic_search import list_file_watchers
-
+# List all watchers
 watchers = list_file_watchers()
 for w in watchers:
-    print(f"{w['project_path']}: {w['status']}")
+    print(f"{w['project_path']}: {w['status']}, provider: {w['provider']}")
+
+# Stop watching
+stopped = stop_file_watcher(".")
+print(f"Stopped: {stopped}")
+```
+
+## API Reference
+
+### start_file_watcher
+
+Start watching a project directory for file changes.
+
+```python
+async def start_file_watcher(
+    project_path: str,
+    provider: EmbeddingProvider = "ollama",
+    debounce_seconds: float = 2.0,
+) -> CodebaseFileWatcher
+```
+
+**Parameters:**
+- `project_path`: Path to the project root
+- `provider`: Embedding provider to use for reindexing
+- `debounce_seconds`: Time to wait before reindexing after changes (default: 2.0)
+
+**Returns:** The started CodebaseFileWatcher instance
+
+**Behavior:**
+- If an index exists, performs an incremental reindex on startup
+- If watcher already exists and is running, returns existing watcher
+- If watcher exists but stopped, restarts it
+
+**Example:**
+```python
+# Start with default settings
+watcher = await start_file_watcher(".")
+
+# Start with custom debounce
+watcher = await start_file_watcher(
+    project_path="/path/to/project",
+    provider="mxbai",
+    debounce_seconds=5.0
+)
+```
+
+### stop_file_watcher
+
+Stop watching a project directory.
+
+```python
+def stop_file_watcher(project_path: str) -> bool
+```
+
+**Parameters:**
+- `project_path`: Path to the project root
+
+**Returns:** True if watcher was stopped, False if no watcher was active
+
+**Example:**
+```python
+stopped = stop_file_watcher(".")
+if stopped:
+    print("Watcher stopped")
+else:
+    print("No active watcher found")
+```
+
+### get_file_watcher
+
+Get an active file watcher for a project.
+
+```python
+def get_file_watcher(project_path: str) -> CodebaseFileWatcher | None
+```
+
+**Parameters:**
+- `project_path`: Path to the project root
+
+**Returns:** The CodebaseFileWatcher if active, None otherwise
+
+**Example:**
+```python
+watcher = get_file_watcher(".")
+if watcher:
+    print(f"Watching: {watcher.project_path}")
+    print(f"Running: {watcher.is_running()}")
+```
+
+### list_file_watchers
+
+List all active file watchers.
+
+```python
+def list_file_watchers() -> list[dict]
+```
+
+**Returns:** List of dicts with watcher info:
+- `project_path`: Path being watched
+- `debounce_seconds`: Debounce time setting
+- `provider`: Embedding provider in use
+- `status`: "running" or "stopped"
+
+**Example:**
+```python
+watchers = list_file_watchers()
+for w in watchers:
+    print(f"{w['project_path']}")
+    print(f"  Status: {w['status']}")
     print(f"  Provider: {w['provider']}")
     print(f"  Debounce: {w['debounce_seconds']}s")
 ```
 
-Output:
-```
-/Users/dev/projects/myapp: running
-  Provider: ollama
-  Debounce: 2.0s
+## Architecture
+
+```mermaid
+flowchart TB
+    subgraph "File System"
+        FILES[Python Source Files]
+    end
+
+    subgraph "File Watcher"
+        OBS[watchdog Observer<br/>or Native Watcher]
+        HANDLER[Event Handler]
+        DEB[Debounce Timer<br/>2 seconds]
+    end
+
+    subgraph "Indexing Worker"
+        QUEUE[Request Queue<br/>max size: 1]
+        WORKER[Dedicated Thread]
+        IDX[index_codebase()]
+    end
+
+    subgraph "Storage"
+        DB[(ChromaDB<br/>~/.stravinsky/vectordb/)]
+    end
+
+    FILES -->|file events| OBS
+    OBS --> HANDLER
+    HANDLER --> DEB
+    DEB -->|batch files| QUEUE
+    QUEUE --> WORKER
+    WORKER --> IDX
+    IDX --> DB
 ```
 
-### Enable Debug Logging
+### Components
+
+**File Watcher (CodebaseFileWatcher):**
+- Uses native file watching when available (efficient kernel-level notifications)
+- Falls back to watchdog library if native watcher not available
+- Filters for .py files only
+- Skips hidden directories and common non-code directories
+
+**Debounce Timer:**
+- Waits 2 seconds (configurable) after last file change
+- Batches multiple rapid changes into single reindex
+- Prevents excessive reindexing during active development
+
+**Indexing Worker (DedicatedIndexingWorker):**
+- Single-threaded worker prevents concurrent database access
+- Queue size of 1 provides natural debouncing (drops duplicate requests)
+- Uses asyncio.run() for each operation to avoid event loop issues
+- Logs errors to ~/.stravinsky/logs/file_watcher.log
+
+## Common Workflows
+
+### Development Session
 
 ```python
-import logging
+from mcp_bridge.tools.semantic_search import (
+    index_codebase,
+    start_file_watcher,
+    stop_file_watcher,
+)
 
-# Enable detailed logging
-logging.basicConfig(level=logging.DEBUG)
+async def setup_dev_session():
+    """Set up semantic search for a development session."""
 
-from mcp_bridge.tools.semantic_search import start_file_watcher
+    # Initial index (if needed)
+    await index_codebase(".")
 
-watcher = start_file_watcher(".")
-# Now you'll see detailed logs of all file changes and reindexing
+    # Start file watcher
+    watcher = await start_file_watcher(".", provider="mxbai")
+    print(f"Watching {watcher.project_path}")
+
+    return watcher
+
+async def cleanup_dev_session():
+    """Clean up at end of session."""
+    stop_file_watcher(".")
 ```
 
-Sample debug output:
+### Multi-Project Workspace
+
+```python
+from mcp_bridge.tools.semantic_search import (
+    start_file_watcher,
+    list_file_watchers,
+)
+from pathlib import Path
+
+async def watch_workspace(workspace_dir: str):
+    """Watch all git repos in a workspace."""
+
+    workspace = Path(workspace_dir)
+
+    # Find all subdirectories with git repos
+    for project in workspace.iterdir():
+        if (project / ".git").exists():
+            watcher = await start_file_watcher(
+                str(project),
+                provider="ollama"
+            )
+            print(f"Watching: {project.name}")
+
+    # Show status
+    watchers = list_file_watchers()
+    print(f"\nWatching {len(watchers)} projects")
 ```
-DEBUG:mcp_bridge.tools.semantic_search:File modified: src/auth.py
-DEBUG:mcp_bridge.tools.semantic_search:File created: src/models/user.py
-INFO:mcp_bridge.tools.semantic_search:Reindexing codebase due to changes: ['src/auth.py', 'src/models/user.py']
-INFO:mcp_bridge.tools.semantic_search:Reindexing completed
+
+### CI/CD Integration
+
+```python
+from mcp_bridge.tools.semantic_search import (
+    index_codebase,
+    start_file_watcher,
+    stop_file_watcher,
+)
+
+async def ci_pipeline():
+    """Ensure index is current for CI checks."""
+
+    # Start watcher
+    await start_file_watcher(".")
+
+    # Run tests (any file changes are tracked)
+    await run_tests()
+
+    # Ensure index is up-to-date before deployment
+    stop_file_watcher(".")
+
+    # Final reindex to catch any test-generated files
+    await index_codebase(".", force=False)
+```
+
+## Configuration
+
+### Debounce Settings
+
+| Project Size | Recommended Debounce | Rationale |
+|--------------|---------------------|-----------|
+| Small (<100 files) | 0.5-1.0s | Fast feedback, low overhead |
+| Medium (100-1000 files) | 2.0s (default) | Balance speed and efficiency |
+| Large (>1000 files) | 5.0-10.0s | Reduce reindex frequency |
+| Very Large (>10k files) | Consider manual | Disable watcher, reindex on demand |
+
+```python
+# Small project - fast feedback
+await start_file_watcher(".", debounce_seconds=0.5)
+
+# Large project - conservative
+await start_file_watcher(".", debounce_seconds=5.0)
+```
+
+### Ignored Directories
+
+The watcher automatically skips these directories:
+
+```python
+SKIP_DIRS = {
+    # Python
+    "__pycache__", ".venv", "venv", "env", ".env",
+    ".pytest_cache", ".mypy_cache", ".ruff_cache",
+
+    # Node.js
+    "node_modules", ".npm", ".yarn",
+
+    # Build outputs
+    "dist", "build", "out", ".next", ".nuxt",
+
+    # Version control
+    ".git", ".svn", ".hg",
+
+    # IDE/Editor
+    ".idea", ".vscode", ".vs",
+
+    # Test/coverage
+    "coverage", "htmlcov", ".nyc_output",
+
+    # Misc
+    ".stravinsky", "logs", "tmp", "temp"
+}
+```
+
+### Gitignore Support
+
+The watcher respects `.gitignore` and `.stravignore` patterns:
+
+```bash
+# .stravignore - additional patterns for semantic indexing
+*.generated.py
+test_data/
+experimental/
 ```
 
 ## Troubleshooting
 
-### Problem: Watcher Doesn't Start
+### Watcher Does Not Start
 
-**Symptom**: `FileWatcher failed to start`
+**Symptom:** `start_file_watcher()` fails or returns None
 
-**Solutions**:
-1. Check that `watchdog` is installed: `pip list | grep watchdog`
+**Solutions:**
+1. Check that watchdog is installed: `pip list | grep watchdog`
 2. Verify project path exists: `ls /path/to/project`
 3. Check file permissions: `ls -la /path/to/project`
 
-### Problem: Reindexing Fails
+### Reindexing Fails
 
-**Symptom**: "Error during file watcher reindex"
+**Symptom:** "Error during file watcher reindex" in logs
 
-**Solutions**:
+**Solutions:**
 1. Check embedding service is running:
-   - For Ollama: `ollama serve`
-   - For Gemini: Ensure authentication is valid
-2. Check database isn't locked:
-   - Wait a few seconds, watcher will retry
-3. Check available disk space for vector database
+   - Ollama: `ollama serve`
+   - Cloud providers: `stravinsky-auth status`
+2. Check database is not locked (wait a few seconds, watcher retries)
+3. Check available disk space
 
-### Problem: Too Many Reindexes (Slow)
+### Too Many Reindexes (Slow)
 
-**Symptom**: Reindexing happens every second, slowing down work
+**Symptom:** Constant reindexing during active development
 
-**Solutions**:
+**Solutions:**
 1. Increase debounce period:
    ```python
-   watcher = start_file_watcher(".", debounce_seconds=5.0)
+   await start_file_watcher(".", debounce_seconds=5.0)
    ```
 2. Stop watcher during heavy editing:
    ```python
    stop_file_watcher(".")
    # ... heavy editing ...
-   start_file_watcher(".")
+   await start_file_watcher(".")
    ```
 
-### Problem: Watcher Doesn't Detect Some Changes
+### Watcher Does Not Detect Changes
 
-**Possible causes**:
-1. File is in ignored directory (`.git`, `__pycache__`, `venv`, etc.)
-2. File isn't a `.py` file (only Python files are watched)
-3. File is hidden (starts with `.`)
+**Possible causes:**
+1. File is in ignored directory (.git, __pycache__, venv, etc.)
+2. File is not a .py file (only Python files are watched)
+3. File is hidden (starts with .)
+4. File matches .gitignore or .stravignore pattern
 
-**Verify**: Check `CodebaseVectorStore.SKIP_DUW` for excluded directories
-
-## Performance Tips
-
-### For Small Projects (<100 files)
-
+**Verify:**
 ```python
-# Use aggressive debounce
-watcher = start_file_watcher(".", debounce_seconds=0.5)
+from mcp_bridge.tools.semantic_search import CodebaseVectorStore
+
+# Check if directory is skipped
+skipped = CodebaseVectorStore.SKIP_DIRS
+print(f"Skipped directories: {skipped}")
 ```
 
-### For Medium Projects (100-1000 files)
+### Watcher Uses High CPU
 
+**Symptom:** High CPU usage from file watching
+
+**Solutions:**
+1. Increase debounce to reduce reindex frequency
+2. Check for large directories being watched
+3. Use .stravignore to exclude large generated directories
+
+## Logging
+
+Watcher errors are logged to: `~/.stravinsky/logs/file_watcher.log`
+
+**Enable debug logging:**
 ```python
-# Use default debounce
-watcher = start_file_watcher(".", debounce_seconds=2.0)
+import logging
+
+logging.basicConfig(level=logging.DEBUG)
+logging.getLogger("mcp_bridge.tools.semantic_search").setLevel(logging.DEBUG)
 ```
 
-### For Large Projects (>1000 files)
-
-```python
-# Use conservative debounce
-watcher = start_file_watcher(".", debounce_seconds=5.0)
+**Sample log output:**
 ```
-
-### For Very Large Projects (>10k files)
-
-```python
-# Stop watcher during active development
-# Manually trigger reindexes when needed
-from mcp_bridge.tools.semantic_search import get_store
-
-store = get_store(".")
-await store.index_codebase()  # Manual reindex when ready
-```
-
-## Real-World Examples
-
-### Example 1: Development Environment Setup
-
-```python
-# setup_dev_env.py
-from mcp_bridge.tools.semantic_search import (
-    start_file_watcher,
-    index_codebase,
-)
-
-async def setup_development():
-    """Set up semantic search for development."""
-    
-    # Initialize vector index
-    stats = await index_codebase(".")
-    print(f"Indexed {stats['indexed']} chunks")
-    
-    # Start file watcher for continuous updates
-    watcher = start_file_watcher(".", provider="ollama")
-    print(f"Watching {watcher.project_path}")
-    
-    return watcher
-
-if __name__ == "__main__":
-    import asyncio
-    watcher = asyncio.run(setup_development())
-    print("Development environment ready!")
-```
-
-### Example 2: Multi-Project Workspace
-
-```python
-# watch_workspace.py
-from mcp_bridge.tools.semantic_search import (
-    start_file_watcher,
-    list_file_watchers,
-)
-
-async def watch_workspace(workspace_dir):
-    """Watch all projects in a workspace."""
-    from pathlib import Path
-    
-    workspace = Path(workspace_dir)
-    
-    # Find all subdirectories with git repos
-    projects = [d for d in workspace.iterdir() if (d / ".git").exists()]
-    
-    for project in projects:
-        watcher = start_file_watcher(str(project), provider="ollama")
-        print(f"Started watching {project.name}")
-    
-    # Show status
-    watchers = list_file_watchers()
-    print(f"\nWatching {len(watchers)} projects:")
-    for w in watchers:
-        print(f"  - {Path(w['project_path']).name}")
-
-if __name__ == "__main__":
-    import asyncio
-    asyncio.run(watch_workspace("/Users/dev/projects"))
-```
-
-### Example 3: Semantic Search with Auto-Indexing
-
-```python
-# search_with_watcher.py
-from mcp_bridge.tools.semantic_search import (
-    start_file_watcher,
-    semantic_search,
-    index_codebase,
-)
-
-async def search_with_auto_index(query, project_path="."):
-    """Search semantic index, with file watcher keeping it fresh."""
-    
-    # Ensure initial index exists
-    await index_codebase(project_path)
-    
-    # Start watching for changes
-    watcher = start_file_watcher(project_path)
-    
-    # Perform semantic search
-    results = await semantic_search(query, project_path)
-    
-    return results
-
-# Usage:
-# results = await search_with_auto_index("authentication logic")
+[2026-01-22 10:15:30] File watcher started for /path/to/project
+[2026-01-22 10:15:35] File modified: src/auth.py
+[2026-01-22 10:15:37] Queued reindex for 1 files: [auth.py]
+[2026-01-22 10:15:38] Reindex completed for /path/to/project
 ```
 
 ## Best Practices
 
-1. **Always Initialize Index First**
-   ```python
-   # ✅ DO THIS
-   await index_codebase(".")
-   watcher = start_file_watcher(".")
-   
-   # ❌ DON'T start watcher without initial index
-   ```
+### 1. Let Auto-Start Handle It
 
-2. **Use Appropriate Debounce Period**
-   ```python
-   # ✅ DO THIS - match your workflow
-   watcher = start_file_watcher(".", debounce_seconds=2.0)
-   
-   # ❌ DON'T use very small debounce (0.1s)
-   ```
+The watcher auto-starts on first search. No manual setup needed.
 
-3. **Stop Watcher When Done**
-   ```python
-   # ✅ DO THIS - clean shutdown
-   stop_file_watcher(".")
-   
-   # ❌ DON'T leave watchers running if you won't need them
-   ```
+```python
+# Just search - watcher starts automatically
+results = await semantic_search("authentication", project_path=".")
+```
 
-4. **Monitor Watcher Health**
-   ```python
-   # ✅ DO THIS - check if watcher is still active
-   watcher = get_file_watcher(".")
-   if watcher and watcher.is_running():
-       print("Watcher healthy")
-   
-   # ❌ DON'T assume watcher is running
-   ```
+### 2. Use Appropriate Debounce
 
-5. **Handle Errors Gracefully**
-   ```python
-   # ✅ DO THIS - watcher handles errors automatically
-   try:
-       watcher = start_file_watcher(".")
-   except Exception as e:
-       print(f"Watcher failed: {e}, semantic search still available")
-   
-   # ❌ DON'T let watcher errors crash your app
-   ```
+Match debounce to your workflow:
+- Fast iteration: 0.5-1.0s
+- Normal development: 2.0s (default)
+- Large projects: 5.0-10.0s
+
+### 3. Stop When Not Needed
+
+Stop watchers you don't need to free resources:
+
+```python
+# Stop specific project
+stop_file_watcher("/path/to/inactive/project")
+
+# Check what's running
+for w in list_file_watchers():
+    if w['status'] == 'running':
+        print(f"Active: {w['project_path']}")
+```
+
+### 4. Handle Errors Gracefully
+
+Watcher errors should not crash your application:
+
+```python
+try:
+    watcher = await start_file_watcher(".")
+except Exception as e:
+    print(f"Watcher failed: {e}")
+    # Semantic search still works, just without auto-updates
+```
+
+### 5. Monitor Health
+
+Check watcher status before critical operations:
+
+```python
+watcher = get_file_watcher(".")
+if watcher and watcher.is_running():
+    print("Watcher healthy")
+else:
+    print("Watcher not running - consider restarting")
+```
 
 ## See Also
 
-- [FileWatcher Implementation Details](./FILE_WATCHER.md)
-- [Semantic Search Guide](./SEMANTIC_SEARCH.md)
-- [Embedding Providers](./EMBEDDING_PROVIDERS.md)
+- [Quick Start Guide](./SEMANTIC_SEARCH_QUICK_START.md) - Get started with semantic search
+- [Best Practices Guide](./SEMANTIC_SEARCH_BEST_PRACTICES.md) - Search optimization tips
+- [Indexing Quick Start](./semantic_indexing_quick_start.md) - Manual indexing options
+
+---
+
+**Last Updated:** January 2026
+**Status:** Complete guide for file watcher usage

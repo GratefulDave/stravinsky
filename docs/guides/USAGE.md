@@ -1,6 +1,37 @@
-øø# Stravinsky Usage Guide
+# Stravinsky Usage Guide
 
 Complete reference for all Stravinsky MCP tools and features.
+
+---
+
+## System Requirements
+
+**Python Version:** 3.11-3.13 (required)
+
+Stravinsky depends on chromadb, which uses onnxruntime. The onnxruntime package does not have pre-built wheels for Python 3.14+.
+
+---
+
+## Installation Quick Reference
+
+```bash
+# Recommended installation
+claude mcp add --scope user stravinsky -- uvx --python python3.13 stravinsky@latest
+
+# Development installation
+uv pip install -e .
+```
+
+---
+
+## Available Commands
+
+| Command | Description |
+|---------|-------------|
+| `stravinsky` | Start the MCP server |
+| `stravinsky --version` | Check installed version |
+| `stravinsky-auth` | Authentication CLI |
+| `stravinsky-proxy` | Start proxy mode for long-running generations |
 
 ---
 
@@ -58,6 +89,13 @@ invoke_gemini(prompt, model, temperature, max_tokens, thinking_budget)
 - Requires Google account with Gemini access
 - Setup: `stravinsky-auth login gemini`
 - Tokens stored securely in system keyring (auto-refresh enabled)
+
+**API Key Fallback:**
+For high-volume usage, add `GEMINI_API_KEY` to your `.env` file:
+```bash
+GEMINI_API_KEY=your_api_key_here
+```
+When OAuth rate limits are reached, Stravinsky automatically falls back to the API key.
 
 **Parameters:**
 - `prompt` (required): The prompt to send

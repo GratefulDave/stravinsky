@@ -10,24 +10,42 @@ Common issues and solutions.
 
 **Solution:**
 ```bash
-# Reinstall
-uv tool install stravinsky --force
+# Reinstall with Python 3.13
+uv tool install --python python3.13 stravinsky --force
 
 # Or use uvx directly
-uvx stravinsky --help
+uvx --python python3.13 stravinsky --help
 ```
 
 ### MCP server not appearing in Claude Code
 
 **Solution:**
 ```bash
-# Remove and re-add
+# Remove and re-add with Python 3.13
 claude mcp remove stravinsky
-claude mcp add --scope user stravinsky -- uvx stravinsky@latest
+claude mcp add --scope user stravinsky -- uvx --python python3.13 stravinsky@latest
 
 # Verify
 claude mcp list
 ```
+
+### Python version / onnxruntime errors
+
+**Symptoms:**
+- `ModuleNotFoundError: No module named 'onnxruntime'`
+- Wheel build failures during installation
+- Import errors related to chromadb
+
+**Root cause:** You are running Python 3.14+ (onnxruntime lacks wheels for these versions)
+
+**Solution:**
+```bash
+# Reinstall with Python 3.13
+claude mcp remove stravinsky
+claude mcp add --scope user stravinsky -- uvx --python python3.13 stravinsky@latest
+```
+
+**Why this works:** chromadb depends on onnxruntime, which only has pre-built wheels for Python 3.11-3.13.
 
 ### "uvx: command not found"
 
@@ -37,7 +55,7 @@ claude mcp list
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Restart terminal, then
-claude mcp add --scope user stravinsky -- uvx stravinsky@latest
+claude mcp add --scope user stravinsky -- uvx --python python3.13 stravinsky@latest
 ```
 
 ---
@@ -55,6 +73,18 @@ claude mcp add --scope user stravinsky -- uvx stravinsky@latest
 stravinsky-auth logout gemini
 stravinsky-auth login gemini
 ```
+
+### Gemini: Rate Limits (429 Errors)
+
+**Cause:** OAuth has lower rate limits than API keys
+
+**Solution:** Add an API key fallback to your `.env` file:
+```bash
+# .env file in project root
+GEMINI_API_KEY=your_api_key_here
+```
+
+Stravinsky will automatically fall back to the API key when OAuth rate limits are reached.
 
 ### OpenAI: Port 1455 in use
 
@@ -305,7 +335,7 @@ ast_grep_search(pattern="function $NAME($_)")
 
 **Solution:** Install globally instead:
 ```bash
-uv tool install stravinsky
+uv tool install --python python3.13 stravinsky
 claude mcp remove stravinsky
 claude mcp add --scope user stravinsky -- stravinsky
 ```
@@ -330,7 +360,7 @@ claude mcp add --scope user stravinsky -- stravinsky
 3. Re-add MCP server:
 ```bash
 claude mcp remove stravinsky
-claude mcp add --scope user stravinsky -- uvx stravinsky@latest
+claude mcp add --scope user stravinsky -- uvx --python python3.13 stravinsky@latest
 ```
 
 ### Tools not appearing
@@ -370,7 +400,10 @@ STRAVINSKY_DEBUG=1 stravinsky
 A: No. Each is optional. Use whichever you need.
 
 **Q: Can I use Stravinsky without authentication?**
-A: Agent tools work without auth. Model invocation requires auth.
+A: Agent tools work without auth. Model invocation requires auth (OAuth or API key).
+
+**Q: What Python versions are supported?**
+A: Python 3.11-3.13. Python 3.14+ is not supported due to onnxruntime/chromadb dependencies.
 
 **Q: How do I update Stravinsky?**
 A: With uvx, it auto-updates. With uv tool: `uv tool upgrade stravinsky`

@@ -4,7 +4,7 @@ This document details how tools are registered, invoked, and processed in Stravi
 
 ## Overview
 
-Stravinsky implements 47 MCP tools across 8 categories. Each tool follows a consistent invocation pattern with hooks for pre/post processing.
+Stravinsky implements 54 MCP tools across 10 categories. Each tool follows a consistent invocation pattern with hooks for pre/post processing.
 
 ```mermaid
 flowchart TB
@@ -24,10 +24,12 @@ flowchart TB
 
         subgraph "Tool Implementations"
             MI[model_invoke.py]
-            AM[agents/]
+            AM[agent_manager.py]
             CS[code_search.py]
-            SS[semantic_search/]
-            LSP[lsp/]
+            FC[find_code.py]
+            SS[semantic_search.py]
+            LSP[lsp/tools.py]
+            SE[search_enhancements.py]
         end
     end
 
@@ -39,8 +41,10 @@ flowchart TB
     HM --> MI
     HM --> AM
     HM --> CS
+    HM --> FC
     HM --> SS
     HM --> LSP
+    HM --> SE
 ```
 
 ## Tool Registration
@@ -78,16 +82,17 @@ Tool(
 
 ```mermaid
 graph LR
-    subgraph "Tool Categories (47 total)"
+    subgraph "Tool Categories (54 total)"
         MI[Model Invoke<br/>3 tools]
-        ENV[Environment<br/>6 tools]
-        BG[Background Tasks<br/>3 tools]
-        AG[Agents<br/>6 tools]
-        CS[Code Search<br/>4 tools]
-        SS[Semantic Search<br/>12 tools]
+        ENV[Environment<br/>2 tools]
+        AG[Agents<br/>7 tools]
+        CS[Code Search<br/>5 tools]
+        SS[Semantic Search<br/>11 tools]
         LSP[LSP<br/>12 tools]
+        FW[File Watcher<br/>3 tools]
         SESS[Sessions<br/>3 tools]
         SK[Skills<br/>2 tools]
+        FILE[File Ops<br/>6 tools]
     end
 ```
 
@@ -122,6 +127,7 @@ sequenceDiagram
             Ext-->>Tool: Response
             Tool->>HM: execute_post_model_invoke(result)
         else Agent Tool
+            Tool->>Tool: Validate with DelegationEnforcer
             Tool->>Tool: Spawn subprocess
             Tool-->>Tool: Background execution
         else LSP Tool
@@ -164,8 +170,13 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             # ... other params
         )
     elif name == "agent_spawn":
-        from .tools.agents import spawn_agent
-        result = await spawn_agent(...)
+        from .tools.agent_manager import agent_spawn
+        result = await agent_spawn(
+            prompt=arguments["prompt"],
+            agent_type=arguments.get("agent_type", "explore"),
+            task_graph_id=arguments.get("task_graph_id"),  # NEW: parallel enforcement
+            # ... other params
+        )
     elif name.startswith("lsp_"):
         from .tools.lsp import get_lsp_tool
         tool_fn = get_lsp_tool(name)
@@ -239,7 +250,45 @@ await invoke_gemini(
 )
 
 # Logged as:
-# [explore] → gemini-3-flash: Find authentication code...
+# [explore] -> gemini-3-flash: Find authentication code...
+```
+
+## Parallel Execution Enforcement
+
+### DelegationEnforcer Integration
+
+The `agent_spawn` tool now integrates with `DelegationEnforcer` for parallel execution validation:
+
+```mermaid
+flowchart TD
+    REQ[agent_spawn Request] --> CHECK{task_graph_id<br/>provided?}
+
+    CHECK -->|No| SPAWN[Normal spawn]
+    CHECK -->|Yes| VALIDATE[DelegationEnforcer.validate_spawn]
+
+    VALIDATE --> VALID{Is spawn<br/>allowed?}
+
+    VALID -->|Yes| RECORD[Record spawn]
+    VALID -->|No| ERROR[ParallelExecutionError]
+
+    RECORD --> SPAWN
+    SPAWN --> RESULT[Return task_id]
+```
+
+Usage with parallel enforcement:
+```python
+# During DELEGATE phase, orchestrator sets enforcer
+from mcp_bridge.tools.agent_manager import set_delegation_enforcer
+set_delegation_enforcer(enforcer)
+
+# Subsequent spawns are validated
+await agent_spawn(
+    prompt="Search for auth patterns",
+    agent_type="explore",
+    task_graph_id="task_001",  # Links to TaskGraph node
+)
+
+# Independent tasks MUST be spawned together or error is raised
 ```
 
 ## Rate Limiting Architecture
@@ -318,7 +367,7 @@ stateDiagram-v2
 # Retry configuration
 retry = tenacity.retry(
     stop=stop_after_attempt(2),           # Max 2 attempts
-    wait=wait_exponential(multiplier=10), # 10s → 20s → 40s
+    wait=wait_exponential(multiplier=10), # 10s -> 20s -> 40s
     retry=retry_if_result(is_retryable),  # Only 5xx errors
 )
 ```
@@ -333,16 +382,27 @@ retry = tenacity.retry(
 | `invoke_gemini_agentic` | Gemini 3 Flash | Agentic loop with tools |
 | `invoke_openai` | GPT-5.2 | Complex reasoning |
 
-### Agent Tools (6 tools)
+### Agent Tools (7 tools)
 
 | Tool | Purpose |
 |------|---------|
-| `agent_spawn` | Launch background agent |
-| `agent_output` | Get agent results |
-| `agent_progress` | Real-time progress |
+| `agent_spawn` | Launch background agent with optional task_graph_id for parallel enforcement |
+| `agent_output` | Get agent results (block=true to wait) |
+| `agent_progress` | Real-time progress monitoring |
 | `agent_cancel` | Cancel running agent |
 | `agent_list` | List all agents |
 | `agent_retry` | Retry failed agent |
+| `agent_cleanup` | Remove old completed/failed agents |
+
+### Code Search (5 tools)
+
+| Tool | Purpose |
+|------|---------|
+| `ast_grep_search` | AST-aware structural pattern search |
+| `ast_grep_replace` | AST-aware code replacement |
+| `grep_search` | Fast text/regex search (ripgrep) |
+| `glob_files` | Find files by pattern |
+| `find_code` | Smart routing to optimal search strategy |
 
 ### LSP Tools (12 tools)
 
@@ -361,22 +421,55 @@ retry = tenacity.retry(
 | `lsp_servers` | N/A | List servers |
 | `lsp_diagnostics` | N/A (ruff/tsc) | File diagnostics |
 
-### Semantic Search (12 tools)
+### Semantic Search (11 tools)
 
 | Tool | Purpose |
 |------|---------|
 | `semantic_search` | Natural language code search |
-| `hybrid_search` | Semantic + AST search |
-| `semantic_index` | Index codebase |
+| `hybrid_search` | Semantic + AST combined search |
+| `semantic_index` | Index codebase for search |
 | `semantic_stats` | Index statistics |
-| `multi_query_search` | LLM-expanded queries |
-| `decomposed_search` | Break complex queries |
-| `enhanced_search` | Auto-select strategy |
-| `start_file_watcher` | Auto-reindex on change |
+| `multi_query_search` | LLM-expanded query variations |
+| `decomposed_search` | Break complex queries into sub-searches |
+| `enhanced_search` | Auto-select best strategy |
+| `start_file_watcher` | Auto-reindex on file changes |
 | `stop_file_watcher` | Stop watching |
 | `list_file_watchers` | List active watchers |
-| `cancel_indexing` | Cancel ongoing index |
-| `delete_index` | Remove index |
+| `cancel_indexing` | Cancel ongoing indexing |
+| `delete_index` | Remove search index |
+
+### File Operations (6 tools)
+
+| Tool | Purpose |
+|------|---------|
+| `list_directory` | List files in directory |
+| `read_file` | Read file contents with smart truncation |
+| `write_file` | Write content to file |
+| `replace` | Replace text in file |
+| `run_shell_command` | Execute shell command |
+| `tool_search` | Search for tools by name/category |
+
+### Environment (2 tools)
+
+| Tool | Purpose |
+|------|---------|
+| `get_project_context` | Git status, rules, todos |
+| `get_system_health` | Dependencies and auth status |
+
+### Sessions (3 tools)
+
+| Tool | Purpose |
+|------|---------|
+| `session_list` | List Claude Code sessions |
+| `session_read` | Read session messages |
+| `session_search` | Search session content |
+
+### Skills (2 tools)
+
+| Tool | Purpose |
+|------|---------|
+| `skill_list` | List available commands |
+| `skill_get` | Get command content |
 
 ## Lazy Loading Pattern
 
@@ -384,11 +477,11 @@ All tool implementations use lazy imports to minimize startup time:
 
 ```python
 # Instead of top-level imports
-# from .tools.model_invoke import invoke_gemini  # ❌
+# from .tools.model_invoke import invoke_gemini  # Wrong
 
 # Tools are imported only when called
 if name == "invoke_gemini":
-    from .tools.model_invoke import invoke_gemini  # ✅
+    from .tools.model_invoke import invoke_gemini  # Correct
     result = await invoke_gemini(...)
 ```
 
@@ -400,3 +493,4 @@ This reduces initial memory footprint and speeds up MCP server startup.
 - [OAuth Flow](OAUTH_FLOW.md)
 - [Agent Orchestration](AGENT_ORCHESTRATION.md)
 - [LSP Architecture](LSP_ARCHITECTURE.md)
+- [Injection Points](../implementation/MCP_TOOL_CALL_INJECTION_POINTS.md)

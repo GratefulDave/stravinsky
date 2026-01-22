@@ -2,13 +2,33 @@
 
 ## Executive Summary
 
-Stravinsky uses a **three-layer enforcement system** combining Claude Code's native hooks, native sub-agents, and specialized agent prompts to enforce parallel task delegation. This document provides the definitive flowchart showing EXACTLY how the process works from user request to agent execution.
+Stravinsky uses a **three-layer enforcement system** combining Claude Code's native hooks, native sub-agents, and specialized agent prompts with the new **TaskGraph** and **DelegationEnforcer** for hard parallel execution validation. This document provides the definitive flowchart showing EXACTLY how the process works from user request to agent execution.
 
 ---
 
-## Quick Reference: Hook and Agent Types
+## Quick Reference: Agent Types and Models
+
+### Agent Types (13 agents)
+
+| Agent | Display Model | Cost Tier | Delegation Target | Use Case |
+|-------|---------------|-----------|-------------------|----------|
+| **stravinsky** | Claude Sonnet 4.5 | Moderate | Native | Primary orchestrator |
+| **explore** | gemini-3-flash | CHEAP | invoke_gemini_agentic | Codebase search, file discovery |
+| **dewey** | gemini-3-flash | CHEAP | invoke_gemini_agentic | Documentation research |
+| **code-reviewer** | gemini-3-flash | CHEAP | invoke_gemini_agentic | Code quality analysis |
+| **momus** | gemini-3-flash | CHEAP | invoke_gemini_agentic | Quality gate validation |
+| **comment_checker** | gemini-3-flash | CHEAP | invoke_gemini_agentic | Documentation completeness |
+| **document_writer** | gemini-3-flash | CHEAP | invoke_gemini_agentic | Technical documentation |
+| **multimodal** | gemini-3-flash | CHEAP | invoke_gemini | Visual analysis |
+| **research-lead** | gemini-3-flash | CHEAP | invoke_gemini_agentic | Research coordination |
+| **frontend** | gemini-3-pro-high | MEDIUM | invoke_gemini_agentic | UI/UX implementation |
+| **debugger** | claude-sonnet-4.5 | MEDIUM | Native (LSP tools) | Root cause analysis |
+| **implementation-lead** | claude-sonnet-4.5 | MEDIUM | Native | Execution coordination |
+| **delphi** | gpt-5.2 | EXPENSIVE | invoke_openai | Strategic architecture |
+| **planner** | opus-4.5 | EXPENSIVE | Native | Pre-implementation planning |
 
 ### Hook Types (15 hooks)
+
 | Hook File | Type | Trigger | Exit Codes | Purpose |
 |-----------|------|---------|-----------|----------|
 | `parallel_execution.py` | UserPromptSubmit | Before response | 0 | Inject parallel instructions, activate stravinsky mode |
@@ -27,18 +47,6 @@ Stravinsky uses a **three-layer enforcement system** combining Claude Code's nat
 | `execution_state_tracker.py` | UserPromptSubmit | Before response | 0 | Track execution state to detect sequential fallback |
 | `parallel_reinforcement_v2.py`| UserPromptSubmit | Before response | 0 | Smart reinforcement of parallel delegation |
 | `ralph_loop.py` | PostAssistantMessage | After response | 0 | Auto-continue incomplete work |
-
-
-### Agent Types (7 agents)
-| Agent | Model | Cost | Execution | Use For |
-|-------|-------|------|-----------|---------|
-| **stravinsky** | Claude Sonnet 4.5 | Moderate | Primary orchestrator | Multi-step tasks, delegation coordination |
-| **explore** | Gemini 3 Flash | Free | Async | Code search, file reading, pattern finding |
-| **dewey** | Gemini 3 Flash | Cheap | Async | Documentation research, OSS examples |
-| **code-reviewer** | Gemini 3 Flash | Cheap | Async | Quality analysis, security scanning |
-| **debugger** | Claude Sonnet | Medium | Blocking (2+ failures) | Root cause analysis |
-| **frontend** | Gemini 3 Pro High | Medium | Blocking (ALL visual) | UI/UX implementation |
-| **delphi** | Claude Sonnet + GPT-5.2 | Expensive | Blocking (3+ failures) | Strategic architecture, hard debugging |
 
 ---
 
@@ -70,92 +78,121 @@ flowchart TD
     style StravLoaded fill:#9999ff
 ```
 
-### Phase 2: TodoWrite and Parallel Delegation Enforcement
+### Phase 2: TaskGraph Creation and DelegationEnforcer Setup
 
 ```mermaid
 flowchart TD
-    StravWork[Stravinsky Analyzes Task] --> CreateTodos[TodoWrite with<br/>2+ pending items]
+    StravWork[Stravinsky Analyzes Task] --> CreateGraph[Create TaskGraph<br/>with dependencies]
 
-    CreateTodos --> PostHook[PostToolUse Hook:<br/>todo_delegation.py]
+    CreateGraph --> DefineWaves[Define Execution Waves]
 
-    PostHook --> CheckCount{Pending<br/>count >= 2?}
+    DefineWaves --> W1[Wave 1: Independent tasks<br/>task_a, task_b, task_c]
+    DefineWaves --> W2[Wave 2: Dependent tasks<br/>task_d depends on a,b]
+    DefineWaves --> W3[Wave 3: Final tasks<br/>task_e depends on d]
 
-    CheckCount -->|No| Allow[Exit 0 - Allow]
-    CheckCount -->|Yes| CheckMode{Stravinsky<br/>mode active?}
+    W1 --> Enforcer[Create DelegationEnforcer<br/>parallel_window_ms=500<br/>strict=True]
+    W2 --> Enforcer
+    W3 --> Enforcer
 
-    CheckMode -->|No| Warn[Exit 1 - WARNING<br/>Suggest parallel Tasks]
-    CheckMode -->|Yes| Block[Exit 2 - HARD BLOCK<br/>MUST spawn Task agents<br/>in SAME response]
+    Enforcer --> SetEnforcer[set_delegation_enforcer]
 
-    Block --> ForcedDelegate[Stravinsky MUST:<br/>Task explore<br/>Task dewey<br/>Task code-reviewer<br/>ALL in ONE response]
+    SetEnforcer --> SpawnPhase[Begin Parallel Spawning]
 
-    ForcedDelegate --> ParallelSpawn[Multiple Task calls<br/>run_in_background=true]
-
-    ParallelSpawn --> Agents[Sub-agents Execute<br/>Concurrently]
-
-    style Block fill:#ff6666
-    style ForcedDelegate fill:#66ff66
-    style ParallelSpawn fill:#66ff66
-    style Agents fill:#9999ff
+    style CreateGraph fill:#99ff99
+    style Enforcer fill:#ff9999
+    style SpawnPhase fill:#66ff66
 ```
 
-### Phase 3: PreToolUse Hook Enforcement
+### Phase 3: Parallel Agent Spawning with Enforcement
 
 ```mermaid
 flowchart TD
-    ToolAttempt[Stravinsky Attempts<br/>Tool Usage] --> PreHook{PreToolUse Hook:<br/>stravinsky_mode.py}
+    SpawnPhase[Begin Wave 1 Spawning] --> Validate1{validate_spawn<br/>task_a?}
 
-    PreHook --> CheckTool{Tool<br/>type?}
+    Validate1 -->|Valid| Spawn1[agent_spawn<br/>task_graph_id=task_a]
+    Validate1 -->|Invalid| Error1[ParallelExecutionError]
 
-    CheckTool -->|TodoWrite/Task| AllowTool[Exit 0 - Allow]
-    CheckTool -->|Read/Grep/Bash/Edit| CheckMode{Stravinsky<br/>mode active?}
+    Spawn1 --> Record1[record_spawn task_a]
 
-    CheckMode -->|No| AllowTool
-    CheckMode -->|Yes| BlockTool[Exit 2 - HARD BLOCK<br/>Tool rejected]
+    Record1 --> Validate2{validate_spawn<br/>task_b?}
+    Validate2 -->|Valid| Spawn2[agent_spawn<br/>task_graph_id=task_b]
 
-    AllowTool --> Execute[Tool Executes]
-    BlockTool --> ErrorMsg[Error: Tool blocked<br/>Use Task tool instead]
+    Spawn2 --> Record2[record_spawn task_b]
 
-    ErrorMsg --> StravCorrect[Stravinsky uses<br/>Task tool with<br/>appropriate subagent]
+    Record2 --> Validate3{validate_spawn<br/>task_c?}
+    Validate3 -->|Valid| Spawn3[agent_spawn<br/>task_graph_id=task_c]
 
-    StravCorrect --> Execute
-    Execute --> PostHooks[PostToolUse Hooks:<br/>truncator, messaging,<br/>edit_recovery]
+    Spawn3 --> Record3[record_spawn task_c]
 
-    PostHooks --> Result[Tool Result Returned]
+    Record3 --> Compliance{check_parallel_compliance<br/>time spread < 500ms?}
 
-    style BlockTool fill:#ff6666
-    style StravCorrect fill:#66ff66
+    Compliance -->|Yes| WaveOK[Wave 1 spawned correctly]
+    Compliance -->|No| TimeError[ParallelExecutionError:<br/>Sequential execution detected]
+
+    WaveOK --> WaitResults[Wait for Wave 1 results]
+
+    style Spawn1 fill:#66ff66
+    style Spawn2 fill:#66ff66
+    style Spawn3 fill:#66ff66
+    style Error1 fill:#ff6666
+    style TimeError fill:#ff6666
 ```
 
-### Phase 4: Agent Execution and Results Synthesis
+### Phase 4: AGENT_DELEGATION_PROMPTS Injection
 
 ```mermaid
 flowchart TD
-    Agents[Sub-agents Running<br/>in Background] --> Types{Agent Type}
+    AgentSpawn[agent_spawn called] --> GetPrompt[get_agent_delegation_prompt<br/>from AGENT_DELEGATION_PROMPTS]
 
-    Types --> Explore[explore:<br/>gemini-3-flash<br/>Code search]
-    Types --> Dewey[dewey:<br/>gemini-3-flash<br/>Documentation]
-    Types --> Reviewer[code-reviewer:<br/>gemini-3-flash<br/>Quality analysis]
+    GetPrompt --> BuildSystem[Build system_prompt:<br/>delegation_prompt +<br/>agent context +<br/>task details]
+
+    BuildSystem --> InjectPrompt[Inject into Claude CLI:<br/>--system-prompt file]
+
+    InjectPrompt --> Example[Example for explore agent:]
+
+    Example --> E1["CRITICAL: YOU ARE A THIN WRAPPER<br/>DELEGATE TO GEMINI IMMEDIATELY"]
+    E1 --> E2["Call mcp__stravinsky__invoke_gemini_agentic<br/>model: gemini-3-flash<br/>max_turns: 10"]
+    E2 --> E3["DO NOT answer directly<br/>DO NOT use search tools yourself<br/>Delegate to Gemini FIRST"]
+
+    E3 --> Execute[Agent executes with<br/>delegation instructions]
+
+    style GetPrompt fill:#99ff99
+    style BuildSystem fill:#9999ff
+    style Execute fill:#66ff66
+```
+
+### Phase 5: Agent Execution and Results Collection
+
+```mermaid
+flowchart TD
+    Agents[Wave 1 Agents Running] --> Types{Agent Type}
+
+    Types --> Explore[explore:<br/>invoke_gemini_agentic<br/>gemini-3-flash]
+    Types --> Dewey[dewey:<br/>invoke_gemini_agentic<br/>gemini-3-flash]
+    Types --> Reviewer[code-reviewer:<br/>invoke_gemini_agentic<br/>gemini-3-flash]
 
     Explore --> Complete1[Agent Completes]
     Dewey --> Complete2[Agent Completes]
     Reviewer --> Complete3[Agent Completes]
 
-    Complete1 --> Collect[Stravinsky Collects:<br/>TaskOutput block=true]
-    Complete2 --> Collect
-    Complete3 --> Collect
+    Complete1 --> MarkComplete1[enforcer.mark_task_completed<br/>task_a]
+    Complete2 --> MarkComplete2[enforcer.mark_task_completed<br/>task_b]
+    Complete3 --> MarkComplete3[enforcer.mark_task_completed<br/>task_c]
 
-    Collect --> Synthesize[Synthesize Results]
-    Synthesize --> UpdateTodos[Mark TODOs complete]
-    UpdateTodos --> MoreWork{More<br/>work?}
+    MarkComplete1 --> CheckWave{All wave 1<br/>complete?}
+    MarkComplete2 --> CheckWave
+    MarkComplete3 --> CheckWave
 
-    MoreWork -->|Yes| NextTodo[Next TODO]
-    MoreWork -->|No| Verify[Final Verification:<br/>lsp_diagnostics<br/>Build success]
+    CheckWave -->|Yes| AdvanceWave[enforcer.advance_wave]
+    CheckWave -->|No| WaitMore[Wait for remaining]
 
-    Verify --> Done([Complete])
+    AdvanceWave --> Wave2[Begin Wave 2 spawning]
 
     style Agents fill:#9999ff
-    style Collect fill:#66ff66
-    style Done fill:#99ff99
+    style Complete1 fill:#66ff66
+    style Complete2 fill:#66ff66
+    style Complete3 fill:#66ff66
+    style AdvanceWave fill:#99ff99
 ```
 
 ### Combined: Complete Flow Summary
@@ -164,20 +201,20 @@ flowchart TD
 flowchart LR
     A[User Request] --> B[UserPromptSubmit Hooks]
     B --> C[Stravinsky Agent]
-    C --> D[TodoWrite]
-    D --> E[PostToolUse: Exit 2 BLOCK]
-    E --> F[Forced Parallel Task Spawn]
-    F --> G[Sub-agents Execute]
-    G --> H[Results Collection]
-    H --> I[Synthesis & Verification]
-    I --> J[Complete]
+    C --> D[TaskGraph Creation]
+    D --> E[DelegationEnforcer Setup]
+    E --> F[Wave 1: Parallel Spawn]
+    F --> G[AGENT_DELEGATION_PROMPTS<br/>Injection]
+    G --> H[Sub-agents Execute<br/>via invoke_gemini/openai]
+    H --> I[Results + Wave Advance]
+    I --> J[Wave 2+ or Complete]
 
-    C -.->|Tool attempt| K[PreToolUse: Block Read/Grep]
-    K -.->|Correction| F
+    F -.->|Violation| K[ParallelExecutionError]
 
-    style E fill:#ff6666
+    style E fill:#ff9999
     style F fill:#66ff66
     style G fill:#9999ff
+    style H fill:#9999ff
     style J fill:#99ff99
 ```
 
@@ -185,361 +222,439 @@ flowchart LR
 
 ## Detailed Step-by-Step Flow
 
-### Phase 1: User Request → Hook Processing
+### Phase 1: User Request to Hook Processing
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│ 1. USER SUBMITS REQUEST                                          │
-│    Examples:                                                      │
-│    - "/stravinsky implement authentication"                      │
-│    - "Add dark mode to the app"                                  │
-│    - "ultrawork - refactor the codebase"                          │
-└─────────────────────────────────────────────────────────────────┘
-                              ↓
-┌─────────────────────────────────────────────────────────────────┐
-│ 2. UserPromptSubmit HOOKS (Run in Parallel)                      │
-├─────────────────────────────────────────────────────────────────┤
-│ Hook 1: parallel_execution.py                                    │
-│   - Detects: /stravinsky, ultrawork, ultrathink, implementation  │
-│   - Action 1: CREATE ~/.stravinsky_mode marker file             │
-│   - Action 2: INJECT parallel execution instructions to prompt   │
-│   - Output: Modified prompt with [🔄 PARALLEL EXECUTION MODE]   │
-│                                                                   │
-│ Hook 2: context.py                                               │
-│   - Searches: AGENTS.md, README.md, CLAUDE.md                   │
-│   - Action: PREPEND project context to prompt                    │
-│   - Output: "--- LOCAL CONTEXT: README.md ---\n[content]"       │
-│                                                                   │
-│ Hook 3: todo_continuation.py                                     │
-│   - Reads: .claude/todo_state.json                              │
-│   - Detects: in_progress or pending TODOs                        │
-│   - Action: INJECT reminder about incomplete work                │
-│   - Output: "[SYSTEM REMINDER - TODO CONTINUATION]"             │
-└─────────────────────────────────────────────────────────────────┘
-                              ↓
-                    ALL HOOKS EXIT CODE 0
-                    (prompts modified, pass through)
+1. USER SUBMITS REQUEST
+   Examples:
+   - "/stravinsky implement authentication"
+   - "Add dark mode to the app"
+   - "ultrawork - refactor the codebase"
+
+2. UserPromptSubmit HOOKS (Run in Parallel)
+
+   Hook 1: parallel_execution.py
+   - Detects: /stravinsky, ultrawork, ultrathink, implementation
+   - Action 1: CREATE ~/.stravinsky_mode marker file
+   - Action 2: INJECT parallel execution instructions to prompt
+   - Output: Modified prompt with [PARALLEL EXECUTION MODE]
+
+   Hook 2: context.py
+   - Searches: AGENTS.md, README.md, CLAUDE.md
+   - Action: PREPEND project context to prompt
+
+   Hook 3: todo_continuation.py
+   - Reads: .claude/todo_state.json
+   - Detects: in_progress or pending TODOs
+   - Action: INJECT reminder about incomplete work
 ```
 
-### Phase 2: Claude Code Auto-Delegation
+### Phase 2: Stravinsky Activation and Task Analysis
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│ 3. CLAUDE CODE PROCESSES MODIFIED PROMPT                         │
-│    Prompt now contains:                                           │
-│    - [🔄 PARALLEL EXECUTION MODE ACTIVE] instructions           │
-│    - --- LOCAL CONTEXT: README.md --- (project documentation)   │
-│    - [SYSTEM REMINDER - TODO CONTINUATION] (if applicable)      │
-│    - Original user request                                       │
-└─────────────────────────────────────────────────────────────────┘
-                              ↓
-┌─────────────────────────────────────────────────────────────────┐
-│ 4. AUTO-DELEGATION DECISION                                      │
-│    Claude Code evaluates:                                         │
-│    - Is task complex (3+ steps)?        → YES                    │
-│    - Does description match "stravinsky"? → YES                  │
-│    - Is this multi-step implementation?  → YES                   │
-│                                                                   │
-│    Decision: DELEGATE to stravinsky sub-agent                    │
-│    Method: Task(subagent_type="stravinsky", ...)                │
-└─────────────────────────────────────────────────────────────────┘
-                              ↓
-┌─────────────────────────────────────────────────────────────────┐
-│ 5. STRAVINSKY AGENT ACTIVATED                                    │
-│    System Prompt Sections Loaded:                                │
-│    - Phase 0: Skill gate (check skill_list first)               │
-│    - Phase 1: Intent classification                              │
-│    - Phase 2: Aggressive delegation                              │
-│    - Phase 2B: Parallel task execution (CRITICAL section)        │
-│    - Phase 3: Relentless completion                              │
-│    - MANDATORY tool usage (MUST use Task, NOT Read/Grep)        │
-│    - 7-section delegation template                               │
-│    - ULTRAWORK mode                                               │
-│                                                                   │
-│    Key Constraints from Prompt:                                  │
-│    ❌ NEVER use Read/Grep/Bash directly                         │
-│    ✅ ALWAYS delegate to Task(subagent_type="explore", ...)    │
-│    ✅ TodoWrite → IMMEDIATE Task spawning (SAME response)       │
-└─────────────────────────────────────────────────────────────────┘
+3. STRAVINSKY AGENT ACTIVATED
+   System Prompt Sections Loaded:
+   - Phase 0: Skill gate (check skill_list first)
+   - Phase 1: Intent classification
+   - Phase 2: Aggressive delegation
+   - Phase 2B: Parallel task execution (CRITICAL section)
+   - Phase 3: Relentless completion
+
+   Key Constraints:
+   - NEVER use Read/Grep/Bash directly
+   - ALWAYS delegate to specialized agents
+   - Use TaskGraph for dependency management
+   - All wave tasks MUST spawn within 500ms
+
+4. STRAVINSKY ANALYZES TASK AND CREATES TASKGRAPH
+   Task: "Implement authentication system"
+
+   TaskGraph created:
+   {
+     "search_existing": {
+       "description": "Find existing auth code",
+       "agent_type": "explore",
+       "depends_on": []
+     },
+     "research_jwt": {
+       "description": "Research JWT best practices",
+       "agent_type": "dewey",
+       "depends_on": []
+     },
+     "review_design": {
+       "description": "Review auth flow design",
+       "agent_type": "code-reviewer",
+       "depends_on": []
+     },
+     "implement_auth": {
+       "description": "Implement auth endpoints",
+       "agent_type": "frontend",
+       "depends_on": ["search_existing", "research_jwt", "review_design"]
+     }
+   }
+
+   Waves computed:
+   - Wave 1: [search_existing, research_jwt, review_design] <- PARALLEL
+   - Wave 2: [implement_auth] <- SEQUENTIAL (depends on wave 1)
 ```
 
-### Phase 3: Stravinsky Creates TODOs
+### Phase 3: DelegationEnforcer Setup
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│ 6. STRAVINSKY ANALYZES TASK                                      │
-│    Task: "Implement authentication system"                       │
-│                                                                   │
-│    Breakdown into TODOs:                                         │
-│    1. Research JWT best practices (dewey)                        │
-│    2. Find existing auth implementations (explore)               │
-│    3. Design auth flow (code-reviewer)                           │
-│    4. Implement login endpoint (independent)                     │
-│    5. Implement token refresh (independent)                      │
-│    6. Write tests (independent)                                  │
-└─────────────────────────────────────────────────────────────────┘
-                              ↓
-┌─────────────────────────────────────────────────────────────────┐
-│ 7. STRAVINSKY CALLS: TodoWrite([6 items])                       │
-│    Creates todo_state.json with 6 pending items                  │
-└─────────────────────────────────────────────────────────────────┘
-                              ↓
-┌─────────────────────────────────────────────────────────────────┐
-│ 8. PostToolUse HOOK: todo_delegation.py FIRES                   │
-│    Input: tool_name = "TodoWrite"                                │
-│    Reads: tool result, counts pending items                      │
-│    Finds: 6 pending items                                        │
-│                                                                   │
-│    Logic:                                                         │
-│    pending_count = 6                                              │
-│    if pending_count >= 2:                                         │
-│        if os.path.exists("~/.stravinsky_mode"):  # TRUE         │
-│            return EXIT CODE 2  # HARD BLOCK                      │
-│                                                                   │
-│    Output to stderr:                                             │
-│    🚨 PARALLEL DELEGATION REQUIRED 🚨                           │
-│    TodoWrite created 6 pending items.                            │
-│    ⚠️ STRAVINSKY MODE ACTIVE                                    │
-│    You MUST spawn Task agents for ALL independent TODOs          │
-│    in THIS SAME RESPONSE.                                        │
-│                                                                   │
-│    DO NOT:                                                        │
-│    - End your response without spawning Tasks                    │
-│    - Mark TODOs in_progress before spawning Tasks                │
-│                                                                   │
-│    EXIT CODE 2 = HARD BLOCK                                      │
-└─────────────────────────────────────────────────────────────────┘
-                              ↓
-            CLAUDE CODE SEES: Exit code 2 = blocking error
-            MESSAGE: Must spawn Task agents immediately
+5. DELEGATIONENFORCER CREATED
+
+   from mcp_bridge.orchestrator.task_graph import TaskGraph, DelegationEnforcer
+   from mcp_bridge.tools.agent_manager import set_delegation_enforcer
+
+   graph = TaskGraph.from_dict(task_dict)
+   enforcer = DelegationEnforcer(
+       task_graph=graph,
+       parallel_window_ms=500,  # 500ms window for parallel spawns
+       strict=True              # Raise errors on violations
+   )
+
+   set_delegation_enforcer(enforcer)
+
+   Enforcer initialized with 2 execution waves:
+   - Wave 1: [search_existing, research_jwt, review_design]
+   - Wave 2: [implement_auth]
 ```
 
-### Phase 4: Forced Parallel Delegation
+### Phase 4: Parallel Agent Spawning
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│ 9. STRAVINSKY FORCED CORRECTION                                  │
-│    System Prompt + Hook Message = MANDATORY pattern              │
-│                                                                   │
-│    Stravinsky MUST now execute (in SAME response):               │
-│                                                                   │
-│    Task(                                                          │
-│      subagent_type="dewey",                                      │
-│      prompt="## TASK\nResearch JWT best practices...",          │
-│      description="Research JWT",                                 │
-│      run_in_background=true                                      │
-│    )                                                              │
-│    → dewey:gemini-3-flash('Research JWT') task_id=agent_abc123  │
-│                                                                   │
-│    Task(                                                          │
-│      subagent_type="explore",                                    │
-│      prompt="## TASK\nFind existing auth implementations...",   │
-│      description="Find auth code",                               │
-│      run_in_background=true                                      │
-│    )                                                              │
-│    → explore:gemini-3-flash('Find auth') task_id=agent_def456   │
-│                                                                   │
-│    Task(                                                          │
-│      subagent_type="code-reviewer",                              │
-│      prompt="## TASK\nReview auth flow design...",              │
-│      description="Review auth design",                           │
-│      run_in_background=true                                      │
-│    )                                                              │
-│    → code-reviewer:sonnet('Review design') task_id=agent_ghi789 │
-│                                                                   │
-│    ALL 3 TASKS FIRED IN PARALLEL IN ONE RESPONSE                 │
-└─────────────────────────────────────────────────────────────────┘
-                              ↓
-┌─────────────────────────────────────────────────────────────────┐
-│ 10. PostToolUse HOOK: tool_messaging.py                         │
-│     Triggered for each Task call                                 │
-│                                                                   │
-│     Outputs to stderr (user sees):                               │
-│     🎯 dewey:gemini-3-flash('Research JWT best practices')      │
-│     🎯 explore:gemini-3-flash('Find existing auth')             │
-│     🎯 code-reviewer:sonnet('Review auth flow design')          │
-└─────────────────────────────────────────────────────────────────┘
+6. WAVE 1 PARALLEL SPAWNING (ALL within 500ms)
+
+   # Spawn 1: explore agent
+   is_valid, error = enforcer.validate_spawn("search_existing")
+   # Returns: (True, None)
+
+   task_id_1 = await agent_spawn(
+       prompt="Find existing auth implementations",
+       agent_type="explore",
+       task_graph_id="search_existing"
+   )
+   # AGENT_DELEGATION_PROMPTS["explore"] injected as system prompt
+   # Timestamp recorded: T+0ms
+
+   # Spawn 2: dewey agent
+   is_valid, error = enforcer.validate_spawn("research_jwt")
+   # Returns: (True, None)
+
+   task_id_2 = await agent_spawn(
+       prompt="Research JWT best practices",
+       agent_type="dewey",
+       task_graph_id="research_jwt"
+   )
+   # AGENT_DELEGATION_PROMPTS["dewey"] injected
+   # Timestamp recorded: T+150ms
+
+   # Spawn 3: code-reviewer agent
+   is_valid, error = enforcer.validate_spawn("review_design")
+   # Returns: (True, None)
+
+   task_id_3 = await agent_spawn(
+       prompt="Review auth flow design",
+       agent_type="code-reviewer",
+       task_graph_id="review_design"
+   )
+   # AGENT_DELEGATION_PROMPTS["code-reviewer"] injected
+   # Timestamp recorded: T+300ms
+
+   # Compliance check
+   is_compliant, error = enforcer.check_parallel_compliance()
+   # Time spread: 300ms < 500ms limit
+   # Returns: (True, None) - PARALLEL EXECUTION VERIFIED
+
+7. IF SEQUENTIAL SPAWN ATTEMPTED (BLOCKED)
+
+   # Example: Response ends, next response tries to spawn
+
+   task_id_2 = await agent_spawn(
+       prompt="Research JWT...",
+       agent_type="dewey",
+       task_graph_id="research_jwt"
+   )
+   # Timestamp: T+10000ms (10 seconds later)
+
+   # Compliance check FAILS
+   is_compliant, error = enforcer.check_parallel_compliance()
+   # Time spread: 10000ms > 500ms limit
+   # Raises: ParallelExecutionError(
+   #   "Tasks in wave were not spawned in parallel. "
+   #   "Time spread: 10000ms > 500ms limit. "
+   #   "Independent tasks MUST be spawned simultaneously."
+   # )
 ```
 
-### Phase 5: Sub-Agents Execute in Parallel
+### Phase 5: Agent Execution with Delegation Prompts
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│ 11. SUB-AGENTS EXECUTE CONCURRENTLY                              │
-│                                                                   │
-│ Agent: dewey (task_id=agent_abc123)                             │
-│ ├─ Model: Claude Sonnet                                         │
-│ ├─ Tools: Read, WebSearch, WebFetch, invoke_gemini, grep.app   │
-│ ├─ Task: Research JWT best practices from official sources      │
-│ ├─ Status: RUNNING (background)                                 │
-│ └─ Result: Will return research summary + sources               │
-│                                                                   │
-│ Agent: explore (task_id=agent_def456)                           │
-│ ├─ Model: Claude Sonnet                                         │
-│ ├─ Tools: Read, Grep, Glob, Bash, ast_grep, LSP tools          │
-│ ├─ Task: Find existing auth code in codebase                    │
-│ ├─ Status: RUNNING (background)                                 │
-│ └─ Result: Will return file paths + line numbers + code         │
-│                                                                   │
-│ Agent: code-reviewer (task_id=agent_ghi789)                     │
-│ ├─ Model: Claude Sonnet                                         │
-│ ├─ Tools: Read, Grep, lsp_diagnostics, ast_grep                │
-│ ├─ Task: Review proposed auth flow design                       │
-│ ├─ Status: RUNNING (background)                                 │
-│ └─ Result: Will return security analysis + recommendations      │
-└─────────────────────────────────────────────────────────────────┘
-                              ↓
-              ALL AGENTS RUN INDEPENDENTLY
-              NO BLOCKING OF MAIN ORCHESTRATOR
+8. AGENTS EXECUTE WITH DELEGATION PROMPTS
+
+   Each agent receives AGENT_DELEGATION_PROMPTS[agent_type]:
+
+   explore agent receives:
+   ---
+   ## CRITICAL: YOU ARE A THIN WRAPPER - DELEGATE TO GEMINI IMMEDIATELY
+
+   You are the Explore agent. Your ONLY job is to delegate ALL work
+   to Gemini Flash with full tool access.
+
+   **IMMEDIATELY** call `mcp__stravinsky__invoke_gemini_agentic` with:
+   - **model**: `gemini-3-flash`
+   - **prompt**: The complete task description, plus instructions to use
+     search tools (semantic_search, grep_search, ast_grep_search)
+   - **max_turns**: 10
+
+   **DO NOT** answer directly. **DO NOT** use search tools yourself.
+   Delegate to Gemini FIRST, then return Gemini's response.
+   ---
+
+   dewey agent receives similar prompt targeting gemini-3-flash
+
+   code-reviewer agent receives similar prompt with lsp_diagnostics focus
+
+9. AGENTS CALL EXTERNAL MODELS
+
+   explore agent calls:
+     mcp__stravinsky__invoke_gemini_agentic(
+       model="gemini-3-flash",
+       prompt="Search the codebase for auth implementations using
+               available tools (grep_search, ast_grep_search,
+               semantic_search, glob_files)...",
+       max_turns=10
+     )
+
+   Gemini executes with tool access:
+   - grep_search("jwt", "src/")
+   - ast_grep_search("def.*token", "python")
+   - semantic_search("authentication flow")
+
+   Results returned through explore agent to orchestrator
 ```
 
-### Phase 6: Stravinsky Attempts Direct Tool Usage (Hypothetical)
+### Phase 6: Results Collection and Wave Advancement
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│ 12. HYPOTHETICAL: Stravinsky tries Read tool                    │
-│     (This violates MANDATORY constraints)                        │
-│                                                                   │
-│     Stravinsky calls: Read(file_path="src/auth/login.py")       │
-└─────────────────────────────────────────────────────────────────┘
-                              ↓
-┌─────────────────────────────────────────────────────────────────┐
-│ 13. PreToolUse HOOK: stravinsky_mode.py INTERCEPTS              │
-│     Input: tool_name = "Read"                                    │
-│     Check: os.path.exists("~/.stravinsky_mode") → TRUE          │
-│                                                                   │
-│     Logic:                                                        │
-│     blocked_tools = ["Read", "Grep", "Bash", "Edit", ...]       │
-│     if tool_name in blocked_tools:                               │
-│         if stravinsky_mode_active:                               │
-│             return EXIT CODE 2  # HARD BLOCK                     │
-│                                                                   │
-│     Outputs to stderr:                                           │
-│     ⚠️ STRAVINSKY MODE ACTIVE - Read BLOCKED                    │
-│                                                                   │
-│     You are in Stravinsky orchestrator mode.                     │
-│     Instead of using Read, you MUST use Task tool:               │
-│       Task(subagent_type="explore", ...)                        │
-│                                                                   │
-│     EXIT CODE 2 = HARD BLOCK                                     │
-└─────────────────────────────────────────────────────────────────┘
-                              ↓
-            READ TOOL REJECTED - NEVER EXECUTES
-            Claude sees: "Tool blocked, use Task instead"
-                              ↓
-┌─────────────────────────────────────────────────────────────────┐
-│ 14. STRAVINSKY CORRECTS                                          │
-│     Sees error message, system prompt constraints                │
-│     Uses Task tool instead:                                      │
-│                                                                   │
-│     Task(                                                         │
-│       subagent_type="explore",                                   │
-│       prompt="Read src/auth/login.py and analyze...",           │
-│       description="Read login.py"                                │
-│     )                                                             │
-└─────────────────────────────────────────────────────────────────┘
-```
+10. RESULTS COLLECTED AND WAVE ADVANCED
 
-### Phase 7: Results Collection and Synthesis
+    # As agents complete:
+    result_1 = await agent_output(task_id_1, block=True)
+    enforcer.mark_task_completed("search_existing")
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│ 15. STRAVINSKY COLLECTS RESULTS                                  │
-│     When agents complete, stravinsky uses:                        │
-│                                                                   │
-│     TaskOutput(task_id="agent_abc123", block=true)              │
-│     → dewey result: JWT best practices summary                   │
-│                                                                   │
-│     TaskOutput(task_id="agent_def456", block=true)              │
-│     → explore result: Found auth code in:                        │
-│         - src/auth/login.py:45                                   │
-│         - src/auth/token.py:12                                   │
-│                                                                   │
-│     TaskOutput(task_id="agent_ghi789", block=true)              │
-│     → code-reviewer result: Security analysis complete           │
-└─────────────────────────────────────────────────────────────────┘
-                              ↓
-┌─────────────────────────────────────────────────────────────────┐
-│ 16. STRAVINSKY SYNTHESIZES                                       │
-│     Combines all agent results:                                   │
-│     - JWT best practices → Use HTTP-only cookies                 │
-│     - Existing auth → Extend current JWT implementation          │
-│     - Security review → Add rate limiting, CSRF protection       │
-│                                                                   │
-│     Creates implementation plan                                  │
-│     Updates TODOs:                                               │
-│     - Mark TODOs 1, 2, 3 as COMPLETED                           │
-│     - Mark TODOs 4, 5, 6 as IN_PROGRESS                         │
-└─────────────────────────────────────────────────────────────────┘
-                              ↓
-┌─────────────────────────────────────────────────────────────────┐
-│ 17. FINAL VERIFICATION                                           │
-│     Stravinsky executes (when ALL work done):                    │
-│                                                                   │
-│     - lsp_diagnostics on modified files                          │
-│     - Bash: run tests                                            │
-│     - Verify all TODOs marked complete                           │
-│     - Build succeeds                                             │
-│                                                                   │
-│     Only then: Mark task as COMPLETE                             │
-└─────────────────────────────────────────────────────────────────┘
+    result_2 = await agent_output(task_id_2, block=True)
+    enforcer.mark_task_completed("research_jwt")
+
+    result_3 = await agent_output(task_id_3, block=True)
+    enforcer.mark_task_completed("review_design")
+
+    # All wave 1 tasks complete - automatic advance
+    # enforcer.advance_wave() called internally
+
+    # Wave 2 now available
+    current_wave = enforcer.get_current_wave()
+    # Returns: [Task(id="implement_auth", ...)]
+
+11. WAVE 2 EXECUTION
+
+    is_valid, error = enforcer.validate_spawn("implement_auth")
+    # Returns: (True, None) - dependencies satisfied
+
+    task_id_4 = await agent_spawn(
+        prompt=f"""Implement auth based on research:
+        - Existing code: {result_1}
+        - JWT practices: {result_2}
+        - Design review: {result_3}""",
+        agent_type="frontend",
+        task_graph_id="implement_auth"
+    )
+    # AGENT_DELEGATION_PROMPTS["frontend"] injected
+    # Delegates to gemini-3-pro via invoke_gemini_agentic
+
+12. COMPLETION AND CLEANUP
+
+    result_4 = await agent_output(task_id_4, block=True)
+    enforcer.mark_task_completed("implement_auth")
+
+    # All waves complete
+    clear_delegation_enforcer()
+
+    # Final verification
+    lsp_diagnostics(file_paths=[...])
+    # Run tests
+    # Mark task complete
 ```
 
 ---
 
-## Hook Execution Timeline
+## Agent Delegation Prompts Reference
 
+### AGENT_DELEGATION_PROMPTS Dictionary
+
+Location: `mcp_bridge/tools/agent_manager.py`
+
+```python
+AGENT_DELEGATION_PROMPTS = {
+    "explore": """## CRITICAL: YOU ARE A THIN WRAPPER - DELEGATE TO GEMINI IMMEDIATELY
+
+    You are the Explore agent. Your ONLY job is to delegate ALL work to Gemini Flash...
+    **IMMEDIATELY** call `mcp__stravinsky__invoke_gemini_agentic` with:
+    - **model**: `gemini-3-flash`
+    - **max_turns**: 10
+    ...""",
+
+    "dewey": """## CRITICAL: YOU ARE A THIN WRAPPER - DELEGATE TO GEMINI IMMEDIATELY
+
+    You are the Dewey agent - a documentation and research specialist.
+    **IMMEDIATELY** call `mcp__stravinsky__invoke_gemini_agentic`...""",
+
+    "delphi": """## CRITICAL: YOU ARE A THIN WRAPPER - DELEGATE TO OPENAI/GPT IMMEDIATELY
+
+    You are the Delphi agent - a strategic technical advisor.
+    **IMMEDIATELY** call `mcp__stravinsky__invoke_openai` with:
+    - **model**: `gpt-5.2-codex`
+    - **reasoning_effort**: `high`
+    ...""",
+
+    "frontend": """## CRITICAL: YOU ARE A THIN WRAPPER - DELEGATE TO GEMINI PRO IMMEDIATELY
+
+    You are the Frontend agent - a UI/UX implementation specialist.
+    **IMMEDIATELY** call `mcp__stravinsky__invoke_gemini_agentic` with:
+    - **model**: `gemini-3-pro`
+    ...""",
+
+    "code-reviewer": """## CRITICAL: YOU ARE A THIN WRAPPER - DELEGATE TO GEMINI IMMEDIATELY
+
+    You are the Code Reviewer agent...
+    Use lsp_diagnostics and ast_grep_search...""",
+
+    "debugger": """## YOU ARE A DEBUGGING SPECIALIST
+
+    Use your available tools (lsp_diagnostics, lsp_hover, ast_grep_search)...""",
+
+    "momus": """## CRITICAL: YOU ARE A THIN WRAPPER - DELEGATE TO GEMINI IMMEDIATELY
+
+    You are the Momus agent - a quality gate validator...""",
+
+    "document_writer": """## CRITICAL: YOU ARE A THIN WRAPPER - DELEGATE TO GEMINI IMMEDIATELY
+
+    You are the Document Writer agent - technical documentation specialist...""",
+
+    "multimodal": """## CRITICAL: YOU ARE A THIN WRAPPER - DELEGATE TO GEMINI IMMEDIATELY
+
+    You are the Multimodal agent - visual analysis specialist.
+    Note: Use `invoke_gemini` (not agentic) for pure visual analysis...""",
+
+    "comment_checker": """## CRITICAL: YOU ARE A THIN WRAPPER - DELEGATE TO GEMINI IMMEDIATELY
+
+    You are the Comment Checker agent - documentation completeness validator...""",
+}
 ```
-TIME →
-═══════════════════════════════════════════════════════════════════════
 
-User Request Submitted
-│
-├─ [0ms] UserPromptSubmit Hooks (PARALLEL)
-│  ├─ parallel_execution.py (create marker, inject instructions)
-│  ├─ context.py (inject CLAUDE.md)
-│  └─ todo_continuation.py (inject TODO reminders)
-│     ALL EXIT CODE 0 (pass through)
-│
-├─ [100ms] Claude Code processes modified prompt
-│
-├─ [150ms] Auto-delegates to stravinsky sub-agent
-│
-├─ [200ms] Stravinsky analyzes, creates TodoWrite
-│
-├─ [250ms] PostToolUse Hook: todo_delegation.py
-│           EXIT CODE 2 (HARD BLOCK)
-│           Message: "MUST spawn Task agents SAME response"
-│
-├─ [300ms] Stravinsky spawns Task calls (all in ONE response)
-│  ├─ Task(dewey)    → task_id=agent_abc123
-│  ├─ Task(explore)  → task_id=agent_def456
-│  └─ Task(reviewer) → task_id=agent_ghi789
-│
-├─ [350ms] PostToolUse Hook: tool_messaging.py (for each Task)
-│           Output: 🎯 dewey:gemini-3-flash('...')
-│
-├─ [400ms] Sub-agents start executing IN PARALLEL
-│  ├─ dewey: WebSearch, WebFetch...
-│  ├─ explore: Read, Grep, ast_grep...
-│  └─ reviewer: Read, lsp_diagnostics...
-│
-├─ [IF stravinsky tries Read/Grep/Bash while agents running]
-│  └─ PreToolUse Hook: stravinsky_mode.py
-│     EXIT CODE 2 (HARD BLOCK)
-│     Message: "Use Task tool instead"
-│
-├─ [30s] Agents complete, return results
-│
-├─ [31s] Stravinsky calls TaskOutput(block=true) for each
-│
-├─ [32s] Synthesis and TODO updates
-│
-├─ [35s] Final verification (lsp_diagnostics, tests)
-│
-└─ [40s] Response complete
+### Default Delegation Prompt
 
-═══════════════════════════════════════════════════════════════════════
+For unknown agent types:
+
+```python
+DEFAULT_DELEGATION_PROMPT = """## AGENT DELEGATION AVAILABLE
+
+You have access to Stravinsky MCP tools for model delegation:
+
+- `mcp__stravinsky__invoke_gemini_agentic`: Delegate to Gemini with tool access
+- `mcp__stravinsky__invoke_gemini`: Delegate to Gemini for simple tasks
+- `mcp__stravinsky__invoke_openai`: Delegate to OpenAI/GPT for complex reasoning
+
+Use these tools when appropriate for your task."""
+```
+
+---
+
+## TaskGraph and DelegationEnforcer API
+
+### TaskGraph Creation
+
+```python
+from mcp_bridge.orchestrator.task_graph import TaskGraph, Task, TaskStatus
+
+# From dictionary
+graph = TaskGraph.from_dict({
+    "task_a": {"description": "...", "agent_type": "explore", "depends_on": []},
+    "task_b": {"description": "...", "agent_type": "dewey", "depends_on": []},
+    "task_c": {"description": "...", "agent_type": "frontend", "depends_on": ["task_a", "task_b"]}
+})
+
+# Programmatically
+graph = TaskGraph()
+graph.add_task("task_a", "Description", "explore", dependencies=[])
+graph.add_task("task_b", "Description", "dewey", dependencies=[])
+graph.add_task("task_c", "Description", "frontend", dependencies=["task_a", "task_b"])
+
+# Get execution waves
+waves = graph.get_independent_groups()
+# Returns: [[task_a, task_b], [task_c]]
+
+# Get ready tasks (no pending dependencies)
+ready = graph.get_ready_tasks()
+```
+
+### DelegationEnforcer Usage
+
+```python
+from mcp_bridge.orchestrator.task_graph import DelegationEnforcer, ParallelExecutionError
+
+# Create enforcer
+enforcer = DelegationEnforcer(
+    task_graph=graph,
+    parallel_window_ms=500,  # Max time between parallel spawns
+    strict=True              # Raise errors on violations
+)
+
+# Validate spawn is allowed
+is_valid, error = enforcer.validate_spawn("task_id")
+if not is_valid:
+    raise ParallelExecutionError(error)
+
+# Record spawn timing
+enforcer.record_spawn("task_id", "agent_abc123")
+
+# Check parallel compliance after wave
+is_compliant, error = enforcer.check_parallel_compliance()
+
+# Mark task completed
+enforcer.mark_task_completed("task_id")
+
+# Advance to next wave
+has_more = enforcer.advance_wave()
+
+# Get enforcement status
+status = enforcer.get_enforcement_status()
+# {
+#     "current_wave": 1,
+#     "total_waves": 2,
+#     "current_wave_tasks": ["task_a", "task_b"],
+#     "spawn_batch": [("task_a", 1642000000.5)],
+#     "task_statuses": {"task_a": "spawned", "task_b": "pending"}
+# }
+```
+
+### Global Enforcer Management
+
+```python
+from mcp_bridge.tools.agent_manager import (
+    set_delegation_enforcer,
+    clear_delegation_enforcer,
+    get_delegation_enforcer
+)
+
+# Activate during DELEGATE phase
+set_delegation_enforcer(enforcer)
+
+# Get current enforcer
+current = get_delegation_enforcer()
+
+# Clear after execution complete
+clear_delegation_enforcer()
 ```
 
 ---
@@ -548,279 +663,68 @@ User Request Submitted
 
 ### When Stravinsky Delegates to Specialists
 
-| Trigger Condition | Delegated Agent | Execution Mode | Rationale |
-|------------------|-----------------|----------------|-----------|
-| Task contains "find", "search", "where is" | **explore** | Async (run_in_background=true) | Fast code search, cheap |
-| Task contains "research", "documentation", "best practices" | **dewey** | Async (run_in_background=true) | External research, cheap |
-| Task contains "review", "security", "quality" | **code-reviewer** | Async (run_in_background=true) | Static analysis, cheap |
-| 2+ consecutive fix attempts failed | **debugger** | Blocking (block=true) | Need to wait for root cause |
-| Task involves "UI", "frontend", "styling", "layout", "animation" | **frontend** | Blocking (block=true) | ALWAYS for visual changes, Gemini required |
-| 3+ consecutive fix attempts failed OR architecture decisions | **delphi** | Blocking (block=true) | Expensive GPT-5.2, use sparingly |
-| Complex multi-step task (3+ independent steps) | Self (stravinsky) | Primary orchestrator | Coordinate all delegation |
+| Trigger Condition | Agent | Cost Tier | Delegation Target |
+|------------------|-------|-----------|-------------------|
+| Task contains "find", "search", "where is" | **explore** | CHEAP | gemini-3-flash |
+| Task contains "research", "documentation" | **dewey** | CHEAP | gemini-3-flash |
+| Task contains "review", "security", "quality" | **code-reviewer** | CHEAP | gemini-3-flash |
+| Task contains "validate", "gate", "check" | **momus** | CHEAP | gemini-3-flash |
+| Task contains "missing docs", "undocumented" | **comment_checker** | CHEAP | gemini-3-flash |
+| Task contains "write docs", "document" | **document_writer** | CHEAP | gemini-3-flash |
+| Task contains "analyze image", "screenshot" | **multimodal** | CHEAP | gemini-3-flash |
+| Task involves "UI", "frontend", "styling" | **frontend** | MEDIUM | gemini-3-pro |
+| 2+ consecutive fix attempts failed | **debugger** | MEDIUM | Native (LSP) |
+| 3+ failures OR architecture decisions | **delphi** | EXPENSIVE | gpt-5.2-codex |
+| Need implementation plan before coding | **planner** | EXPENSIVE | Native (Opus) |
 
-### Cost-Based Execution Strategy (oh-my-opencode Pattern)
+### Cost-Based Execution Strategy
 
 ```
-ASYNC (Non-Blocking) - Fire and forget, cheap:
-├─ explore       (FREE - Gemini 3 Flash)
-├─ dewey         (CHEAP - Gemini 3 Flash)
-└─ code-reviewer (CHEAP - Gemini 3 Flash)
+CHEAP tier (AGENT_COST_TIERS) - Use liberally:
+- explore       (gemini-3-flash)
+- dewey         (gemini-3-flash)
+- code-reviewer (gemini-3-flash)
+- momus         (gemini-3-flash)
+- comment_checker (gemini-3-flash)
+- document_writer (gemini-3-flash)
+- multimodal    (gemini-3-flash)
+- research-lead (gemini-3-flash)
 
-BLOCKING (Wait for results) - Expensive or critical:
-├─ debugger      (MEDIUM - Claude Sonnet)
-├─ frontend      (MEDIUM - Gemini 3 Pro High)
-└─ delphi        (EXPENSIVE - GPT-5.2, strategic advisor)
+MEDIUM tier - Use when needed:
+- frontend      (gemini-3-pro-high)
+- debugger      (claude-sonnet-4.5)
+- implementation-lead (claude-sonnet-4.5)
+
+EXPENSIVE tier - Use sparingly:
+- delphi        (gpt-5.2)
+- planner       (opus-4.5)
 ```
 
 ---
 
-## Exit Code Enforcement Points
+## Error Handling and Recovery
 
-### Exit Code 0 (Continue/Allow)
-- All UserPromptSubmit hooks (always pass through)
-- PreToolUse when stravinsky mode inactive
-- PreToolUse for allowed tools (TodoRead, TodoWrite, Task)
-- PostToolUse for truncator, messaging, edit_recovery (informational)
-- PostToolUse todo_delegation when <2 pending items
-
-### Exit Code 1 (Non-Blocking Warning)
-- PostToolUse todo_delegation when 2+ pending AND stravinsky mode inactive
-- Shows warning but allows continuation
-
-### Exit Code 2 (Hard Block)
-- **PreToolUse stravinsky_mode.py**: Blocks Read/Grep/Bash/Edit when ~/.stravinsky_mode exists
-- **PostToolUse todo_delegation.py**: Blocks response completion when 2+ pending TODOs AND stravinsky mode active
-- Prevents execution, forces correction
-
----
-
-## Stravinsky Mode Activation/Deactivation
+### ParallelExecutionError
 
 ```python
-# ACTIVATION (parallel_execution.py)
-if detect_stravinsky_invocation(user_prompt):
-    # Patterns: /stravinsky, ultrawork, ultrathink, etc.
-    create_file("~/.stravinsky_mode", content='{"active": true}')
-    inject_parallel_instructions()
+from mcp_bridge.orchestrator.task_graph import ParallelExecutionError
 
-# DEACTIVATION (manual)
-os.remove("~/.stravinsky_mode")  # User must manually delete
-
-# CHECK STATUS
-stravinsky_active = os.path.exists(os.path.expanduser("~/.stravinsky_mode"))
+try:
+    await agent_spawn(..., task_graph_id="task_c")
+except ParallelExecutionError as e:
+    # Handle: task has unmet dependencies
+    # Or: tasks not spawned in parallel
+    logger.error(f"Parallel violation: {e}")
 ```
 
-### Marker File Content (Optional JSON)
-```json
-{
-  "active": true,
-  "reason": "/stravinsky invoked",
-  "timestamp": "2026-01-05T10:30:00Z"
-}
-```
+### Common Error Scenarios
 
----
-
-## 7-Section Delegation Template (MANDATORY)
-
-When Stravinsky delegates via Task tool, the prompt MUST include all 7 sections:
-
-```markdown
-## TASK
-[One sentence: atomic, specific goal]
-
-## EXPECTED OUTCOME
-[Concrete deliverables with success criteria]
-
-## REQUIRED TOOLS
-[Explicit tool whitelist: Read, Grep, Glob, etc.]
-
-## MUST DO
-[Exhaustive requirements list with bullet points]
-
-## MUST NOT DO
-[Forbidden actions to prevent rogue behavior]
-
-## CONTEXT
-[File paths, existing patterns, constraints, relevant background]
-
-## SUCCESS CRITERIA
-[How to verify completion - checkable conditions]
-```
-
-**Example for explore agent:**
-```markdown
-## TASK
-Find all JWT token generation implementations in the auth module.
-
-## EXPECTED OUTCOME
-List of functions with: function name, file path, line number, token type (access/refresh).
-
-## REQUIRED TOOLS
-Read, Grep, Glob, ast_grep_search, lsp_workspace_symbols
-
-## MUST DO
-- Search in src/auth/ directory recursively
-- Include both access token and refresh token generation
-- Report exact line numbers
-- Show function signatures
-
-## MUST NOT DO
-- Modify any files
-- Search outside src/auth/ directory
-- Make assumptions without reading code
-
-## CONTEXT
-Project uses FastAPI. Auth module handles JWT tokens for API authentication.
-Existing patterns use jose library for token creation.
-
-## SUCCESS CRITERIA
-All JWT generation functions documented with complete file paths, line numbers, and function signatures.
-```
-
----
-
-## Common Workflow Patterns
-
-### Pattern 1: Research + Implementation
-
-```
-User: "Implement rate limiting for API endpoints"
-
-1. UserPromptSubmit hooks inject parallel instructions
-2. Stravinsky creates TODOs:
-   - Research rate limiting libraries (dewey)
-   - Find existing middleware (explore)
-   - Design rate limit strategy (code-reviewer)
-   - Implement rate limiter (stravinsky)
-   - Write tests (stravinsky)
-
-3. PostToolUse todo_delegation: EXIT CODE 2 (HARD BLOCK)
-
-4. Stravinsky spawns (SAME response):
-   Task(dewey, "Research rate limiting...")
-   Task(explore, "Find middleware...")
-   Task(code-reviewer, "Review strategy...")
-
-5. Agents run in parallel (30s)
-
-6. Stravinsky collects results, implements, tests
-
-7. Final verification → Complete
-```
-
-### Pattern 2: Debug After Failures
-
-```
-User: "Fix the authentication bug"
-
-1. Stravinsky attempts fix #1 → FAILS
-2. Stravinsky attempts fix #2 → FAILS
-3. Trigger condition: 2+ failures
-
-4. Stravinsky delegates:
-   Task(
-     subagent_type="debugger",
-     prompt="Investigate auth bug...",
-     run_in_background=false  # BLOCKING
-   )
-
-5. Wait for debugger root cause analysis
-
-6. Implement fix based on debugger recommendations
-
-7. If still fails after 3rd attempt:
-   Task(
-     subagent_type="delphi",
-     prompt="Strategic analysis of persistent auth issue...",
-     run_in_background=false  # BLOCKING, EXPENSIVE
-   )
-```
-
-### Pattern 3: Visual UI Changes (ALWAYS delegate)
-
-```
-User: "Add a dark mode toggle to settings page"
-
-1. Stravinsky detects: UI, visual, styling keywords
-
-2. MANDATORY delegation (system prompt enforced):
-   Task(
-     subagent_type="frontend",
-     prompt="Design and implement dark mode toggle...",
-     run_in_background=false  # BLOCKING for visual
-   )
-
-3. Frontend agent:
-   - Uses invoke_gemini (Gemini 3 Pro High) for creative UI
-   - Implements component with accessibility
-   - Returns polished code
-
-4. Stravinsky integrates without modifications
-   (trusts frontend specialist)
-```
-
----
-
-## Troubleshooting Guide
-
-### Issue: "Tool blocked in stravinsky mode"
-
-**Symptom**: Error message "⚠️ STRAVINSKY MODE ACTIVE - Read BLOCKED"
-
-**Cause**: PreToolUse hook (stravinsky_mode.py) intercepted direct tool usage
-
-**Solution**:
-```python
-# WRONG
-Read(file_path="src/auth/login.py")
-
-# CORRECT
-Task(
-  subagent_type="explore",
-  prompt="Read src/auth/login.py and analyze authentication flow",
-  description="Read login.py"
-)
-```
-
-### Issue: "Must spawn Task agents SAME response"
-
-**Symptom**: Error after TodoWrite: "🚨 PARALLEL DELEGATION REQUIRED"
-
-**Cause**: PostToolUse hook (todo_delegation.py) detected 2+ pending TODOs without Task spawning
-
-**Solution**:
-```python
-# WRONG (two separate responses)
-# Response 1:
-TodoWrite([todo1, todo2, todo3])
-# Response 2:
-Task(...)  # TOO LATE!
-
-# CORRECT (single response)
-TodoWrite([todo1, todo2, todo3])
-Task(subagent_type="explore", ...)
-Task(subagent_type="dewey", ...)
-Task(subagent_type="code-reviewer", ...)
-# All in ONE response block
-```
-
-### Issue: Stravinsky mode won't deactivate
-
-**Symptom**: Tools keep getting blocked even after task complete
-
-**Cause**: Marker file `~/.stravinsky_mode` still exists
-
-**Solution**:
-```bash
-rm ~/.stravinsky_mode
-```
-
-Or from Python:
-```python
-import os
-os.remove(os.path.expanduser("~/.stravinsky_mode"))
-```
+| Scenario | Error Message | Recovery |
+|----------|---------------|----------|
+| Spawn before dependencies | "Task X has unmet dependencies" | Wait for wave N-1 to complete |
+| Sequential spawns | "Time spread Xms > 500ms limit" | Spawn all wave tasks in same response |
+| Unknown task | "Unknown task: X" | Verify task_graph_id matches TaskGraph |
+| Wave 2 before wave 1 | "Task X not found in any wave" | Complete wave 1 first |
 
 ---
 
@@ -830,150 +734,74 @@ os.remove(os.path.expanduser("~/.stravinsky_mode"))
 
 | Operation | Time | Notes |
 |-----------|------|-------|
-| UserPromptSubmit hooks | <100ms | All run in parallel |
-| PreToolUse hook check | <10ms | Fast file existence check |
-| PostToolUse hooks | <50ms | Parallel execution |
-| Task delegation (spawn) | <200ms | Agent initialization |
-| Explore agent search | 5-30s | Depends on codebase size |
-| Dewey research | 10-60s | Web fetches, synthesis |
-| Code-reviewer analysis | 5-20s | Static analysis |
-| Debugger root cause | 30-120s | Deep investigation |
-| Frontend implementation | 20-90s | Gemini generation + integration |
-| Delphi strategic analysis | 60-180s | GPT-5.2 extended thinking |
+| TaskGraph creation | <10ms | Dictionary parsing |
+| DelegationEnforcer init | <5ms | Wave computation |
+| validate_spawn | <1ms | In-memory lookup |
+| record_spawn | <1ms | Timestamp recording |
+| check_parallel_compliance | <1ms | Time spread calculation |
+| agent_spawn (non-blocking) | <200ms | CLI subprocess start |
+| explore agent (gemini-3-flash) | 5-30s | Depends on search scope |
+| dewey agent (gemini-3-flash) | 10-60s | Web research |
+| code-reviewer (gemini-3-flash) | 5-20s | Static analysis |
+| frontend (gemini-3-pro) | 20-90s | UI generation |
+| delphi (gpt-5.2) | 60-180s | Strategic analysis |
 
 ### Parallel Speedup
 
 **Sequential (OLD approach)**:
 ```
-Research (60s) → Search (30s) → Review (20s) = 110s total
+Search (30s) -> Research (60s) -> Review (20s) = 110s total
 ```
 
-**Parallel (NEW approach)**:
+**Parallel with DelegationEnforcer**:
 ```
-Research (60s)
-Search (30s)   } ALL CONCURRENT = 60s total (fastest agent)
-Review (20s)
-```
-
-**Speedup**: 110s → 60s (45% faster for 3 agents)
-
----
-
-## Architecture Summary
-
-### Three-Layer Enforcement System
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│ LAYER 1: NATIVE CLAUDE CODE HOOKS                                │
-│ ├─ UserPromptSubmit (inject parallel instructions)              │
-│ ├─ PreToolUse (block direct tool usage)                         │
-│ └─ PostToolUse (validate delegation, user messaging)            │
-│                                                                   │
-│ Tools: Python scripts in .claude/hooks/                         │
-│ Config: .claude/settings.json                                   │
-│ Control: Exit codes (0=allow, 1=warn, 2=hard block)            │
-└─────────────────────────────────────────────────────────────────┘
-                              ↕
-┌─────────────────────────────────────────────────────────────────┐
-│ LAYER 2: NATIVE CLAUDE CODE SUB-AGENTS                          │
-│ ├─ stravinsky (orchestrator with MANDATORY constraints)         │
-│ ├─ explore (fast code search)                                   │
-│ ├─ dewey (documentation research)                               │
-│ ├─ code-reviewer (quality analysis)                             │
-│ ├─ debugger (root cause investigation)                          │
-│ ├─ frontend (UI/UX with Gemini)                                 │
-│ └─ delphi (strategic advisor with GPT-5.2)                      │
-│                                                                   │
-│ Tools: Markdown configs in .claude/agents/                      │
-│ Delegation: Task tool (native Claude Code)                      │
-│ Isolation: Separate context windows per agent                   │
-└─────────────────────────────────────────────────────────────────┘
-                              ↕
-┌─────────────────────────────────────────────────────────────────┐
-│ LAYER 3: SPECIALIZED AGENT PROMPTS                              │
-│ ├─ MANDATORY tool usage (Task tool only)                        │
-│ ├─ CRITICAL parallel-first workflow                             │
-│ ├─ 7-section delegation template                                │
-│ ├─ Domain-based routing (visual→frontend, arch→delphi)         │
-│ └─ Cost-based execution (cheap=async, expensive=blocking)       │
-│                                                                   │
-│ Tools: System prompts with hard constraints                     │
-│ Enforcement: NEVER/MUST/BLOCKING keywords                       │
-└─────────────────────────────────────────────────────────────────┘
+Search (30s)  |
+Research (60s)| ALL CONCURRENT = 60s total (slowest task)
+Review (20s)  |
 ```
 
-### Marker File: Enabler of Hard Blocking
-
-```
-~/.stravinsky_mode
-├─ Created by: parallel_execution.py (UserPromptSubmit hook)
-├─ Checked by: stravinsky_mode.py (PreToolUse hook)
-├─ Checked by: todo_delegation.py (PostToolUse hook)
-└─ Effect: Enables EXIT CODE 2 (hard blocking) for enforcement
-```
-
-**Without marker file**: Warnings only (exit code 1)
-**With marker file**: Hard blocks (exit code 2), forces correction
+**Speedup**: 110s -> 60s (45% faster)
 
 ---
 
 ## Key Takeaways
 
-1. **Three-layer system**: Hooks → Sub-agents → Prompts (all enforce delegation)
+1. **AGENT_DELEGATION_PROMPTS**: Dictionary of full delegation prompts injected at spawn time for cross-repo MCP compatibility
 
-2. **Marker file is critical**: `~/.stravinsky_mode` enables hard blocking mode
+2. **10 specialized agents**: explore, dewey, delphi, frontend, code-reviewer, debugger, momus, document_writer, multimodal, comment_checker
 
-3. **Exit code 2 is the enforcer**: Hard blocks prevent execution, force corrections
+3. **Model routing**: CHEAP tier uses gemini-3-flash, MEDIUM uses gemini-3-pro or sonnet, EXPENSIVE uses gpt-5.2 or opus
 
-4. **Parallel execution is mandatory**: TodoWrite with 2+ items MUST spawn Task agents SAME response
+4. **TaskGraph**: DAG for dependency tracking with wave-based execution
 
-5. **PreToolUse blocks tools**: Read/Grep/Bash/Edit rejected when stravinsky mode active
+5. **DelegationEnforcer**: Hard enforcement of parallel execution within 500ms window
 
-6. **PostToolUse validates**: todo_delegation checks for Task spawning after TodoWrite
+6. **task_graph_id parameter**: Links agent_spawn to TaskGraph for validation
 
-7. **UserPromptSubmit prepares**: Injects parallel instructions before Claude processes
+7. **Thin wrapper pattern**: Agents delegate to external models via invoke_gemini_agentic or invoke_openai
 
-8. **7 specialized agents**: Each with specific domain, model, cost, and execution mode
-
-9. **Cost-based routing**: Cheap agents (explore, dewey, code-reviewer) = async; Expensive (delphi) = blocking
-
-10. **ALWAYS delegate visual**: Frontend agent is MANDATORY for ALL UI/UX changes
+8. **Hierarchy enforcement**: Orchestrators can spawn any agent, workers cannot spawn workers
 
 ---
 
 ## Files Reference
 
-### Hook Files
-- `.claude/hooks/parallel_execution.py` - Inject parallel instructions, create marker
-- `.claude/hooks/stravinsky_mode.py` - Block direct tools (PreToolUse)
-- `.claude/hooks/todo_delegation.py` - Enforce Task spawning (PostToolUse)
-- `.claude/hooks/tool_messaging.py` - User-friendly messages
-- `.claude/hooks/context.py` - Project context injection
-- `.claude/hooks/todo_continuation.py` - TODO reminders
-- `.claude/hooks/edit_recovery.py` - Edit failure guidance
-- `.claude/hooks/truncator.py` - Output truncation
-- `.claude/hooks/notification_hook.py` - Agent spawn messages
-- `.claude/hooks/subagent_stop.py` - Agent completion handling
-- `.claude/hooks/pre_compact.py` - Context preservation before compaction
+### Core Implementation Files
 
-### Agent Files
-- `.claude/agents/stravinsky.md` - Orchestrator
-- `.claude/agents/explore.md` - Code search
-- `.claude/agents/dewey.md` - Documentation research
-- `.claude/agents/code-reviewer.md` - Quality analysis
-- `.claude/agents/debugger.md` - Root cause
-- `.claude/agents/frontend.md` - UI/UX
-- `.claude/agents/delphi.md` - Strategic advisor
-- `.claude/agents/HOOKS.md` - Architecture docs
+- `mcp_bridge/tools/agent_manager.py` - AgentManager, AGENT_DELEGATION_PROMPTS, spawn functions
+- `mcp_bridge/orchestrator/task_graph.py` - TaskGraph, DelegationEnforcer, ParallelExecutionError
 
-### Config Files
-- `.claude/settings.json` - Hook registration
-- `.claude/todo_state.json` - TODO tracking
-- `~/.stravinsky_mode` - Marker file (enables hard blocking)
+### Configuration Dictionaries
+
+- `AGENT_MODEL_ROUTING` - CLI model override per agent type
+- `AGENT_COST_TIERS` - Cost classification (CHEAP/MEDIUM/EXPENSIVE)
+- `AGENT_DISPLAY_MODELS` - Display model names for UI
+- `AGENT_TOOLS` - Allowed tools per agent type
+- `ORCHESTRATOR_AGENTS` - List of orchestrator agent types
+- `WORKER_AGENTS` - List of worker agent types
 
 ---
 
-**Document Version**: 1.0
-**Last Updated**: 2026-01-05
-**Status**: Complete and Accurate
+**Document Version**: 2.0
+**Last Updated**: 2026-01-22
+**Status**: Updated for TaskGraph and DelegationEnforcer architecture

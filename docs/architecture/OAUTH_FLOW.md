@@ -4,10 +4,27 @@ This document details Stravinsky's OAuth authentication architecture for Gemini 
 
 ## Overview
 
-Stravinsky uses an **OAuth-first with API fallback** strategy:
-1. Try OAuth authentication first (better rate limits)
-2. On 429 rate limit, fall back to API key for 5 minutes
-3. Automatically retry OAuth after cooldown
+Stravinsky uses an **OAuth-first with automatic API key fallback** strategy:
+
+1. **OAuth is tried first** (if configured via `stravinsky-auth login gemini`)
+2. **On OAuth 429 rate limit** - Automatically switch to API key (if available) for 5 minutes
+3. **After 5-minute cooldown** - Retry OAuth
+
+This architecture provides the best of both worlds: OAuth convenience for typical usage with Tier 3 API key quotas as a safety net for heavy workloads.
+
+### Authentication Priority
+
+| Priority | Method | When Used |
+|----------|--------|-----------|
+| 1 | OAuth | Default if tokens exist and valid |
+| 2 | API Key | Fallback on OAuth 429 or if no OAuth configured |
+
+### Rate Limit Architecture
+
+| Auth Method | Rate Limits | Best For |
+|-------------|-------------|----------|
+| **OAuth** | Lower limits, but convenient | Interactive use, typical workloads |
+| **API Key (Tier 3)** | High quotas | Batch processing, heavy usage, fallback |
 
 ```mermaid
 stateDiagram-v2
@@ -266,14 +283,24 @@ stravinsky-auth logout gemini
 stravinsky-auth logout openai
 ```
 
-### API Key Fallback
+### API Key Fallback (Tier 3 Recommended)
+
+The API key serves as an automatic fallback when OAuth hits rate limits.
 
 ```bash
-# Add to .env file
-GEMINI_API_KEY=your_api_key_here
+# Add to .env file (project root or ~/.stravinsky/.env)
+GEMINI_API_KEY=your_tier_3_api_key_here
 # OR
-GOOGLE_API_KEY=your_api_key_here
+GOOGLE_API_KEY=your_tier_3_api_key_here
 ```
+
+**Why Tier 3?** Tier 3 API keys have significantly higher quotas, making them ideal for fallback during heavy usage periods. Get your key at [Google AI Studio](https://aistudio.google.com/app/apikey).
+
+### File Locations Checked (Priority Order)
+
+1. `~/.stravinsky/.env` - User-global config (recommended)
+2. `~/.env` - User home fallback
+3. Project-local `.env` - If using dotenv in your project
 
 ## Troubleshooting
 
@@ -333,13 +360,35 @@ flowchart TD
 
 ### Best Practices
 
-- Use OAuth over API keys when possible
+- Configure both OAuth and API key for maximum reliability
+- Use Tier 3 API keys for the fallback mechanism
 - Keep `.stravinsky/` directory permissions restricted
 - Re-authenticate periodically to refresh credentials
 - Use `stravinsky-auth logout` when done with a machine
 
+## Quick Reference
+
+### Setup Commands
+
+```bash
+# Configure OAuth (primary)
+stravinsky-auth login gemini
+stravinsky-auth login openai
+
+# Configure API key fallback (add to .env)
+echo "GEMINI_API_KEY=your_tier_3_key" >> ~/.stravinsky/.env
+
+# Check authentication status
+stravinsky-auth status
+
+# Logout when needed
+stravinsky-auth logout gemini
+stravinsky-auth logout openai
+```
+
 ## Related Documentation
 
+- [Gemini API Key Usage](../guides/GEMINI_API_KEY_USAGE.md)
+- [Keyring Auth Fix](../reports/KEYRING_AUTH_FIX.md)
 - [Architecture Overview](ARCHITECTURE.md)
 - [MCP Tool Flow](MCP_TOOL_FLOW.md)
-- [Keyring Auth Fix](KEYRING_AUTH_FIX.md)

@@ -1,6 +1,6 @@
 # Semantic Search Quick Start Guide
 
-After testing and verification, semantic search is **fully functional** and ready for use.
+Semantic search enables natural language queries like "find authentication logic" without requiring exact pattern matching. This guide helps you get started in minutes.
 
 ## Architecture Overview
 
@@ -32,240 +32,366 @@ flowchart TB
         MX[Mxbai<br/>mxbai-embed-large<br/>1024 dims - FREE]
         GE[Gemini<br/>gemini-embedding-001<br/>768 dims]
         OP[OpenAI<br/>text-embedding-3-small<br/>1536 dims]
+        HF[HuggingFace<br/>all-mpnet-base-v2<br/>768 dims]
     end
 
     EMB -.-> OL
     EMB -.-> MX
     EMB -.-> GE
     EMB -.-> OP
+    EMB -.-> HF
     QE -.-> OL
 ```
 
-## Search Flow
+## Quick Setup (3 Steps)
 
-```mermaid
-sequenceDiagram
-    participant User
-    participant SS as semantic_search()
-    participant EP as Embedding Provider
-    participant DB as ChromaDB
+### Step 1: Install an Embedding Provider
 
-    User->>SS: query="authentication logic"
-    SS->>EP: Generate query embedding
-    EP-->>SS: [0.123, -0.456, ...]
+**Option A: Ollama (Local, Free) - Recommended**
 
-    SS->>DB: collection.query(embedding, n=10)
-    DB-->>SS: Matching chunks + distances
-
-    SS->>SS: Format results with:<br/>- File path<br/>- Line numbers<br/>- Relevance score<br/>- Code preview
-
-    SS-->>User: Formatted results
-```
-
-## Quick Test
-
-To verify semantic search is working in your environment:
-
-```python
-import asyncio
-from mcp_bridge.tools.semantic_search import semantic_search, semantic_health
-
-async def test():
-    # Check health
-    health = await semantic_health("/path/to/project")
-    print(health)
-    
-    # Search
-    results = await semantic_search(
-        query="authentication logic",
-        project_path="/path/to/project",
-        n_results=5
-    )
-    print(results)
-
-asyncio.run(test())
-```
-
-## What's Working
-
-✅ **Semantic Search**
-- Natural language code search queries
-- Multiple embedding providers (Ollama, HuggingFace, Gemini, OpenAI)
-- Relevance scoring and result ranking
-
-✅ **Index Management**
-- Automatic database initialization
-- Chunk-based code parsing (AST-aware for Python)
-- Incremental indexing support
-
-✅ **Provider Support**
-- **Ollama** (local, free) - `nomic-embed-text` (768 dims)
-- **HuggingFace** (cloud, requires token) - sentence-transformers
-- **Gemini** (cloud, requires OAuth) - gemini-embedding-001
-- **OpenAI** (cloud, requires OAuth) - text-embedding-3-small
-- **Mxbai** (local, free, better for code) - mxbai-embed-large (1024 dims)
-
-✅ **Utilities**
-- `semantic_health()` - Check provider and database status
-- `semantic_stats()` - View index statistics
-- `hybrid_search()` - Combine semantic + structural (AST) matching
-- `multi_query_search()` - Expand queries for better recall
-- `decomposed_search()` - Break complex queries into sub-queries
-
-## Test Results Summary
-
-| Test | Result | Status |
-|------|--------|--------|
-| Health Check | Ollama online, DB OK | ✅ PASS |
-| Index Stats | 1500 chunks indexed | ✅ PASS |
-| Basic Search | "authentication logic" → 3 results | ✅ PASS |
-| Advanced Queries | OAuth, embeddings, error handling | ✅ PASS |
-| Database Access | ChromaDB collection accessible | ✅ PASS |
-
-**No exceptions**: ✅ No NameError, ✅ No KeyError
-
-## Test Report
-
-Full test report with detailed results:
-- **Location**: `/Users/davidandrews/PycharmProjects/stravinsky/docs/SEMANTIC_SEARCH_TEST_REPORT.md`
-- **Database**: `/Users/davidandrews/.stravinsky/vectordb/b9836bfcdc15_ollama/`
-
-## Common Issues & Solutions
-
-### "Embedding service not available"
-**Solution**: Start Ollama:
 ```bash
+# Install Ollama
+brew install ollama
+
+# Start the service
 ollama serve
-```
 
-### "Model not found: nomic-embed-text"
-**Solution**: Pull the model:
-```bash
+# Pull the embedding model
 ollama pull nomic-embed-text
 ```
 
-### "Gemini not authenticated"
-**Solution**: Authenticate:
+**Option B: Mxbai (Local, Free, Better for Code)**
+
 ```bash
-stravinsky-auth login gemini
+# After installing Ollama
+ollama pull mxbai-embed-large
 ```
 
-### Context length error during re-indexing
-**Status**: Does not affect search functionality (existing index works perfectly)  
-**Solution**: Search works on existing 1500-chunk index. For re-indexing:
-- Filter out third-party directories (e.g., `pygls/`)
-- Or increase max chunk size limit
+**Option C: Cloud Providers (OAuth)**
 
-## Code Examples
-
-### Basic Search
-```python
-results = await semantic_search(
-    query="find authentication mechanisms",
-    project_path=".",
-    n_results=10,
-    provider="ollama"
-)
-```
-
-### Search with Filters
-```python
-results = await semantic_search(
-    query="error handling",
-    project_path=".",
-    language="py",           # Filter by language
-    node_type="function",    # Filter by node type
-    provider="ollama"
-)
-```
-
-### Health Check
-```python
-health = await semantic_health(".", provider="ollama")
-print(health)
-# Output:
-# Provider (ollama): ✅ Online
-# Vector DB: ✅ Online (1500 documents)
-```
-
-### Hybrid Search (Semantic + AST)
-```python
-results = await hybrid_search(
-    query="database connection setup",
-    pattern="def $FUNC($$$):",  # AST pattern
-    project_path="."
-)
-```
-
-### Multi-Query Search (Better Recall)
-```python
-results = await multi_query_search(
-    query="how to authenticate users",
-    project_path=".",
-    num_expansions=3  # Generate 3 query variations
-)
-```
-
-## Provider Configuration
-
-### Using Ollama (Default, Recommended for Local)
 ```bash
-# Start Ollama
-ollama serve
-
-# Ensure model is available
-ollama pull nomic-embed-text
-
-# Use in code
-results = await semantic_search(..., provider="ollama")
-```
-
-### Using Gemini (Cloud, Better Quality)
-```bash
-# Authenticate
+# Gemini (free tier available)
 stravinsky-auth login gemini
 
-# Use in code
-results = await semantic_search(..., provider="gemini")
-```
-
-### Using OpenAI (Cloud, Requires Subscription)
-```bash
-# Authenticate
+# OpenAI (requires subscription)
 stravinsky-auth login openai
-
-# Use in code
-results = await semantic_search(..., provider="openai")
 ```
 
-### Using HuggingFace (Cloud, Free)
+**Option D: HuggingFace (Token-based)**
+
 ```bash
 # Set token
 export HF_TOKEN="your_hf_token"
 # or
 huggingface-cli login
-
-# Use in code
-results = await semantic_search(..., provider="huggingface")
 ```
 
-## Performance Notes
+### Step 2: Index Your Codebase
 
-- **Index Size**: 1500 chunks ≈ 50MB on disk
-- **Search Speed**: ~0.5-2 seconds (Ollama local), ~1-3 seconds (cloud)
-- **Indexing Speed**: ~10-50 chunks/second (depends on provider)
-- **Memory**: ~200-500MB for ChromaDB with 1500 chunks
+```python
+from mcp_bridge.tools.semantic_search import index_codebase
 
-## Next Steps
+# Index with default provider (ollama)
+result = await index_codebase(project_path=".")
+print(result)
 
-1. **Immediate Use**: Semantic search is ready now - no additional setup needed
-2. **Better Coverage**: Authenticate with Gemini for cloud embeddings
-3. **Better Quality**: Install mxbai model (`ollama pull mxbai-embed-large`) for improved code understanding
-4. **Monitoring**: Use `semantic_health()` before searches in production
+# Index with specific provider
+result = await index_codebase(project_path=".", provider="mxbai")
+```
+
+### Step 3: Search
+
+```python
+from mcp_bridge.tools.semantic_search import semantic_search
+
+# Basic search
+results = await semantic_search(
+    query="authentication logic",
+    project_path=".",
+    n_results=10
+)
+print(results)
+```
+
+## Available Search Tools
+
+| Tool | Purpose | When to Use |
+|------|---------|-------------|
+| `semantic_search` | Basic natural language search | Simple conceptual queries |
+| `hybrid_search` | Semantic + AST pattern matching | Need both meaning and structure |
+| `enhanced_search` | Auto-selects best strategy | Unsure which approach fits |
+| `multi_query_search` | LLM-expanded query variations | Need better recall |
+| `decomposed_search` | Breaks complex queries apart | Multi-part queries |
+
+## Search Tool Reference
+
+### semantic_search
+
+Core natural language code search.
+
+```python
+async def semantic_search(
+    query: str,                              # Natural language query
+    project_path: str = ".",                 # Project root
+    n_results: int = 10,                     # Max results
+    language: str | None = None,             # Filter: "py", "ts", "js"
+    node_type: str | None = None,            # Filter: "function", "class", "method"
+    decorator: str | None = None,            # Filter: "@property", "@staticmethod"
+    is_async: bool | None = None,            # Filter: async functions only
+    base_class: str | None = None,           # Filter: by base class
+    provider: EmbeddingProvider = "ollama"   # Embedding provider
+) -> str
+```
+
+**Example:**
+
+```python
+results = await semantic_search(
+    query="how does the system validate user input",
+    project_path=".",
+    language="py",
+    node_type="function",
+    n_results=5
+)
+```
+
+### hybrid_search
+
+Combines semantic similarity with structural AST matching.
+
+```python
+async def hybrid_search(
+    query: str,                          # Natural language query
+    pattern: str | None = None,          # ast-grep pattern (optional)
+    project_path: str = ".",
+    n_results: int = 10,
+    language: str | None = None,
+    node_type: str | None = None,
+    decorator: str | None = None,
+    is_async: bool | None = None,
+    base_class: str | None = None,
+    provider: EmbeddingProvider = "ollama"
+) -> str
+```
+
+**Example:**
+
+```python
+# Find async functions that handle authentication
+results = await hybrid_search(
+    query="user authentication and token validation",
+    pattern="async def $FUNC($$$):",
+    language="py",
+    is_async=True
+)
+```
+
+### enhanced_search
+
+Auto-selects the best search strategy based on query complexity.
+
+```python
+async def enhanced_search(
+    query: str,                      # Search query
+    project_path: str = ".",
+    n_results: int = 10,
+    mode: str = "auto",              # "auto", "expand", "decompose", "both"
+    language: str | None = None,
+    node_type: str | None = None,
+    provider: EmbeddingProvider = "ollama"
+) -> str
+```
+
+**Mode selection:**
+- `auto`: Classifier picks best mode based on query complexity
+- `expand`: Generate query variations for better recall
+- `decompose`: Break multi-part queries into sub-searches
+- `both`: Decompose first, then expand each sub-query
+
+### multi_query_search
+
+Expands queries using LLM for better recall.
+
+```python
+async def multi_query_search(
+    query: str,                      # Original query
+    project_path: str = ".",
+    n_results: int = 10,
+    num_expansions: int = 3,         # Number of variations
+    language: str | None = None,
+    node_type: str | None = None,
+    provider: EmbeddingProvider = "ollama"
+) -> str
+```
+
+**Example:**
+
+```python
+# "caching strategy" expands to:
+# - "cache implementation"
+# - "memoization"
+# - "redis client"
+results = await multi_query_search(
+    query="caching strategy",
+    num_expansions=5,
+    n_results=15
+)
+```
+
+### decomposed_search
+
+Breaks complex multi-part queries into focused sub-searches.
+
+```python
+async def decomposed_search(
+    query: str,                      # Complex query
+    project_path: str = ".",
+    n_results: int = 10,
+    language: str | None = None,
+    node_type: str | None = None,
+    provider: EmbeddingProvider = "ollama"
+) -> str
+```
+
+**Example:**
+
+```python
+# "oauth token generation, refresh, and logout" splits into:
+# - "oauth token generation"
+# - "token refresh"
+# - "logout handling"
+results = await decomposed_search(
+    query="oauth token generation, refresh, and logout handling",
+    n_results=20
+)
+```
+
+## Index Management
+
+### Check Index Status
+
+```python
+from mcp_bridge.tools.semantic_search import semantic_stats, semantic_health
+
+# Get statistics
+stats = await semantic_stats(project_path=".", provider="ollama")
+print(stats)
+
+# Check health
+health = await semantic_health(project_path=".", provider="ollama")
+print(health)
+```
+
+### Delete Index
+
+```python
+from mcp_bridge.tools.semantic_search import delete_index
+
+# Delete specific provider index
+result = delete_index(project_path=".", provider="ollama")
+
+# Delete all providers for project
+result = delete_index(project_path=".")
+
+# Delete ALL indexes for ALL projects
+result = delete_index(delete_all=True)
+```
+
+### Cancel Indexing
+
+```python
+from mcp_bridge.tools.semantic_search import cancel_indexing
+
+# Request cancellation (happens between batches)
+result = cancel_indexing(project_path=".", provider="ollama")
+```
+
+## File Watcher (Auto-Reindexing)
+
+The file watcher automatically reindexes when code changes.
+
+```python
+from mcp_bridge.tools.semantic_search import (
+    start_file_watcher,
+    stop_file_watcher,
+    list_file_watchers,
+)
+
+# Start watching (auto-starts on first search)
+watcher = await start_file_watcher(
+    project_path=".",
+    provider="ollama",
+    debounce_seconds=2.0
+)
+
+# Check active watchers
+watchers = list_file_watchers()
+for w in watchers:
+    print(f"{w['project_path']}: {w['status']}")
+
+# Stop watching
+stopped = stop_file_watcher(project_path=".")
+```
+
+## Provider Comparison
+
+| Provider | Type | Speed | Cost | Quality | Best For |
+|----------|------|-------|------|---------|----------|
+| **ollama** (nomic-embed-text) | Local | Fast | Free | Good | Development, quick iteration |
+| **mxbai** (mxbai-embed-large) | Local | Medium | Free | Better | Code-focused searches |
+| **gemini** | Cloud | Medium | Free tier | Excellent | Production, high quality |
+| **openai** | Cloud | Medium | Paid | Excellent | Complex queries |
+| **huggingface** | Cloud | Slow | Free tier | Good | Budget searches |
+
+## Common Issues
+
+### "Embedding service not available"
+
+**For Ollama:**
+```bash
+ollama serve
+ollama pull nomic-embed-text
+```
+
+**For Gemini/OpenAI:**
+```bash
+stravinsky-auth status
+stravinsky-auth login gemini
+```
+
+### "No documents indexed"
+
+```python
+# Index the codebase first
+await index_codebase(project_path=".")
+```
+
+### Slow searches
+
+- Use local provider (`ollama` or `mxbai`) for development
+- Reduce `n_results` to limit result set
+- Add `language` filter to narrow scope
+
+## Advanced Search Types
+
+```mermaid
+flowchart LR
+    subgraph "Search Types"
+        SS[semantic_search<br/>Basic vector search]
+        HS[hybrid_search<br/>Semantic + AST]
+        MQ[multi_query_search<br/>LLM-expanded queries]
+        DS[decomposed_search<br/>Break complex queries]
+        ES[enhanced_search<br/>Auto-select strategy]
+    end
+
+    Q[Query] --> ES
+    ES -->|simple| SS
+    ES -->|complex| DS
+    ES -->|needs_recall| MQ
+    ES -->|structural| HS
+```
 
 ## File Watcher Architecture
-
-Automatic reindexing when code files change:
 
 ```mermaid
 flowchart TB
@@ -288,45 +414,20 @@ flowchart TB
     IDX --> DB[(ChromaDB)]
 ```
 
-### Usage
+## Next Steps
 
-```python
-# Start file watcher
-await start_file_watcher(".", provider="ollama", debounce_seconds=2.0)
-
-# Files are now auto-reindexed on change!
-
-# Stop when done
-await stop_file_watcher(".")
-```
-
-## Advanced Search Types
-
-```mermaid
-flowchart LR
-    subgraph "Search Types"
-        SS[semantic_search<br/>Basic vector search]
-        HS[hybrid_search<br/>Semantic + AST]
-        MQ[multi_query_search<br/>LLM-expanded queries]
-        DS[decomposed_search<br/>Break complex queries]
-        ES[enhanced_search<br/>Auto-select strategy]
-    end
-
-    Q[Query] --> ES
-    ES -->|simple| SS
-    ES -->|complex| DS
-    ES -->|needs_recall| MQ
-    ES -->|structural| HS
-```
+1. **Better Coverage**: Try `mxbai` provider for improved code understanding
+2. **Auto-Updates**: File watcher starts automatically on first search
+3. **Filtering**: Use `language`, `node_type`, `decorator` filters for precision
+4. **Monitoring**: Use `semantic_health()` before critical searches
 
 ## Documentation Links
 
-- [Full Test Report](../reports/SEMANTIC_SEARCH_TEST_REPORT.md)
-- [Architecture Overview](../architecture/ARCHITECTURE.md)
-- [MCP Tool Flow](../architecture/MCP_TOOL_FLOW.md)
-- [File Watcher Design](../architecture/FILEWATCHER_ARCHITECTURE.md)
+- [Best Practices Guide](./SEMANTIC_SEARCH_BEST_PRACTICES.md)
+- [File Watcher Usage](./SEMANTIC_WATCHER_USAGE.md)
+- [Indexing Quick Start](./semantic_indexing_quick_start.md)
 
 ---
 
-**Last Updated**: January 10, 2026
-**Status**: ✅ All tests passing, ready for production
+**Last Updated**: January 2026
+**Status**: All features functional and tested

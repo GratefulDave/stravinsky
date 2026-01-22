@@ -1,5 +1,9 @@
 # Keyring Authentication Fix
 
+## Summary
+
+This document describes fixes applied to Stravinsky's token storage system to resolve persistent macOS Keychain password prompts and ensure reliable cross-session authentication.
+
 ## Problem
 
 Users experienced persistent macOS Keychain password prompts when running `stravinsky-auth` commands across multiple terminal sessions, breaking the seamless authentication experience.
@@ -201,12 +205,40 @@ This fix is included in Stravinsky v0.4.5+. Users should:
 1. Upgrade to latest version:
    ```bash
    claude mcp remove stravinsky
-   claude mcp add --global stravinsky -- uvx --python python3.13 stravinsky@latest
+   claude mcp add --scope user stravinsky -- uvx --python python3.13 stravinsky@latest
    ```
 
 2. Configure keyring fail backend (see User Configuration above)
 
-3. Re-authenticate once
+3. Re-authenticate once:
+   ```bash
+   stravinsky-auth login gemini
+   ```
+
+## Integration with OAuth-First Architecture
+
+The token storage system supports Stravinsky's OAuth-first authentication strategy:
+
+1. **OAuth tokens** are stored securely in encrypted files at `~/.stravinsky/tokens/`
+2. **API key fallback** uses environment variables (no token storage needed)
+3. **Rate limit state** is tracked in memory (resets on restart)
+
+### Authentication Flow
+
+```
+User Request
+    |
+    v
+OAuth Token Available? --Yes--> Try OAuth Request
+    |                               |
+    No                              v
+    |                           429 Rate Limited?
+    v                               |
+Use API Key (if set)            Yes --> Switch to API-Only Mode (5 min)
+                                    |
+                                    v
+                                Use API Key (Tier 3 quotas)
+```
 
 ## Future Improvements
 
@@ -214,3 +246,8 @@ This fix is included in Stravinsky v0.4.5+. Users should:
 - [ ] Provide `stravinsky-auth configure` command to set up keyring backend
 - [ ] Add warning if keyring backend is not set to fail backend
 - [ ] Consider migrating away from Python keyring library entirely
+
+## Related Documentation
+
+- [OAuth Flow Architecture](../architecture/OAUTH_FLOW.md)
+- [Gemini API Key Usage](../guides/GEMINI_API_KEY_USAGE.md)
